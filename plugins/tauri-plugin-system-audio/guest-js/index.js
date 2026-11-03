@@ -25,7 +25,7 @@ export function windowProcess(hwnd) {
 
 /**
  * Starts capturing. Audio arrives in `onAudio(Float32Array)`: interleaved stereo at 48 kHz, 20 ms per call.
- * @param {{ include?: number[], excludeSelf?: boolean }} target
+ * @param {{ include?: number[], excludeSelf?: boolean, excludeExes?: string[] }} target
  * @param {{ onAudio: (samples: Float32Array) => void, onError?: (message: string) => void }} handlers
  * @returns {Promise<{ sampleRate: number, channels: number, chunkFrames: number, streams: number }>}
  */

@@ -67,6 +67,8 @@ export class Call extends EventTarget {
   screenQuality = { ...DEFAULT_STREAM_QUALITY };
   /** { echoCancellation, noiseSuppression, autoGainControl } applied to the mic. */
   micProcessing = { ...DEFAULT_MIC_PROCESSING };
+  /** Executables left out of an entire-screen share's sound (see setExcludedApps). */
+  excludedApps = [];
   /** @type {Map<string, object>} */
   participants = new Map();
   mediaErrors = {};
@@ -81,10 +83,12 @@ export class Call extends EventTarget {
   #recvReady = null;
   /** @type {Record<'mic' | 'camera' | 'screen' | 'screen-audio', import('mediasoup-client').types.Producer | null>} */
   #producers = { mic: null, camera: null, screen: null, 'screen-audio': null };
-  /** Native screen-share sound while sharing: { track, stop(), description }. */
+  /** Native screen-share sound while sharing: { track, stop(), close(), description }. */
   #screenAudio = null;
   /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
   #nativeMic = null;
+  /** The latest screen-sound restart (see setExcludedApps). */
+  #screenAudioRestart = Promise.resolve();
   #micMuted = false;
   /** Bumped on every (re)setup so late async results from an old setup are discarded. */
   #generation = 0;
@@ -254,11 +258,7 @@ export class Call extends EventTarget {
   async #startScreenAudio() {
     const share = this.screenShare;
     try {
-      this.#screenAudio = await startScreenAudio({
-        mode: share.mode,
-        windowHandle: share.windowHandle,
-        onError: (message) => this.#emit('notice', { message: `Screen sound stopped: ${message}` }),
-      });
+      this.#screenAudio = await startScreenAudio(this.#screenAudioOptions());
     } catch (error) {
       this.#emit('notice', { message: `Sharing without sound: ${error?.message ?? error}` });
       return;
@@ -266,6 +266,39 @@ export class Call extends EventTarget {
     if (!this.#screenAudio) return; // not supported on this platform
     share.audio = this.#screenAudio.description;
     if (this.#send) await this.#produceScreenAudio();
+  }
+
+  #screenAudioOptions() {
+    return {
+      mode: this.screenShare.mode,
+      windowHandle: this.screenShare.windowHandle,
+      excludedApps: this.excludedApps,
+      onError: (message) => this.#emit('notice', { message: `Screen sound stopped: ${message}` }),
+    };
+  }
+
+  /**
+   * Changes the apps left out of an entire-screen share's sound. During such a share the native
+   * capture is restarted and the new track swapped in with replaceTrack (no renegotiation).
+   */
+  setExcludedApps(apps) {
+    this.excludedApps = [...apps];
+    // One restart at a time: overlapping ones would stop each other's Rust-side capture.
+    const restart = this.#screenAudioRestart.catch(() => {}).then(() => this.#restartScreenAudio());
+    this.#screenAudioRestart = restart;
+    return restart;
+  }
+
+  async #restartScreenAudio() {
+    if (this.screenShare?.mode !== 'screen' || !this.#screenAudio) return;
+    const old = this.#screenAudio;
+    const next = await startScreenAudio(this.#screenAudioOptions()); // replaces the Rust-side capture
+    if (this.#screenAudio !== old) return next.stop(); // the share stopped meanwhile
+    old.close();
+    this.#screenAudio = next;
+    this.screenShare.audio = next.description;
+    await this.#producers['screen-audio']?.replaceTrack({ track: next.track });
+    this.#emit('local-updated', {});
   }
 
   async #produceScreenAudio() {

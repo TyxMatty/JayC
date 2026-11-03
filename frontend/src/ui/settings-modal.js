@@ -3,6 +3,9 @@ import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { toWebSocketUrl, DEFAULT_PORT } from '../core/server-address.js';
 import { checkServer } from '../core/server-check.js';
+import { screenAudioSupported } from '../core/screen-audio.js';
+import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../core/excluded-apps.js';
+import * as systemAudio from 'tauri-plugin-system-audio-api';
 
 /** [settings key, label, when to change it]. Changes apply right away, also during a call. */
 const MIC_OPTIONS = [
@@ -94,6 +97,96 @@ export function createSettingsModal() {
 
   defaultHint();
 
+  // Streaming: apps left out of the entire-screen share's sound (Windows native capture only).
+  const setExcluded = (excludedApps) => settings.update({ excludedApps });
+  let playingApps = []; // apps with an audio session, refreshed each time Settings opens
+  const excludedList = h('ul', { class: 'chip-list', 'aria-label': 'Excluded apps' });
+  const suggestionList = h('div', { class: 'chip-list', role: 'group', 'aria-label': 'Apps to exclude' });
+  const renderStreaming = () => {
+    const list = settings.get().excludedApps;
+    excludedList.replaceChildren(
+      ...(list.length
+        ? list.map((exe) =>
+            h(
+              'li',
+              { class: 'chip' },
+              exe,
+              h('button', {
+                type: 'button',
+                class: 'chip-remove',
+                'aria-label': `Stop excluding ${exe}`,
+                html: icons.close,
+                onClick: () => setExcluded(removeExcludedApp(settings.get().excludedApps, exe)),
+              }),
+            ),
+          )
+        : [h('li', { class: 'hint' }, 'No apps excluded.')]),
+    );
+    const seen = new Set(list.map(exeKey));
+    const picks = [...playingApps, ...SUGGESTED_APPS].filter((app) => !seen.has(exeKey(app.exe)) && seen.add(exeKey(app.exe)));
+    suggestionList.replaceChildren(
+      ...picks.map((app) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'chip chip-add',
+            title: app.exe,
+            onClick: () => setExcluded(addExcludedApp(settings.get().excludedApps, app.exe)),
+          },
+          `+ ${app.displayName}`,
+        ),
+      ),
+    );
+  };
+  const excludeInput = h('input', {
+    id: 'settings-exclude',
+    class: 'input',
+    autocomplete: 'off',
+    spellcheck: 'false',
+    placeholder: 'e.g. Spotify.exe',
+    onKeydown: (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault(); // Enter would submit (close) the dialog's form
+      addTyped();
+    },
+  });
+  const addTyped = () => {
+    setExcluded(addExcludedApp(settings.get().excludedApps, excludeInput.value));
+    excludeInput.value = '';
+  };
+  const streamingSection = h(
+    'fieldset',
+    { hidden: true },
+    h('h3', {}, 'Streaming'),
+    h(
+      'div',
+      { class: 'field' },
+      h('p', { class: 'hint' }, 'Sound from these apps is left out when you share your entire screen. Jay-C itself (the call) is never shared.'),
+      excludedList,
+    ),
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Add an app'), suggestionList),
+    h(
+      'div',
+      { class: 'field' },
+      h('label', { for: 'settings-exclude' }, 'Or type its program name'),
+      h('div', { class: 'input-row' }, excludeInput, h('button', { type: 'button', class: 'btn btn-secondary', onClick: addTyped }, 'Add')),
+    ),
+  );
+  renderStreaming();
+  settings.subscribe((next, prev) => next.excludedApps !== prev.excludedApps && renderStreaming());
+  const refreshPlayingApps = () =>
+    systemAudio
+      .listAudioApps()
+      .then((apps) => {
+        playingApps = apps;
+        renderStreaming();
+      })
+      .catch((error) => console.warn('[settings] audio apps', error));
+  screenAudioSupported().then((supported) => {
+    streamingSection.hidden = !supported;
+  });
+
   const dialog = h(
     'dialog',
     { class: 'modal', 'aria-labelledby': 'settings-title' },
@@ -134,6 +227,7 @@ export function createSettingsModal() {
             ),
           ),
         ),
+        streamingSection,
         h(
           'fieldset',
           {},
@@ -160,6 +254,7 @@ export function createSettingsModal() {
     element: dialog,
     open(focus) {
       dialog.showModal();
+      if (!streamingSection.hidden) refreshPlayingApps();
       if (focus === 'server') serverInput.focus();
     },
   };

@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   streamQuality: DEFAULT_STREAM_QUALITY,
   /** { echoCancellation, noiseSuppression, autoGainControl } for the call microphone. */
   micProcessing: DEFAULT_MIC_PROCESSING,
+  /** Executables left out of the entire-screen share's sound, e.g. ['Discord.exe']. */
+  excludedApps: [],
 });
 
 function load() {

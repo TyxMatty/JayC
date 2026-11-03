@@ -45,10 +45,13 @@ export const screenAudioSupported = () => systemAudio.isSupported();
  * Starts capturing the sound that goes with a screen share:
  *   mode 'window' -> only the app that owns the shared window (and its helper processes)
  *   mode 'screen' -> everything except Jay-C itself (so the call's voices aren't echoed back)
- * Resolves with `{ track, stop(), description }`, or null when native capture isn't available.
- * @param {{ mode: 'screen' | 'window', windowHandle: number | null, onError?: (message: string) => void }} options
+ *                    and the `excludedApps` executables
+ * Resolves with `{ track, stop(), close(), description }`, or null when native capture isn't available.
+ * Starting a new capture replaces the running one on the Rust side; call `close()` (not `stop()`)
+ * on the old handle then, so it doesn't stop the new capture.
+ * @param {{ mode: 'screen' | 'window', windowHandle: number | null, excludedApps?: string[], onError?: (message: string) => void }} options
  */
-export async function startScreenAudio({ mode, windowHandle, onError }) {
+export async function startScreenAudio({ mode, windowHandle, excludedApps = [], onError }) {
   if (!(await systemAudio.isSupported())) return null;
 
   let target;
@@ -59,8 +62,8 @@ export async function startScreenAudio({ mode, windowHandle, onError }) {
     target = { include: [app.rootPid] };
     description = app.exe;
   } else {
-    target = { excludeSelf: true };
-    description = 'all apps except Jay-C';
+    target = { excludeSelf: true, excludeExes: excludedApps };
+    description = excludedApps.length ? `all apps except Jay-C, ${excludedApps.join(', ')}` : 'all apps except Jay-C';
   }
 
   const source = await PcmTrackSource.create();
@@ -75,6 +78,9 @@ export async function startScreenAudio({ mode, windowHandle, onError }) {
     description,
     stop() {
       systemAudio.stopCapture().catch(() => {});
+      source.close();
+    },
+    close() {
       source.close();
     },
   };

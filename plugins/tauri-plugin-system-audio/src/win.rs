@@ -120,11 +120,39 @@ fn is_excluded(pid: u32, table: &ProcessTable, exclude_exes: &[String]) -> bool 
 /// The process trees to capture for "everything except us and `exclude_exes`": one per app with
 /// an audio session. Must run on an MTA thread (see `list_audio_apps`).
 fn included_roots(exclude_exes: &[String]) -> Result<Vec<u32>, String> {
-    let apps = list_audio_apps()?;
     let table = process_table();
-    let roots: Vec<u32> = apps.iter().map(|app| app.pid).filter(|&pid| !is_excluded(pid, &table, exclude_exes)).collect();
+    let sessions: Vec<u32> = audio_sessions(&table)?.into_iter().map(|(pid, _, _)| pid).collect();
+    Ok(capture_roots(&sessions, &table, exclude_exes, std::process::id()))
+}
+
+/// Picks the trees to capture for the processes playing sound (`sessions`), leaving out `me` and
+/// `exclude_exes`. An INCLUDE capture takes a process's whole tree, so a tree that holds `me` or an
+/// excluded app is off-limits: a session there is captured from a lower root, or not at all (e.g.
+/// explorer.exe, or a launcher whose child is excluded) rather than leak what must stay out.
+fn capture_roots(sessions: &[u32], table: &ProcessTable, exclude_exes: &[String], me: u32) -> Vec<u32> {
+    let off_limits: HashSet<u32> = table
+        .iter()
+        .filter(|(pid, (_, exe))| **pid == me || exclude_exes.iter().any(|name| same_exe(exe, name)))
+        .flat_map(|(&pid, _)| lineage(pid, table))
+        .collect();
+    let mut roots: Vec<u32> = Vec::new();
+    for &pid in sessions {
+        let Some((_, exe)) = table.get(&pid) else { continue };
+        if is_excluded(pid, table, exclude_exes) {
+            continue;
+        }
+        // Like `root_of`: up through parents running the same executable, while still allowed.
+        let root = lineage(pid, table)
+            .take_while(|p| !off_limits.contains(p) && table.get(p).is_some_and(|(_, e)| e.eq_ignore_ascii_case(exe)))
+            .last();
+        match root {
+            Some(root) if !roots.contains(&root) => roots.push(root),
+            Some(_) => {}
+            None => log::debug!("system-audio: not capturing {exe} ({pid}): its tree holds an excluded app or Jay-C"),
+        }
+    }
     // A root inside another root's tree is already captured with it; capturing both doubles it.
-    Ok(roots.iter().copied().filter(|&pid| !lineage(pid, &table).skip(1).any(|p| roots.contains(&p))).collect())
+    roots.iter().copied().filter(|&pid| !lineage(pid, table).skip(1).any(|p| roots.contains(&p))).collect()
 }
 
 // ---------- Queries ----------
@@ -151,8 +179,9 @@ pub fn window_process(hwnd: i64) -> Result<WindowProcess, String> {
     })
 }
 
-/// Apps with an audio session on the default playback device, one entry per root process.
-pub fn list_audio_apps() -> Result<Vec<AudioApp>, String> {
+/// Processes with an audio session on the default playback device, other than ours and system
+/// ones: (pid, playing right now, session display name). Must run on an MTA thread.
+fn audio_sessions(table: &ProcessTable) -> Result<Vec<(u32, bool, Option<String>)>, String> {
     initialize_mta().ok().map_err(|e| e.to_string())?;
     let device = DeviceEnumerator::new()
         .and_then(|e| e.get_default_device(&Direction::Render))
@@ -161,10 +190,7 @@ pub fn list_audio_apps() -> Result<Vec<AudioApp>, String> {
         .get_iaudiosessionmanager()
         .and_then(|m| m.get_audiosessionenumerator())
         .map_err(|e| e.to_string())?;
-    let table = process_table();
-
-    let mut apps: Vec<AudioApp> = Vec::new();
-    let mut by_root: HashMap<u32, usize> = HashMap::new();
+    let mut found = Vec::new();
     for i in 0..sessions.get_count().map_err(|e| e.to_string())? {
         let Ok(control) = sessions.get_session(i) else { continue };
         let active = match control.get_state() {
@@ -174,15 +200,27 @@ pub fn list_audio_apps() -> Result<Vec<AudioApp>, String> {
         };
         let Ok(pid) = control.get_process_id() else { continue };
         let Some((_, exe)) = table.get(&pid) else { continue };
-        if pid == 0 || in_own_tree(pid, &table) || IGNORED_EXES.contains(&exe.to_ascii_lowercase().as_str()) {
+        if pid == 0 || in_own_tree(pid, table) || IGNORED_EXES.contains(&exe.to_ascii_lowercase().as_str()) {
             continue;
         }
+        let display_name = control.get_display_name().ok().filter(|n| !n.is_empty() && !n.starts_with('@'));
+        found.push((pid, active, display_name));
+    }
+    Ok(found)
+}
+
+/// Apps with an audio session on the default playback device, one entry per root process.
+pub fn list_audio_apps() -> Result<Vec<AudioApp>, String> {
+    let table = process_table();
+    let mut apps: Vec<AudioApp> = Vec::new();
+    let mut by_root: HashMap<u32, usize> = HashMap::new();
+    for (pid, active, display_name) in audio_sessions(&table)? {
+        let exe = &table[&pid].1;
         let root = root_of(pid, &table);
         match by_root.get(&root) {
             Some(&index) => apps[index].active |= active,
             None => {
                 by_root.insert(root, apps.len());
-                let display_name = control.get_display_name().ok().filter(|n| !n.is_empty() && !n.starts_with('@'));
                 apps.push(AudioApp {
                     pid: root,
                     display_name: display_name.unwrap_or_else(|| exe.trim_end_matches(".exe").to_string()),
@@ -711,6 +749,36 @@ mod tests {
         assert_eq!(lineage(12, &table).collect::<Vec<_>>(), [12, 11, 10, 1]);
     }
 
+    #[test]
+    fn capture_roots_never_hold_us_or_an_excluded_app() {
+        // 1 explorer (plays sound) -> 2 powershell -> 3 powershell (plays) and 4 jayc-tone-b (plays)
+        // 1 -> 5 jay-c (us) -> 6 msedgewebview2;  1 -> 10 Discord -> 11 Discord (plays);  1 -> 20 brave (plays)
+        let table: ProcessTable = [
+            (1, (0, "explorer.exe")),
+            (2, (1, "powershell.exe")),
+            (3, (2, "powershell.exe")),
+            (4, (2, "jayc-tone-b.exe")),
+            (5, (1, "jay-c.exe")),
+            (6, (5, "msedgewebview2.exe")),
+            (10, (1, "Discord.exe")),
+            (11, (10, "Discord.exe")),
+            (20, (1, "brave.exe")),
+        ]
+        .into_iter()
+        .map(|(pid, (parent, exe))| (pid, (parent, exe.to_string())))
+        .collect();
+        let sessions = [1, 3, 4, 11, 20];
+        let excluding = |names: &[&str]| names.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        // explorer's tree holds us: never captured. powershell 3 is captured from its same-exe
+        // parent 2, whose tree also holds tone-b (captured once, with it).
+        assert_eq!(capture_roots(&sessions, &table, &excluding(&["nothing"]), 5), [2, 10, 20]);
+        // tone-b excluded: 2's tree holds it, so powershell 3 is captured on its own.
+        assert_eq!(capture_roots(&sessions, &table, &excluding(&["jayc-tone-b", "discord"]), 5), [3, 20]);
+        // excluding powershell: tone-b (a child of an excluded app) is excluded too.
+        assert_eq!(capture_roots(&sessions, &table, &excluding(&["powershell"]), 5), [10, 20]);
+    }
+
     /// Writes a 30 s stereo 16-bit WAV of a sine at `hz`.
     fn write_tone(path: &std::path::Path, hz: f64) {
         let frames = SAMPLE_RATE as usize * 30;
@@ -763,6 +831,51 @@ mod tests {
         samples[samples.len() - n..].to_vec()
     }
 
+    fn powershell() -> std::path::PathBuf {
+        std::path::Path::new(&std::env::var("WINDIR").unwrap()).join(r"System32\WindowsPowerShell\v1.0\powershell.exe")
+    }
+
+    /// (dir, powershell.exe, its copy jayc-tone-b.exe, 500 Hz WAV, 1500 Hz WAV)
+    fn tone_files() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join("jayc-exclusion-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let other = dir.join("jayc-tone-b.exe");
+        std::fs::copy(powershell(), &other).unwrap();
+        let (wav_a, wav_b) = (dir.join("a.wav"), dir.join("b.wav"));
+        write_tone(&wav_a, 500.0);
+        write_tone(&wav_b, 1500.0);
+        (dir, powershell(), other, wav_a, wav_b)
+    }
+
+    fn play_script(wav: &std::path::Path) -> String {
+        format!("(New-Object Media.SoundPlayer '{}').PlaySync()", wav.display())
+    }
+
+    /// Plays `wav` in `exe` (powershell or a copy). Started via `cmd /c start` so it's not our
+    /// child: our own tree is never captured.
+    fn play(exe: &std::path::Path, wav: &std::path::Path) {
+        play_command(exe, &play_script(wav));
+    }
+
+    fn play_command(exe: &std::path::Path, script: &str) {
+        std::process::Command::new("cmd").args(["/c", "start", "", "/min", exe.to_str().unwrap(), "-NoProfile", "-c", script]).status().unwrap();
+    }
+
+    /// Stops the players whose command line contains `pattern` (the tones would play for 30 s).
+    fn stop_players(pattern: &std::path::Path) {
+        let script = format!(
+            "Get-CimInstance Win32_Process | ? {{ $_.CommandLine -like '*{}*' }} | % {{ Stop-Process -Id $_.ProcessId }}",
+            pattern.display()
+        );
+        std::process::Command::new(powershell()).args(["-NoProfile", "-c", &script]).status().unwrap();
+    }
+
+    fn report(name: &str, s: &[f32]) -> (f64, f64) {
+        let (a, b) = (tone_db(s, 500.0), tone_db(s, 1500.0));
+        println!("{name}: 500 Hz {a:.1} dB, 1500 Hz {b:.1} dB");
+        (a, b)
+    }
+
     /// Live check with real audio, two tones from two different executables:
     /// - both start *after* the captures, so they're heard only if the re-check picks them up;
     /// - the capture excluding one of them must not contain it;
@@ -772,33 +885,7 @@ mod tests {
     #[test]
     #[ignore]
     fn exclusion_live() {
-        let dir = std::env::temp_dir().join("jayc-exclusion-test");
-        std::fs::create_dir_all(&dir).unwrap();
-        let ps = std::path::Path::new(&std::env::var("WINDIR").unwrap()).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
-        let other = dir.join("jayc-tone-b.exe");
-        std::fs::copy(&ps, &other).unwrap();
-        let (wav_a, wav_b) = (dir.join("a.wav"), dir.join("b.wav"));
-        write_tone(&wav_a, 500.0);
-        write_tone(&wav_b, 1500.0);
-        // Started via `cmd /c start` so they're not our children: our own tree is never captured.
-        let play = |exe: &std::path::Path, wav: &std::path::Path| {
-            let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", wav.display());
-            let exe = exe.to_str().unwrap();
-            std::process::Command::new("cmd").args(["/c", "start", "", "/min", exe, "-NoProfile", "-c", &script]).status().unwrap();
-        };
-        // Stops the players whose command line contains `pattern` (the tones would play for 30 s).
-        let stop_players = |pattern: &std::path::Path| {
-            let script = format!(
-                "Get-CimInstance Win32_Process | ? {{ $_.CommandLine -like '*{}*' }} | % {{ Stop-Process -Id $_.ProcessId }}",
-                pattern.display()
-            );
-            std::process::Command::new(&ps).args(["-NoProfile", "-c", &script]).status().unwrap();
-        };
-        let report = |name: &str, s: &[f32]| {
-            let (a, b) = (tone_db(s, 500.0), tone_db(s, 1500.0));
-            println!("{name}: 500 Hz {a:.1} dB, 1500 Hz {b:.1} dB");
-            (a, b)
-        };
+        let (dir, ps, other, wav_a, wav_b) = tone_files();
 
         let (all, all_samples) = start_capture(&["jayc-nothing.exe"]);
         let (excluded, excluded_samples) = start_capture(&["jayc-tone-b"]);
@@ -828,5 +915,35 @@ mod tests {
         assert_eq!(with_players, before + 1, "one new app stream (the excluded one isn't opened)");
         assert_eq!(after_quit, before, "the quitting app's stream is dropped");
         assert!((rate - SAMPLE_RATE as f64).abs() < SAMPLE_RATE as f64 * 0.02, "the mix keeps real time");
+    }
+
+    /// Live check of an excluded app started by an app that plays sound: powershell (500 Hz)
+    /// launches jayc-tone-b.exe (1500 Hz) as its child. Capturing powershell's tree would leak the
+    /// excluded child, so with the exclusion neither is captured; without it, both are, once.
+    ///   cargo test --lib -- --ignored --nocapture exclusion_live_nested
+    #[test]
+    #[ignore]
+    fn exclusion_live_nested() {
+        let (dir, ps, other, wav_a, wav_b) = tone_files();
+        // The child's script goes in a file: nesting it in the parent's command line breaks the quoting.
+        let child_script = dir.join("b.ps1");
+        std::fs::write(&child_script, play_script(&wav_b)).unwrap();
+        let child = format!(
+            "Start-Process '{}' -WindowStyle Minimized -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','{}'; {}",
+            other.display(),
+            child_script.display(),
+            play_script(&wav_a)
+        );
+        let (all, all_samples) = start_capture(&["jayc-nothing.exe"]);
+        let (excluded, excluded_samples) = start_capture(&["jayc-tone-b"]);
+        play_command(&ps, &child);
+        std::thread::sleep(APPS_RECHECK * 2 + Duration::from_secs(1));
+        let (all_a, all_b) = report("no exclusions, last 1 s", &last(&all_samples, 1.0));
+        let (_, ex_b) = report("jayc-tone-b excluded, last 1 s", &last(&excluded_samples, 1.0));
+        stop_players(&dir);
+        drop((all, excluded));
+
+        assert!(all_a > -20.0 && all_b > -20.0 && all_b < -13.0, "both tones, each once (doubled would be +6 dB)");
+        assert!(ex_b < all_b - 40.0, "the excluded child must not leak through its parent's tree");
     }
 }
