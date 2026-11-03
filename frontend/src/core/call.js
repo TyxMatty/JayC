@@ -1,6 +1,15 @@
 import { Device } from 'mediasoup-client';
 import { SignalingClient } from './signaling.js';
-import { openLocalMedia, getMicTrack, getCameraTrack } from './media.js';
+import {
+  openLocalMedia,
+  getMicTrack,
+  getCameraTrack,
+  getScreenTrack,
+  describeCapture,
+  streamBitrate,
+  targetHeight,
+  DEFAULT_STREAM_QUALITY,
+} from './media.js';
 
 /** Camera simulcast: the SFU forwards one of these layers to each viewer. */
 const CAMERA_ENCODINGS = [
@@ -9,8 +18,12 @@ const CAMERA_ENCODINGS = [
   { scaleResolutionDownBy: 1, maxBitrate: 1_500_000 },
 ];
 
-/** Which camera layer to receive, by how many cameras are on screen (bigger tiles -> higher layer). */
-function cameraLayerFor(cameraCount) {
+/**
+ * Which camera layer to receive, by how many cameras are on screen (bigger tiles -> higher layer).
+ * While someone presents, cameras shrink to a strip, so the lowest layer is enough.
+ */
+function cameraLayerFor(cameraCount, presenting) {
+  if (presenting) return 0;
   if (cameraCount <= 2) return 2;
   if (cameraCount <= 6) return 1;
   return 0;
@@ -24,16 +37,27 @@ function cameraLayerFor(cameraCount) {
  *   participant-added   { participant }
  *   participant-removed { participant }
  *   participant-updated { participant }   tracks, mute state or connection changed
- *   local-updated       {}                local tracks changed (mute, camera on/off)
+ *   local-updated       {}                local tracks changed (mute, camera on/off, screen share)
  *   signaling-state     { state }
  *   ended               {}
  *
- * participant = { id, name, stream: MediaStream, media: { audio, video }, connectionState }
+ * participant = {
+ *   id, name, connectionState,
+ *   stream: MediaStream,        mic + camera
+ *   screenStream: MediaStream,  their screen share, if any
+ *   media: { audio, video, screen },
+ *   screenMode: 'screen' | 'window' | null,
+ * }
  */
 export class Call extends EventTarget {
-  local = { audio: null, video: null };
-  /** For the local preview tile. */
+  local = { audio: null, video: null, screen: null };
+  /** For the local preview tile (mic + camera). */
   localStream = new MediaStream();
+  /** Our own screen share preview, while sharing. */
+  screenStream = null;
+  /** { mode: 'screen' | 'window', windowHandle: number | null } while sharing. */
+  screenShare = null;
+  screenQuality = { ...DEFAULT_STREAM_QUALITY };
   /** @type {Map<string, object>} */
   participants = new Map();
   mediaErrors = {};
@@ -46,8 +70,8 @@ export class Call extends EventTarget {
   #recv = null;
   /** Resolves with the recv transport of the current setup (consumes wait for it). */
   #recvReady = null;
-  /** @type {{ mic: import('mediasoup-client').types.Producer | null, camera: import('mediasoup-client').types.Producer | null }} */
-  #producers = { mic: null, camera: null };
+  /** @type {Record<'mic' | 'camera' | 'screen', import('mediasoup-client').types.Producer | null>} */
+  #producers = { mic: null, camera: null, screen: null };
   #micMuted = false;
   /** Bumped on every (re)setup so late async results from an old setup are discarded. */
   #generation = 0;
@@ -128,6 +152,65 @@ export class Call extends EventTarget {
     this.#syncLocalStream();
   }
 
+  get sharing() {
+    return Boolean(this.local.screen);
+  }
+
+  /**
+   * Opens the system picker and starts sharing. Resolves false if the user cancelled the picker.
+   * @param {{ mode: 'screen' | 'window', quality: typeof DEFAULT_STREAM_QUALITY }} options
+   */
+  async startScreenShare({ mode, quality }) {
+    let track;
+    try {
+      track = await getScreenTrack(mode, quality);
+    } catch (error) {
+      if (error?.name === 'NotAllowedError' || error?.name === 'AbortError') return false; // picker dismissed
+      throw error;
+    }
+    if (this.local.screen) await this.stopScreenShare();
+
+    this.screenQuality = { ...quality };
+    this.screenShare = describeCapture(track);
+    this.local.screen = track;
+    this.screenStream = new MediaStream([track]);
+    // "Stop sharing" from the system UI, or the shared window closed.
+    track.addEventListener('ended', () => this.local.screen === track && this.stopScreenShare());
+
+    await this.#applyCaptureQuality();
+    if (this.#send) await this.#produceScreen();
+    this.#emit('local-updated', {});
+    return true;
+  }
+
+  async stopScreenShare() {
+    const producer = this.#producers.screen;
+    this.#producers.screen = null;
+    if (producer) {
+      producer.close();
+      await this.#signaling?.request('closeProducer', { producerId: producer.id }).catch(() => {});
+    }
+    this.local.screen?.stop();
+    this.local.screen = null;
+    this.screenStream = null;
+    this.screenShare = null;
+    this.#emit('local-updated', {});
+  }
+
+  /** Changes resolution / fps / content hint of the running share, without renegotiating. */
+  async setScreenQuality(quality) {
+    this.screenQuality = { ...this.screenQuality, ...quality };
+    if (!this.local.screen) return;
+    await this.#applyCaptureQuality();
+    await this.#producers.screen?.setRtpEncodingParameters(this.#screenEncoding());
+  }
+
+  /** Outbound stats of the screen producer (resolution, fps, bitrate actually sent). */
+  async screenStats() {
+    const stats = await this.#producers.screen?.getStats();
+    return stats ? [...stats.values()].find((s) => s.type === 'outbound-rtp') ?? null : null;
+  }
+
   leave() {
     if (this.#ended) return;
     this.#ended = true;
@@ -175,6 +258,7 @@ export class Call extends EventTarget {
 
     if (this.local.audio) await this.#produce('mic', this.local.audio);
     if (this.local.video) await this.#produce('camera', this.local.video);
+    if (this.local.screen) await this.#produceScreen();
   }
 
   async #createTransport(direction, generation) {
@@ -190,7 +274,14 @@ export class Call extends EventTarget {
     if (direction === 'send') {
       transport.on('produce', ({ kind, rtpParameters, appData }, ok, fail) => {
         this.#signaling
-          .request('produce', { transportId: transport.id, kind, rtpParameters, source: appData.source, paused: appData.paused })
+          .request('produce', {
+            transportId: transport.id,
+            kind,
+            rtpParameters,
+            source: appData.source,
+            mode: appData.mode,
+            paused: appData.paused,
+          })
           .then(ok, fail);
       });
     }
@@ -219,7 +310,7 @@ export class Call extends EventTarget {
     this.#send?.close();
     this.#recv?.close();
     this.#send = this.#recv = this.#recvReady = null;
-    this.#producers = { mic: null, camera: null };
+    this.#producers = { mic: null, camera: null, screen: null };
   }
 
   // ---------- Sending ----------
@@ -242,6 +333,44 @@ export class Call extends EventTarget {
     return producer;
   }
 
+  async #produceScreen() {
+    this.#producers.screen = await this.#send.produce({
+      track: this.local.screen,
+      stopTracks: false,
+      encodings: [this.#screenEncoding()],
+      codecOptions: { videoGoogleStartBitrate: 1000 },
+      appData: { source: 'screen', mode: this.screenShare.mode },
+    });
+  }
+
+  /**
+   * Resizes the capture itself where the browser allows it (cheaper than encoding a bigger frame),
+   * and sets the content hint. Encoder-side scaling in #screenEncoding() covers the rest.
+   */
+  async #applyCaptureQuality() {
+    const track = this.local.screen;
+    const { fps, resolution, optimizeFor } = this.screenQuality;
+    track.contentHint = optimizeFor === 'motion' ? 'motion' : 'detail';
+    const height = targetHeight(resolution);
+    try {
+      // Replaces the previous constraints, so "Source" lifts an earlier height cap.
+      await track.applyConstraints({ frameRate: { max: fps }, ...(height ? { height: { max: height } } : {}) });
+    } catch (error) {
+      console.warn('[call] applyConstraints on the screen track failed; scaling in the encoder instead', error);
+    }
+  }
+
+  #screenEncoding() {
+    const { fps, resolution } = this.screenQuality;
+    const settings = this.local.screen.getSettings();
+    const height = targetHeight(resolution);
+    // If the capture is still bigger than asked (applyConstraints unsupported), let the encoder scale it.
+    const scale = height && settings.height > height * 1.05 ? settings.height / height : 1;
+    const width = (settings.width ?? 1920) / scale;
+    const outHeight = (settings.height ?? 1080) / scale;
+    return { maxBitrate: streamBitrate(width, outHeight, fps), maxFramerate: fps, scaleResolutionDownBy: scale };
+  }
+
   async #setProducerPaused(source, paused) {
     const producer = this.#producers[source];
     if (!producer || producer.paused === paused) return;
@@ -260,9 +389,11 @@ export class Call extends EventTarget {
       id,
       name: name ?? 'Guest',
       stream: new MediaStream(),
-      media: { audio: false, video: false },
+      screenStream: new MediaStream(),
+      media: { audio: false, video: false, screen: false },
+      screenMode: null,
       connectionState: 'connected',
-      /** producerId -> { consumer, source, paused, layer } */
+      /** producerId -> { consumer, source, mode, paused, layer } */
       consumers: new Map(),
       pending: new Set(),
     };
@@ -276,7 +407,9 @@ export class Call extends EventTarget {
     if (!participant) return;
     this.participants.delete(id);
     for (const { consumer } of participant.consumers.values()) consumer.close();
-    for (const track of participant.stream.getTracks()) participant.stream.removeTrack(track);
+    for (const stream of [participant.stream, participant.screenStream]) {
+      for (const track of stream.getTracks()) stream.removeTrack(track);
+    }
     this.#emit('participant-removed', { participant });
     this.#applyLayerPolicy();
   }
@@ -284,7 +417,7 @@ export class Call extends EventTarget {
   async #consume({ peerId, producerId, source }) {
     const participant = this.participants.get(peerId);
     if (!participant || participant.consumers.has(producerId) || participant.pending.has(producerId)) return;
-    if (source !== 'mic' && source !== 'camera') return; // screen sources arrive with the streaming milestone
+    if (source === 'screen-audio') return; // native screen audio arrives with the system-audio milestone
 
     const generation = this.#generation;
     participant.pending.add(producerId);
@@ -300,11 +433,12 @@ export class Call extends EventTarget {
         rtpParameters: params.rtpParameters,
         appData: { source: params.source },
       });
-      participant.consumers.set(producerId, { consumer, source: params.source, paused: params.producerPaused, layer: null });
-      participant.stream.addTrack(consumer.track);
+      const entry = { consumer, source: params.source, mode: params.mode ?? null, paused: params.producerPaused, layer: null };
+      participant.consumers.set(producerId, entry);
+      this.#streamFor(participant, entry.source).addTrack(consumer.track);
       await this.#signaling.request('resumeConsumer', { consumerId: consumer.id });
       this.#updateParticipant(participant);
-      if (params.source === 'camera') this.#applyLayerPolicy();
+      if (params.source === 'camera' || params.source === 'screen') this.#applyLayerPolicy();
     } catch (error) {
       // The producer may have closed in the meantime.
       if (error?.code !== 'unknown-producer') console.warn('[call] consume failed', error);
@@ -318,10 +452,14 @@ export class Call extends EventTarget {
     const entry = participant?.consumers.get(producerId);
     if (!entry) return;
     participant.consumers.delete(producerId);
-    participant.stream.removeTrack(entry.consumer.track);
+    this.#streamFor(participant, entry.source).removeTrack(entry.consumer.track);
     entry.consumer.close();
     this.#updateParticipant(participant);
-    if (entry.source === 'camera') this.#applyLayerPolicy();
+    if (entry.source === 'camera' || entry.source === 'screen') this.#applyLayerPolicy();
+  }
+
+  #streamFor(participant, source) {
+    return source === 'screen' || source === 'screen-audio' ? participant.screenStream : participant.stream;
   }
 
   #onProducerState({ peerId, producerId, paused }) {
@@ -334,7 +472,8 @@ export class Call extends EventTarget {
 
   #updateParticipant(participant) {
     const live = (source) => [...participant.consumers.values()].some((c) => c.source === source && !c.paused);
-    participant.media = { audio: live('mic'), video: live('camera') };
+    participant.media = { audio: live('mic'), video: live('camera'), screen: live('screen') };
+    participant.screenMode = [...participant.consumers.values()].find((c) => c.source === 'screen')?.mode ?? null;
     const recvState = this.#recv?.connectionState ?? 'new';
     participant.connectionState = participant.consumers.size === 0 ? 'connected' : recvState;
     this.#emit('participant-updated', { participant });
@@ -343,10 +482,14 @@ export class Call extends EventTarget {
   /** Ask the SFU for a camera layer that fits the tile size. */
   #applyLayerPolicy() {
     const cameras = [];
+    let presenting = false;
     for (const participant of this.participants.values()) {
-      for (const entry of participant.consumers.values()) if (entry.source === 'camera') cameras.push(entry);
+      for (const entry of participant.consumers.values()) {
+        if (entry.source === 'camera') cameras.push(entry);
+        if (entry.source === 'screen') presenting = true;
+      }
     }
-    const layer = cameraLayerFor(cameras.length);
+    const layer = cameraLayerFor(cameras.length, presenting);
     for (const entry of cameras) {
       if (entry.layer === layer) continue;
       entry.layer = layer;
@@ -369,8 +512,9 @@ export class Call extends EventTarget {
   }
 
   #stopLocal() {
-    for (const track of [this.local.audio, this.local.video]) track?.stop();
-    this.local.audio = this.local.video = null;
+    for (const track of [this.local.audio, this.local.video, this.local.screen]) track?.stop();
+    this.local.audio = this.local.video = this.local.screen = null;
+    this.screenStream = this.screenShare = null;
     for (const track of this.localStream.getTracks()) this.localStream.removeTrack(track);
   }
 

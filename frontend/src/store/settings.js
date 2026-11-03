@@ -1,3 +1,5 @@
+import { DEFAULT_STREAM_QUALITY } from '../core/media.js';
+
 // User preferences persisted in localStorage. public/theme-init.js reads the same key.
 const STORAGE_KEY = 'jayc.settings';
 
@@ -7,12 +9,19 @@ export const DEFAULT_SETTINGS = Object.freeze({
   /** 'system' | 'light' | 'dark' */
   theme: 'system',
   lastRoom: '',
+  /** Last screen-share choices: 'screen' | 'window', and { resolution, fps, optimizeFor }. */
+  shareMode: 'screen',
+  streamQuality: DEFAULT_STREAM_QUALITY,
 });
 
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    return { ...DEFAULT_SETTINGS, ...saved };
+    return {
+      ...DEFAULT_SETTINGS,
+      ...saved,
+      streamQuality: { ...DEFAULT_STREAM_QUALITY, ...saved.streamQuality },
+    };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

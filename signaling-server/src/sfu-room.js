@@ -6,6 +6,9 @@ export const SOURCES = {
   'screen-audio': 'audio',
 };
 
+/** How a screen share was captured (sent along with `screen` producers). */
+export const SHARE_MODES = new Set(['screen', 'window']);
+
 export class SfuError extends Error {
   constructor(code) {
     super(code);
@@ -61,6 +64,7 @@ export class SfuRoom {
       id: p.id,
       kind: p.kind,
       source: p.appData.source,
+      ...(p.appData.mode ? { mode: p.appData.mode } : {}),
       paused: p.paused,
     }));
   }
@@ -102,8 +106,11 @@ export class SfuRoom {
     return { iceParameters: await this.#transport(peerId, transportId).restartIce() };
   }
 
-  async produce(peerId, { transportId, kind, rtpParameters, source, paused = false }) {
+  async produce(peerId, { transportId, kind, rtpParameters, source, mode, paused = false }) {
     if (SOURCES[source] !== kind || !isObject(rtpParameters)) throw new SfuError('bad-request');
+    if (source.startsWith('screen') ? mode !== undefined && !SHARE_MODES.has(mode) : mode !== undefined) {
+      throw new SfuError('bad-request');
+    }
     const member = this.#member(peerId);
     if ([...member.producers.values()].some((p) => p.appData.source === source)) {
       throw new SfuError('duplicate-source');
@@ -111,7 +118,12 @@ export class SfuRoom {
     const transport = this.#transport(peerId, transportId);
     if (transport.appData.direction !== 'send') throw new SfuError('bad-request');
 
-    const producer = await transport.produce({ kind, rtpParameters, paused: Boolean(paused), appData: { source, peerId } });
+    const producer = await transport.produce({
+      kind,
+      rtpParameters,
+      paused: Boolean(paused),
+      appData: { source, peerId, ...(mode ? { mode } : {}) },
+    });
     member.producers.set(producer.id, producer);
     producer.on('transportclose', () => member.producers.delete(producer.id));
 
@@ -121,6 +133,7 @@ export class SfuRoom {
       producerId: producer.id,
       kind,
       source,
+      ...(mode ? { mode } : {}),
       paused: producer.paused,
     });
     return { id: producer.id };
@@ -172,6 +185,7 @@ export class SfuRoom {
       peerId: ownerId,
       kind: consumer.kind,
       source: producer.appData.source,
+      ...(producer.appData.mode ? { mode: producer.appData.mode } : {}),
       type: consumer.type,
       rtpParameters: consumer.rtpParameters,
       producerPaused: consumer.producerPaused,

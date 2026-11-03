@@ -249,6 +249,38 @@ describe('SFU requests', () => {
     c.client.close();
   });
 
+  test('screen producers carry the share mode to everyone', async () => {
+    const vp8 = {
+      codecs: [{ mimeType: 'video/VP8', payloadType: 101, clockRate: 90000, parameters: {}, rtcpFeedback: [] }],
+      headerExtensions: [],
+      encodings: [{ ssrc: 22222222 }],
+      rtcp: { cname: 'test' },
+    };
+    const a = await joined(port, 'sfu-screen', 'Alice');
+    const b = await joined(port, 'sfu-screen', 'Bob');
+    const sendT = (await a.client.request('createTransport', { direction: 'send' })).data;
+    await b.client.request('createTransport', { direction: 'recv' });
+
+    const badMode = await a.client.request('produce', { transportId: sendT.id, kind: 'video', source: 'screen', mode: 'tab', rtpParameters: vp8 });
+    assert.equal(badMode.error, 'bad-request');
+    const modeOnMic = await a.client.request('produce', { transportId: sendT.id, kind: 'audio', source: 'mic', mode: 'window', rtpParameters: opusRtpParameters });
+    assert.equal(modeOnMic.error, 'bad-request');
+
+    const { id: producerId } = (
+      await a.client.request('produce', { transportId: sendT.id, kind: 'video', source: 'screen', mode: 'window', rtpParameters: vp8 })
+    ).data;
+    const announced = await b.client.next('new-producer');
+    assert.equal(announced.source, 'screen');
+    assert.equal(announced.mode, 'window');
+
+    const consumed = await b.client.request('consume', { producerId, rtpCapabilities: b.msg.routerRtpCapabilities });
+    assert.equal(consumed.data.mode, 'window');
+
+    const c = await joined(port, 'sfu-screen', 'Carol');
+    assert.equal(c.msg.peers.find((p) => p.id === a.msg.id).producers[0].mode, 'window');
+    for (const x of [a, b, c]) x.client.close();
+  });
+
   test('leaving closes your producers for everyone consuming them', async () => {
     const a = await joined(port, 'sfu-leave', 'Alice');
     const b = await joined(port, 'sfu-leave', 'Bob');

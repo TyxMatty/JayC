@@ -238,11 +238,23 @@ WASAPI process loopback        mixer Rust                 tauri::ipc::Channel   
 
 ### Qualidade durante a transmissão
 
-1. `track.applyConstraints({width, height, frameRate})` muda a captura na origem.
-2. `sender.setParameters()` com `encodings[0].maxBitrate`, `maxFramerate` e `scaleResolutionDownBy` muda o encoder.
-3. Não há renegociação nem queda. Se o `applyConstraints` falhar, o fallback é capturar de novo e usar `replaceTrack()`.
+Tudo fica no painel "Share" da chamada, que é um `popover`. As escolhas são salvas para a próxima vez.
 
-Presets: resolução 360p, 480p, 720p, 1080p, 1440p ou original. FPS 5, 15, 24, 30 ou 60. Bitrate automático ou com teto.
+1. `track.applyConstraints({ frameRate: {max}, height: {max} })` reduz a captura na origem, que é o caminho mais barato. O Chromium faz isso com `resizeMode: crop-and-scale`.
+2. `producer.setRtpEncodingParameters({ maxBitrate, maxFramerate, scaleResolutionDownBy })` ajusta o encoder. Se a captura continuar maior que o pedido, porque o `applyConstraints` foi ignorado, quem reduz é o encoder (`scaleResolutionDownBy`).
+3. Não há renegociação nem queda: o SSRC é o mesmo antes e depois, verificado com `getStats()`.
+
+| Opção | Valores |
+|---|---|
+| Resolução | 360p, 480p, 720p, 1080p (padrão), 1440p ou Source |
+| FPS | 5, 15, 24, 30 (padrão) ou 60 |
+| Otimizar para | *Text & detail* (`contentHint: detail`, padrão) ou *Motion & games* (`motion`) |
+
+Bitrate automático: ~0,08 bit/pixel/quadro, e os quadros acima de 30 fps contam pela metade. Dá ≈5 Mbps em 1080p30 e ≈7,5 Mbps em 1080p60, entre 0,2 e 12 Mbps.
+
+A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8). Usar H.264 com encoder por hardware, para gastar menos CPU em 1080p60, fica como otimização futura: exige um `profile-level-id` que suporte 1080p.
+
+**Para quem assiste:** o layout vira *presenting*, com as telas em destaque e as câmeras numa faixa de 160 px (pedindo a camada mais baixa). Clique duplo na tela abre em tela cheia. Quem transmite vê uma prévia pequena no canto.
 
 ### Settings › Streaming
 
@@ -316,7 +328,7 @@ Cada etapa termina com algo testável.
 | 5 ✅ | Chamadas (câmera/mic), 1:1 e até 4 pessoas | duas instâncias do app se veem e se ouvem via servidor local |
 | 6 ✅ | **Spike das transmissões** (Windows), ver [spikes/06-transmissoes.md](spikes/06-transmissoes.md) | No Tauri: o `getDisplayMedia` abre o seletor e dá para descobrir a janela escolhida (ou o Plano B foi decidido). Um protótipo em Rust captura o áudio de um único processo. |
 | 7 ✅ | **SFU (mediasoup)** no container, interface de transporte no cliente, estado pela sinalização, simulcast; limite da sala vai a 16 | 16 abas ou instâncias numa sala se veem; cada cliente envia 1× (confirmado em `getStats()`); o Docker expõe só a 3000 e uma porta de mídia |
-| 8 | **Transmissão: vídeo** (tela inteira e janela), tela em destaque para quem assiste e controles de qualidade | resolução e FPS mudam durante a transmissão sem a chamada cair, confirmado em `getStats()` |
+| 8 ✅ | **Transmissão: vídeo** (tela inteira e janela), tela em destaque para quem assiste e controles de qualidade | resolução e FPS mudam durante a transmissão sem a chamada cair, confirmado em `getStats()` |
 | 9 | **Plugin `system-audio` (Windows):** process loopback, mixer, ponte Channel → AudioWorklet → faixa WebRTC, Opus estéreo | quem assiste ouve o áudio de um app escolhido, em estéreo |
 | 10 | **Modos completos + Settings › Streaming** | Tela inteira: com o Discord excluído, ninguém ouve o Discord nem as vozes da chamada. Janela: só o áudio daquele app é transmitido. |
 | 11 | PiP desktop | o vídeo remoto flutua sobre outras janelas |

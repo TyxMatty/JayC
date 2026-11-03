@@ -1,5 +1,7 @@
 import { h } from './dom.js';
 import { icons } from './icons.js';
+import { canShareScreen } from '../core/media.js';
+import { createSharePanel } from './share-panel.js';
 
 const CONNECTION_LABELS = {
   new: 'Connecting…',
@@ -76,6 +78,37 @@ function createTile({ name, stream, local, getMedia }) {
   return tile;
 }
 
+/** A shared screen/window. Double-click toggles fullscreen. Audio (later) plays from the same element. */
+function createScreenTile({ name, stream, local }) {
+  const video = h('video', { autoplay: true, playsinline: true, muted: local, srcObject: stream });
+  const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
+  const nameText = h('span', {}, local ? 'Your screen' : `${name}'s screen`);
+  const el = h(
+    'div',
+    { class: local ? 'tile tile-screen tile-screen-local' : 'tile tile-screen', title: local ? '' : 'Double-click for fullscreen' },
+    video,
+    h('div', { class: 'tile-label' }, icon, nameText),
+  );
+  if (!local) {
+    el.addEventListener('dblclick', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else el.requestFullscreen?.().catch(() => {});
+    });
+  }
+  return {
+    el,
+    refresh({ name: next, mode }) {
+      icon.innerHTML = mode === 'window' ? icons.appWindow : icons.monitor;
+      nameText.textContent = local ? `Your ${mode === 'window' ? 'window' : 'screen'}` : `${next}'s ${mode === 'window' ? 'window' : 'screen'}`;
+      if (video.srcObject !== stream || video.dataset.tracks !== String(stream.getTracks().length)) {
+        video.srcObject = stream;
+        video.dataset.tracks = String(stream.getTracks().length);
+        video.play().catch(() => {});
+      }
+    },
+  };
+}
+
 function controlButton({ label, onClick, variant = '' }) {
   return h('button', { type: 'button', class: `control-btn ${variant}`.trim(), 'aria-label': label, title: label, onClick });
 }
@@ -85,10 +118,15 @@ function controlButton({ label, onClick, variant = '' }) {
  * @param {import('../core/call.js').Call} call
  */
 export function createCallView(call, { displayName, onLeft }) {
-  const stage = h('div', { class: 'call-stage' });
+  // Shared screens (featured) and cameras (grid, or a strip while someone presents).
+  const screens = h('div', { class: 'stage-screens' });
+  const cameras = h('div', { class: 'stage-cameras' });
+  const stage = h('div', { class: 'call-stage' }, screens, cameras);
   const banner = h('div', { class: 'call-banner', role: 'status', hidden: true });
   const toast = h('div', { class: 'call-toast', role: 'status', 'aria-live': 'polite', hidden: true });
   const tiles = new Map();
+  const screenTiles = new Map();
+  let localScreenTile = null;
 
   let toastTimer;
   const showToast = (text) => {
@@ -122,12 +160,33 @@ export function createCallView(call, { displayName, onLeft }) {
     local: true,
     getMedia: () => ({ audio: call.micOn, video: call.cameraOn }),
   });
-  stage.append(localTile.el);
+  cameras.append(localTile.el);
 
   const layout = () => {
     const remotes = tiles.size;
-    stage.dataset.layout = remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
+    stage.dataset.layout =
+      screenTiles.size > 0 ? 'presenting' : remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
     waiting.hidden = remotes > 0;
+  };
+
+  const renderScreen = (participant) => {
+    let tile = screenTiles.get(participant.id);
+    if (!participant.media.screen) {
+      if (tile) {
+        tile.el.remove();
+        screenTiles.delete(participant.id);
+        layout();
+      }
+      return;
+    }
+    if (!tile) {
+      tile = createScreenTile({ name: participant.name, stream: participant.screenStream, local: false });
+      screenTiles.set(participant.id, tile);
+      screens.append(tile.el);
+      showToast(`${participant.name} started sharing.`);
+      layout();
+    }
+    tile.refresh({ name: participant.name, mode: participant.screenMode });
   };
 
   const renderParticipant = (participant, { announce }) => {
@@ -140,21 +199,39 @@ export function createCallView(call, { displayName, onLeft }) {
         getMedia: () => participant.media,
       });
       tiles.set(participant.id, tile);
-      stage.insertBefore(tile.el, localTile.el);
+      cameras.insertBefore(tile.el, localTile.el);
       if (announce) showToast(`${participant.name} joined.`);
       layout();
     }
     tile.setName(participant.name);
     tile.setOverlay(CONNECTION_LABELS[participant.connectionState]);
     tile.refresh();
+    renderScreen(participant);
+  };
+
+  /** Small preview of what we're sharing, floating in a corner. */
+  const renderLocalScreen = () => {
+    if (!call.screenStream) {
+      localScreenTile?.el.remove();
+      localScreenTile = null;
+      return;
+    }
+    if (!localScreenTile || localScreenTile.stream !== call.screenStream) {
+      localScreenTile?.el.remove();
+      localScreenTile = { ...createScreenTile({ name: displayName, stream: call.screenStream, local: true }), stream: call.screenStream };
+      stage.append(localScreenTile.el);
+    }
+    localScreenTile.refresh({ mode: call.screenShare?.mode });
   };
 
   call.addEventListener('participant-added', (e) => renderParticipant(e.detail.participant, { announce: true }));
   call.addEventListener('participant-updated', (e) => renderParticipant(e.detail.participant, { announce: false }));
   call.addEventListener('participant-removed', (e) => {
     const { participant } = e.detail;
+    screenTiles.get(participant.id)?.el.remove();
+    screenTiles.delete(participant.id);
     const tile = tiles.get(participant.id);
-    if (!tile) return;
+    if (!tile) return layout();
     tile.el.remove();
     tiles.delete(participant.id);
     showToast(`${participant.name} left.`);
@@ -175,6 +252,12 @@ export function createCallView(call, { displayName, onLeft }) {
   const leaveButton = controlButton({ label: 'Leave call', variant: 'danger', onClick: () => call.leave() });
   leaveButton.innerHTML = icons.phoneOff;
 
+  // Screen sharing (desktop only: mobile WebViews have no getDisplayMedia).
+  const sharePanel = canShareScreen() ? createSharePanel(call, { onError: showToast }) : null;
+  const shareButton = sharePanel
+    ? h('button', { type: 'button', class: 'control-btn', popovertarget: 'share-panel', html: icons.screenShare })
+    : null;
+
   const renderControls = () => {
     micButton.innerHTML = call.micOn ? icons.mic : icons.micOff;
     micButton.setAttribute('aria-pressed', String(!call.micOn));
@@ -188,7 +271,15 @@ export function createCallView(call, { displayName, onLeft }) {
     camButton.title = camButton.getAttribute('aria-label');
     camButton.classList.toggle('off', !call.cameraOn);
 
+    if (shareButton) {
+      const label = call.sharing ? 'Screen share settings' : 'Share your screen';
+      shareButton.setAttribute('aria-label', label);
+      shareButton.title = label;
+      shareButton.classList.toggle('active', call.sharing);
+    }
+
     localTile.refresh();
+    renderLocalScreen();
   };
 
   const guarded = (button, action, what) => async () => {
@@ -230,6 +321,7 @@ export function createCallView(call, { displayName, onLeft }) {
     stage,
     waiting,
     toast,
-    h('div', { class: 'call-controls' }, micButton, camButton, leaveButton),
+    h('div', { class: 'call-controls' }, micButton, camButton, shareButton, leaveButton),
+    sharePanel,
   );
 }
