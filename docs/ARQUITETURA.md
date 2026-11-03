@@ -217,12 +217,12 @@ WASAPI process loopback        mixer Rust                 tauri::ipc::Channel   
 - **API do Windows:** `ActivateAudioInterfaceAsync` com `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`, disponível a partir do Windows 10 2004 (build 19041). Cada stream **inclui ou exclui uma única árvore de processos**.
 - **Tela inteira:**
   - Se a lista de exclusão estiver vazia, basta um stream EXCLUDE da árvore do **processo navegador do WebView2**, o `msedgewebview2.exe` filho direto do Jay-C, que é quem toca todo o som do app. A árvore do próprio `jay-c.exe` não serve: para o loopback do Windows, ela não inclui o WebView2. Ver [spikes/06](spikes/06-transmissoes.md).
-  - Com exclusões: o app lista as sessões de áudio ativas (`IAudioSessionManager2`) e abre um stream INCLUDE por processo que não seja o Jay-C nem esteja na lista. A comparação é pelo nome do executável, também nos processos ancestrais. Os streams são misturados.
+  - Com exclusões: o app lista as sessões de áudio ativas (`IAudioSessionManager2`) e abre um stream INCLUDE por processo que não seja o Jay-C nem esteja na lista. A comparação é pelo nome do executável, também nos processos ancestrais. Uma raiz que já está dentro da árvore de outra é pulada, para o som não entrar duas vezes. Os streams são misturados por uma thread com relógio próprio de 20 ms. Ela não depende de nenhum stream, porque um processo em silêncio pode não entregar pacotes e um app pode fechar. Cada stream só entra na mistura depois de ter 40 ms na fila, para o jitter dos pacotes não cortar o som. Um stream que falha ao abrir é pulado. Medido com tons em dois executáveis: o app excluído cai de −16,7 para −90 dB e o outro continua a −16,7 dB (teste `exclusion_live`, `cargo test --lib -- --ignored`).
   - Sessões que surgem durante a transmissão entram na mistura via `IAudioSessionNotification`.
 - **Janela:** obtém o processo dono da janela com HWND → `GetWindowThreadProcessId` e abre um stream INCLUDE dessa árvore.
 - **Plugin:** `plugins/tauri-plugin-system-audio`, em Rust com o crate `windows`. Comandos:
   - `list_audio_apps()`: apps tocando som agora, para a tela de Settings
-  - `start_capture({ mode, windowHandle?, excludeExes[] }, channel)`
+  - `start_capture({ include[] | excludeSelf, excludeExes[] }, channel)`
   - `stop_capture()`
 
   Em outras plataformas o plugin responde `unsupported` e a transmissão sai sem áudio. No macOS, o ScreenCaptureKit (`SCContentFilter` com `excludingApplications`) cobre os dois modos e fica para uma fase posterior.

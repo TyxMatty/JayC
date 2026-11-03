@@ -1,11 +1,12 @@
-//! Windows implementation: WASAPI process loopback (one stream per process tree), mixed on the
-//! first stream's audio clock and delivered in 20 ms stereo f32 chunks.
+//! Windows implementation: WASAPI process loopback (one stream per process tree; several are
+//! mixed on a 20 ms clock of their own), delivered in 20 ms stereo f32 chunks.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use wasapi::{
     AudioCaptureClient, AudioClient, DeviceEnumerator, Direction, Handle, SampleType, SessionState, StreamMode,
@@ -21,7 +22,7 @@ use crate::apm::Apm;
 use crate::{AudioApp, CHANNELS, CHUNK_FRAMES, CaptureInfo, CaptureTarget, MicInfo, MicOptions, SAMPLE_RATE, WindowProcess};
 
 const CHUNK_SAMPLES: usize = CHUNK_FRAMES * CHANNELS as usize;
-/// Secondary sources keep at most this much audio queued (drift / hiccups), in chunks.
+/// Queued sources keep at most this much audio (drift / hiccups), in chunks.
 const MAX_QUEUED_CHUNKS: usize = 5;
 /// System processes whose audio sessions are not "apps".
 const IGNORED_EXES: &[&str] = &["audiodg.exe", "[system process]", "system"];
@@ -87,20 +88,43 @@ fn own_audio_root(table: &ProcessTable) -> u32 {
         .unwrap_or(me)
 }
 
+/// `pid` followed by its ancestors, nearest first.
+fn lineage(pid: u32, table: &ProcessTable) -> impl Iterator<Item = u32> + '_ {
+    std::iter::successors(Some(pid), move |current| {
+        table.get(current).map(|&(parent, _)| parent).filter(|&parent| parent != 0 && parent != *current)
+    })
+    .take(32)
+}
+
 /// True if `pid` is this process or one of its descendants (e.g. our WebView2 processes).
 fn in_own_tree(pid: u32, table: &ProcessTable) -> bool {
     let me = std::process::id();
-    let mut current = pid;
-    for _ in 0..32 {
-        if current == me {
-            return true;
-        }
-        match table.get(&current) {
-            Some(&(parent, _)) if parent != 0 && parent != current => current = parent,
-            _ => return false,
-        }
-    }
-    false
+    lineage(pid, table).any(|p| p == me)
+}
+
+/// "Discord.exe" matches "discord.exe" and "Discord".
+fn same_exe(exe: &str, name: &str) -> bool {
+    let base = |s: &str| {
+        let s = s.trim().to_ascii_lowercase();
+        s.strip_suffix(".exe").map(str::to_string).unwrap_or(s)
+    };
+    base(exe) == base(name)
+}
+
+/// True if `pid` or one of its ancestors runs an excluded executable (so e.g. the WebView2
+/// helpers of an excluded app are excluded too).
+fn is_excluded(pid: u32, table: &ProcessTable, exclude_exes: &[String]) -> bool {
+    lineage(pid, table).any(|p| table.get(&p).is_some_and(|(_, exe)| exclude_exes.iter().any(|name| same_exe(exe, name))))
+}
+
+/// The process trees to capture for "everything except us and `exclude_exes`": one per app with
+/// an audio session. Must run on an MTA thread (see `list_audio_apps`).
+fn included_roots(exclude_exes: &[String]) -> Result<Vec<u32>, String> {
+    let apps = list_audio_apps()?;
+    let table = process_table();
+    let roots: Vec<u32> = apps.iter().map(|app| app.pid).filter(|&pid| !is_excluded(pid, &table, exclude_exes)).collect();
+    // A root inside another root's tree is already captured with it; capturing both doubles it.
+    Ok(roots.iter().copied().filter(|&pid| !lineage(pid, &table).skip(1).any(|p| roots.contains(&p))).collect())
 }
 
 // ---------- Queries ----------
@@ -180,10 +204,10 @@ type SharedQueue = Arc<Mutex<VecDeque<f32>>>;
 
 /// What a capture thread does with its samples.
 enum Role {
-    /// Secondary source: queue samples for the mixer.
+    /// One of several sources (or the echo reference): queue samples for a consumer.
     Feed(SharedQueue),
-    /// First source: its audio clock drives mixing in the others and emitting chunks.
-    Mix { others: Vec<SharedQueue>, sink: Sink },
+    /// The only source: emit chunks on its own audio clock, without added latency.
+    Emit(Sink),
 }
 
 pub struct Capture {
@@ -206,25 +230,44 @@ impl Capture {
         sink: impl FnMut(&[f32]) + Send + 'static,
         on_error: impl Fn(String) + Send + Sync + 'static,
     ) -> Result<(Capture, CaptureInfo), String> {
+        // With exclusions, a stream that fails to open (e.g. the app just quit) is skipped.
+        let per_app = target.exclude_self && !target.exclude_exes.is_empty();
         // (pid, include_tree)
-        let streams: Vec<(u32, bool)> = if target.exclude_self {
+        let streams: Vec<(u32, bool)> = if per_app {
+            let exclude_exes = target.exclude_exes.clone();
+            // COM must be MTA here; the caller's thread may be the (STA) main thread.
+            let roots = std::thread::spawn(move || included_roots(&exclude_exes))
+                .join()
+                .map_err(|_| "audio session listing panicked".to_string())??;
+            roots.into_iter().map(|pid| (pid, true)).collect()
+        } else if target.exclude_self {
             vec![(own_audio_root(&process_table()), false)]
         } else {
             let mut seen = HashSet::new();
             target.include.iter().copied().filter(|pid| seen.insert(*pid)).map(|pid| (pid, true)).collect()
         };
-        if streams.is_empty() {
+        if streams.is_empty() && !per_app {
             return Err("nothing to capture".into());
         }
 
         let stop = Arc::new(AtomicBool::new(false));
         let on_error: ErrorSink = Arc::new(on_error);
-        let queues: Vec<SharedQueue> = (1..streams.len()).map(|_| SharedQueue::default()).collect();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
-
         let mut capture = Capture { stop: stop.clone(), threads: Vec::new() };
-        let mut roles: Vec<Role> = vec![Role::Mix { others: queues.clone(), sink: Box::new(sink) }];
-        roles.extend(queues.into_iter().map(Role::Feed));
+
+        let roles: Vec<Role> = if streams.len() == 1 && !per_app {
+            vec![Role::Emit(Box::new(sink))]
+        } else {
+            let queues: Vec<SharedQueue> = streams.iter().map(|_| SharedQueue::default()).collect();
+            let (stop, sources, sink): (_, _, Sink) = (stop.clone(), queues.clone(), Box::new(sink));
+            capture.threads.push(
+                std::thread::Builder::new()
+                    .name("system-audio-mixer".into())
+                    .spawn(move || run_mixer(sources, sink, &stop))
+                    .map_err(|e| e.to_string())?,
+            );
+            queues.into_iter().map(Role::Feed).collect()
+        };
 
         for ((pid, include), role) in streams.iter().copied().zip(roles) {
             let (stop, ready, on_error) = (stop.clone(), ready_tx.clone(), on_error.clone());
@@ -237,16 +280,52 @@ impl Capture {
         drop(ready_tx);
 
         // Fail start() if any stream can't be opened (dropping `capture` stops the others).
+        let mut opened = 0;
         for _ in 0..streams.len() {
             match ready_rx.recv() {
-                Ok(Ok(())) => {}
+                Ok(Ok(())) => opened += 1,
+                Ok(Err(error)) if per_app => log::warn!("system-audio: skipping an app: {error}"),
                 Ok(Err(error)) => return Err(error),
                 Err(_) => return Err("capture thread exited during start".into()),
             }
         }
 
-        let info = CaptureInfo { sample_rate: SAMPLE_RATE, channels: CHANNELS, chunk_frames: CHUNK_FRAMES, streams: streams.len() };
+        let info = CaptureInfo { sample_rate: SAMPLE_RATE, channels: CHANNELS, chunk_frames: CHUNK_FRAMES, streams: opened };
         Ok((capture, info))
+    }
+}
+
+/// Mixes several sources on a steady 20 ms clock of its own, so it keeps going when any source
+/// goes quiet (a silent process may deliver no packets) or its process quits.
+fn run_mixer(sources: Vec<SharedQueue>, mut sink: Sink, stop: &AtomicBool) {
+    let period = Duration::from_secs_f64(CHUNK_FRAMES as f64 / SAMPLE_RATE as f64);
+    let start = Instant::now();
+    let mut primed = vec![false; sources.len()];
+    for tick in 1u32.. {
+        if stop.load(Ordering::SeqCst) {
+            break;
+        }
+        // Deadlines from a fixed start, so sleep overshoot doesn't accumulate.
+        if let Some(wait) = (start + period * tick).checked_duration_since(Instant::now()) {
+            std::thread::sleep(wait);
+        }
+        let mut chunk = vec![0f32; CHUNK_SAMPLES];
+        for (queue, primed) in sources.iter().zip(primed.iter_mut()) {
+            let mut queue = queue.lock().unwrap();
+            // Read a source only once 40 ms are queued, so packet jitter doesn't cut its sound.
+            if !*primed && queue.len() < CHUNK_SAMPLES * 2 {
+                continue;
+            }
+            let take = queue.len().min(CHUNK_SAMPLES);
+            *primed = take == CHUNK_SAMPLES;
+            for (out, s) in chunk.iter_mut().zip(queue.drain(..take)) {
+                *out += s;
+            }
+        }
+        for s in &mut chunk {
+            *s = s.clamp(-1.0, 1.0);
+        }
+        sink(&chunk);
     }
 }
 
@@ -314,21 +393,9 @@ fn run_stream(pid: u32, include_tree: bool, mut role: Role, stop: &AtomicBool, r
                     queue.drain(..excess);
                 }
             }
-            Role::Mix { others, sink } => {
+            Role::Emit(sink) => {
                 while pending.len() >= CHUNK_SAMPLES {
-                    let mut chunk: Vec<f32> = pending.drain(..CHUNK_SAMPLES).collect();
-                    for queue in others.iter() {
-                        let mut queue = queue.lock().unwrap();
-                        let take = queue.len().min(CHUNK_SAMPLES);
-                        for (out, s) in chunk.iter_mut().zip(queue.drain(..take)) {
-                            *out += s;
-                        }
-                    }
-                    if !others.is_empty() {
-                        for s in &mut chunk {
-                            *s = s.clamp(-1.0, 1.0);
-                        }
-                    }
+                    let chunk: Vec<f32> = pending.drain(..CHUNK_SAMPLES).collect();
                     sink(&chunk);
                 }
             }
@@ -497,4 +564,128 @@ fn run_mic(
         }
     }
     let _ = client.stop_stream();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn excludes_by_exe_or_ancestor() {
+        // 1 explorer -> 10 Discord -> 11 Discord -> 12 msedgewebview2; 1 -> 20 brave
+        let table: ProcessTable = [
+            (1, (0, "explorer.exe")),
+            (10, (1, "Discord.exe")),
+            (11, (10, "Discord.exe")),
+            (12, (11, "msedgewebview2.exe")),
+            (20, (1, "brave.exe")),
+        ]
+        .into_iter()
+        .map(|(pid, (parent, exe))| (pid, (parent, exe.to_string())))
+        .collect();
+        let exclude = vec!["discord".to_string()];
+        assert!(is_excluded(11, &table, &exclude));
+        assert!(is_excluded(12, &table, &exclude), "helper of an excluded app");
+        assert!(!is_excluded(20, &table, &exclude));
+        assert!(!is_excluded(1, &table, &exclude));
+        assert!(same_exe("Discord.exe", " DISCORD.EXE "));
+        assert!(!same_exe("Discord.exe", "DiscordPTB.exe"));
+        assert_eq!(lineage(12, &table).collect::<Vec<_>>(), [12, 11, 10, 1]);
+    }
+
+    /// Writes a 30 s stereo 16-bit WAV of a sine at `hz`.
+    fn write_tone(path: &std::path::Path, hz: f64) {
+        let frames = SAMPLE_RATE as usize * 30;
+        let mut data = Vec::with_capacity(frames * 4);
+        for i in 0..frames {
+            let s = ((2.0 * std::f64::consts::PI * hz * i as f64 / SAMPLE_RATE as f64).sin() * 0.3 * 32767.0) as i16;
+            data.extend_from_slice(&s.to_le_bytes());
+            data.extend_from_slice(&s.to_le_bytes());
+        }
+        let mut wav = Vec::new();
+        for part in [&b"RIFF"[..], &(36 + data.len() as u32).to_le_bytes(), b"WAVEfmt ", &16u32.to_le_bytes(), &1u16.to_le_bytes(), &2u16.to_le_bytes()] {
+            wav.extend_from_slice(part);
+        }
+        for part in [SAMPLE_RATE.to_le_bytes(), (SAMPLE_RATE * 4).to_le_bytes()] {
+            wav.extend_from_slice(&part);
+        }
+        for part in [&4u16.to_le_bytes()[..], &16u16.to_le_bytes(), b"data", &(data.len() as u32).to_le_bytes(), &data] {
+            wav.extend_from_slice(part);
+        }
+        std::fs::write(path, wav).unwrap();
+    }
+
+    /// Power of `hz` in the left channel (Goertzel), in dB.
+    fn tone_db(samples: &[f32], hz: f64) -> f64 {
+        let w = 2.0 * std::f64::consts::PI * hz / SAMPLE_RATE as f64;
+        let (mut s1, mut s2) = (0.0f64, 0.0f64);
+        let left: Vec<f64> = samples.iter().step_by(2).map(|&s| s as f64).collect();
+        for &x in &left {
+            let s = x + 2.0 * w.cos() * s1 - s2;
+            s2 = s1;
+            s1 = s;
+        }
+        let power = (s1 * s1 + s2 * s2 - 2.0 * w.cos() * s1 * s2) / (left.len() as f64).powi(2);
+        10.0 * power.max(1e-12).log10()
+    }
+
+    fn capture_for(exclude_exes: &[&str], seconds: u64) -> (Vec<f32>, usize) {
+        let collected = Arc::new(Mutex::new(Vec::new()));
+        let sink = collected.clone();
+        let target = CaptureTarget { include: vec![], exclude_self: true, exclude_exes: exclude_exes.iter().map(|s| s.to_string()).collect() };
+        let (capture, info) =
+            Capture::start(target, move |s: &[f32]| sink.lock().unwrap().extend_from_slice(s), |e| panic!("{e}")).unwrap();
+        std::thread::sleep(Duration::from_secs(seconds));
+        drop(capture);
+        let samples = collected.lock().unwrap().clone();
+        (samples, info.streams)
+    }
+
+    /// Live check with real audio: two tones from two different executables, one of them excluded.
+    /// Plays sound on the default speakers for ~10 s.
+    ///   cargo test --lib -- --ignored --nocapture exclusion_live
+    #[test]
+    #[ignore]
+    fn exclusion_live() {
+        let dir = std::env::temp_dir().join("jayc-exclusion-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let ps = std::path::Path::new(&std::env::var("WINDIR").unwrap()).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        let other = dir.join("jayc-tone-b.exe");
+        std::fs::copy(&ps, &other).unwrap();
+        let (wav_a, wav_b) = (dir.join("a.wav"), dir.join("b.wav"));
+        write_tone(&wav_a, 500.0);
+        write_tone(&wav_b, 1500.0);
+        // Started via `cmd /c start` so they're not our children: our own tree is never captured.
+        let play = |exe: &std::path::Path, wav: &std::path::Path| {
+            let script = format!("(New-Object Media.SoundPlayer '{}').PlaySync()", wav.display());
+            let exe = exe.to_str().unwrap();
+            std::process::Command::new("cmd").args(["/c", "start", "", "/min", exe, "-NoProfile", "-c", &script]).status().unwrap();
+        };
+        play(&ps, &wav_a);
+        play(&other, &wav_b);
+        std::thread::sleep(Duration::from_secs(3)); // let both audio sessions start
+        for app in std::thread::spawn(list_audio_apps).join().unwrap().unwrap() {
+            println!("app: {} {} active={}", app.pid, app.exe, app.active);
+        }
+
+        let (all, all_streams) = capture_for(&["jayc-nothing.exe"], 3);
+        let (excluded, excluded_streams) = capture_for(&["jayc-tone-b"], 3);
+        // Stop the players (the tones would play for 30 s); matched by their WAV path.
+        let stop = format!(
+            "Get-CimInstance Win32_Process | ? {{ $_.CommandLine -like '*{}*' }} | % {{ Stop-Process -Id $_.ProcessId }}",
+            dir.display()
+        );
+        std::process::Command::new(&ps).args(["-NoProfile", "-c", &stop]).status().unwrap();
+
+        let report = |name: &str, s: &[f32], streams: usize| {
+            let (a, b) = (tone_db(s, 500.0), tone_db(s, 1500.0));
+            println!("{name}: {streams} streams, {:.2} s, 500 Hz {a:.1} dB, 1500 Hz {b:.1} dB", s.len() as f64 / 2.0 / SAMPLE_RATE as f64);
+            (a, b)
+        };
+        let (all_a, all_b) = report("no exclusions", &all, all_streams);
+        let (ex_a, ex_b) = report("jayc-tone-b excluded", &excluded, excluded_streams);
+        assert!(all_a > -40.0 && all_b > -40.0, "both tones must be audible without exclusions");
+        assert!(ex_a > -40.0, "the other app must still be captured");
+        assert!(ex_b < all_b - 40.0, "the excluded app must be gone");
+    }
 }

@@ -40,6 +40,11 @@ pub struct CaptureTarget {
     /// Windows means excluding the app's WebView2 browser process tree. Takes precedence over `include`.
     #[serde(default)]
     pub exclude_self: bool,
+    /// With `exclude_self`: also leave out apps running these executables (e.g. "Discord.exe",
+    /// case-insensitive, ".exe" optional), themselves or as an ancestor process. Then each other
+    /// app playing sound is captured as its own stream and mixed.
+    #[serde(default)]
+    pub exclude_exes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
