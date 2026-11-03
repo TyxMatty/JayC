@@ -9,6 +9,8 @@ App leve e open-source de chamadas e compartilhamento de tela para desktop e mob
 | [`plugins/tauri-plugin-system-audio/`](plugins/tauri-plugin-system-audio/) | Captura de áudio por processo para as transmissões (Windows) |
 | `plugins/tauri-plugin-pip/` | Plugin de Picture-in-Picture para Android/iOS *(em construção)* |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas e etapas |
+| [`docs/CONTINUAR.md`](docs/CONTINUAR.md) | Instalar num PC novo, estado atual e próximos passos |
+| [`scripts/`](scripts/) | Ferramentas de desenvolvimento: app com depuração, rodar JS no app real, tom de teste |
 
 ## Rodando o app
 
