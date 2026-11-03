@@ -5,7 +5,8 @@
   "license": "MIT",
   "workspaces": [
     "signaling-server",
-    "frontend"
+    "frontend",
+    "plugins/tauri-plugin-system-audio"
   ],
   "scripts": {
     "dev": "npm run tauri dev -w frontend",

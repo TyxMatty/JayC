@@ -1,0 +1,9 @@
+[default]
+description = "Lets the app list audio-playing apps and capture their audio for screen sharing."
+permissions = [
+  "allow-is-supported",
+  "allow-list-audio-apps",
+  "allow-window-process",
+  "allow-start-capture",
+  "allow-stop-capture",
+]

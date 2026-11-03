@@ -1545,8 +1545,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-log",
- "wasapi",
- "windows",
+ "tauri-plugin-system-audio",
 ]
 
 [[package]]
@@ -3232,6 +3231,19 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.21",
  "time",
+]
+
+[[package]]
+name = "tauri-plugin-system-audio"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "wasapi",
+ "windows",
 ]
 
 [[package]]

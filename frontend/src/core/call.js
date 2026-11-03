@@ -10,6 +10,10 @@ import {
   targetHeight,
   DEFAULT_STREAM_QUALITY,
 } from './media.js';
+import { startScreenAudio } from './screen-audio.js';
+
+/** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
+const SCREEN_AUDIO_CODEC_OPTIONS = { opusStereo: true, opusFec: true, opusDtx: false, opusMaxAverageBitrate: 128_000 };
 
 /** Camera simulcast: the SFU forwards one of these layers to each viewer. */
 const CAMERA_ENCODINGS = [
@@ -39,6 +43,7 @@ function cameraLayerFor(cameraCount, presenting) {
  *   participant-updated { participant }   tracks, mute state or connection changed
  *   local-updated       {}                local tracks changed (mute, camera on/off, screen share)
  *   signaling-state     { state }
+ *   notice              { message }       something worth telling the user (e.g. no screen sound)
  *   ended               {}
  *
  * participant = {
@@ -55,7 +60,7 @@ export class Call extends EventTarget {
   localStream = new MediaStream();
   /** Our own screen share preview, while sharing. */
   screenStream = null;
-  /** { mode: 'screen' | 'window', windowHandle: number | null } while sharing. */
+  /** { mode: 'screen' | 'window', windowHandle: number | null, audio: string | null } while sharing. */
   screenShare = null;
   screenQuality = { ...DEFAULT_STREAM_QUALITY };
   /** @type {Map<string, object>} */
@@ -70,8 +75,10 @@ export class Call extends EventTarget {
   #recv = null;
   /** Resolves with the recv transport of the current setup (consumes wait for it). */
   #recvReady = null;
-  /** @type {Record<'mic' | 'camera' | 'screen', import('mediasoup-client').types.Producer | null>} */
-  #producers = { mic: null, camera: null, screen: null };
+  /** @type {Record<'mic' | 'camera' | 'screen' | 'screen-audio', import('mediasoup-client').types.Producer | null>} */
+  #producers = { mic: null, camera: null, screen: null, 'screen-audio': null };
+  /** Native screen-share sound while sharing: { track, stop(), description }. */
+  #screenAudio = null;
   #micMuted = false;
   /** Bumped on every (re)setup so late async results from an old setup are discarded. */
   #generation = 0;
@@ -171,7 +178,7 @@ export class Call extends EventTarget {
     if (this.local.screen) await this.stopScreenShare();
 
     this.screenQuality = { ...quality };
-    this.screenShare = describeCapture(track);
+    this.screenShare = { ...describeCapture(track), audio: null };
     this.local.screen = track;
     this.screenStream = new MediaStream([track]);
     // "Stop sharing" from the system UI, or the shared window closed.
@@ -179,22 +186,54 @@ export class Call extends EventTarget {
 
     await this.#applyCaptureQuality();
     if (this.#send) await this.#produceScreen();
+    await this.#startScreenAudio();
     this.#emit('local-updated', {});
     return true;
   }
 
   async stopScreenShare() {
-    const producer = this.#producers.screen;
-    this.#producers.screen = null;
-    if (producer) {
-      producer.close();
-      await this.#signaling?.request('closeProducer', { producerId: producer.id }).catch(() => {});
+    this.#screenAudio?.stop();
+    this.#screenAudio = null;
+    for (const source of ['screen', 'screen-audio']) {
+      const producer = this.#producers[source];
+      this.#producers[source] = null;
+      if (producer) {
+        producer.close();
+        await this.#signaling?.request('closeProducer', { producerId: producer.id }).catch(() => {});
+      }
     }
     this.local.screen?.stop();
     this.local.screen = null;
     this.screenStream = null;
     this.screenShare = null;
     this.#emit('local-updated', {});
+  }
+
+  /** Sound for the share (Windows: native per-process capture). Failing here keeps the video going. */
+  async #startScreenAudio() {
+    const share = this.screenShare;
+    try {
+      this.#screenAudio = await startScreenAudio({
+        mode: share.mode,
+        windowHandle: share.windowHandle,
+        onError: (message) => this.#emit('notice', { message: `Screen sound stopped: ${message}` }),
+      });
+    } catch (error) {
+      this.#emit('notice', { message: `Sharing without sound: ${error?.message ?? error}` });
+      return;
+    }
+    if (!this.#screenAudio) return; // not supported on this platform
+    share.audio = this.#screenAudio.description;
+    if (this.#send) await this.#produceScreenAudio();
+  }
+
+  async #produceScreenAudio() {
+    this.#producers['screen-audio'] = await this.#send.produce({
+      track: this.#screenAudio.track,
+      stopTracks: false,
+      codecOptions: SCREEN_AUDIO_CODEC_OPTIONS,
+      appData: { source: 'screen-audio', mode: this.screenShare.mode },
+    });
   }
 
   /** Changes resolution / fps / content hint of the running share, without renegotiating. */
@@ -259,6 +298,7 @@ export class Call extends EventTarget {
     if (this.local.audio) await this.#produce('mic', this.local.audio);
     if (this.local.video) await this.#produce('camera', this.local.video);
     if (this.local.screen) await this.#produceScreen();
+    if (this.#screenAudio) await this.#produceScreenAudio();
   }
 
   async #createTransport(direction, generation) {
@@ -310,7 +350,7 @@ export class Call extends EventTarget {
     this.#send?.close();
     this.#recv?.close();
     this.#send = this.#recv = this.#recvReady = null;
-    this.#producers = { mic: null, camera: null, screen: null };
+    this.#producers = { mic: null, camera: null, screen: null, 'screen-audio': null };
   }
 
   // ---------- Sending ----------
@@ -417,7 +457,6 @@ export class Call extends EventTarget {
   async #consume({ peerId, producerId, source }) {
     const participant = this.participants.get(peerId);
     if (!participant || participant.consumers.has(producerId) || participant.pending.has(producerId)) return;
-    if (source === 'screen-audio') return; // native screen audio arrives with the system-audio milestone
 
     const generation = this.#generation;
     participant.pending.add(producerId);
@@ -512,6 +551,8 @@ export class Call extends EventTarget {
   }
 
   #stopLocal() {
+    this.#screenAudio?.stop();
+    this.#screenAudio = null;
     for (const track of [this.local.audio, this.local.video, this.local.screen]) track?.stop();
     this.local.audio = this.local.video = this.local.screen = null;
     this.screenStream = this.screenShare = null;

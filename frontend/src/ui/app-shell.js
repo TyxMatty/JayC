@@ -89,8 +89,6 @@ export function mountApp(root) {
     { class: 'topbar' },
     h('div', { class: 'brand' }, 'Jay', h('span', {}, '-'), 'C'),
     createStatusPill(() => openSettings('server')),
-    // Temporary: milestone 6 capture spike (dev builds only).
-    import.meta.env.DEV && h('a', { class: 'btn btn-secondary', href: '/spike.html' }, 'Spike'),
     createThemeToggle(),
     h('button', {
       type: 'button',

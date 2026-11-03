@@ -17,6 +17,8 @@ export default defineConfig({
     // WebView2 (Chromium) on Windows/Android, WebKit on macOS/iOS/Linux.
     target: ['es2022', 'chrome110', 'safari16'],
     minify: process.env.TAURI_ENV_DEBUG ? false : undefined,
+    // Never inline AudioWorklet modules as data: URLs; the app's CSP only allows scripts from 'self'.
+    assetsInlineLimit: (file) => (file.endsWith('.worklet.js') ? false : undefined),
     sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
   },
 });

@@ -215,7 +215,7 @@ WASAPI process loopback        mixer Rust                 tauri::ipc::Channel   
 
 - **API do Windows:** `ActivateAudioInterfaceAsync` com `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`, disponível a partir do Windows 10 2004 (build 19041). Cada stream **inclui ou exclui uma única árvore de processos**.
 - **Tela inteira:**
-  - Se a lista de exclusão estiver vazia, basta um stream EXCLUDE da árvore do Jay-C. O WebView2 roda como filho dele, então as vozes da chamada já ficam de fora.
+  - Se a lista de exclusão estiver vazia, basta um stream EXCLUDE da árvore do **processo navegador do WebView2**, o `msedgewebview2.exe` filho direto do Jay-C, que é quem toca todo o som do app. A árvore do próprio `jay-c.exe` não serve: para o loopback do Windows, ela não inclui o WebView2. Ver [spikes/06](spikes/06-transmissoes.md).
   - Com exclusões: o app lista as sessões de áudio ativas (`IAudioSessionManager2`) e abre um stream INCLUDE por processo que não seja o Jay-C nem esteja na lista. A comparação é pelo nome do executável, também nos processos ancestrais. Os streams são misturados.
   - Sessões que surgem durante a transmissão entram na mistura via `IAudioSessionNotification`.
 - **Janela:** obtém o processo dono da janela com HWND → `GetWindowThreadProcessId` e abre um stream INCLUDE dessa árvore.
@@ -329,7 +329,7 @@ Cada etapa termina com algo testável.
 | 6 ✅ | **Spike das transmissões** (Windows), ver [spikes/06-transmissoes.md](spikes/06-transmissoes.md) | No Tauri: o `getDisplayMedia` abre o seletor e dá para descobrir a janela escolhida (ou o Plano B foi decidido). Um protótipo em Rust captura o áudio de um único processo. |
 | 7 ✅ | **SFU (mediasoup)** no container, interface de transporte no cliente, estado pela sinalização, simulcast; limite da sala vai a 16 | 16 abas ou instâncias numa sala se veem; cada cliente envia 1× (confirmado em `getStats()`); o Docker expõe só a 3000 e uma porta de mídia |
 | 8 ✅ | **Transmissão: vídeo** (tela inteira e janela), tela em destaque para quem assiste e controles de qualidade | resolução e FPS mudam durante a transmissão sem a chamada cair, confirmado em `getStats()` |
-| 9 | **Plugin `system-audio` (Windows):** process loopback, mixer, ponte Channel → AudioWorklet → faixa WebRTC, Opus estéreo | quem assiste ouve o áudio de um app escolhido, em estéreo |
+| 9 ✅ | **Plugin `system-audio` (Windows):** process loopback, mixer, ponte Channel → AudioWorklet → faixa WebRTC, Opus estéreo | quem assiste ouve o áudio de um app escolhido, em estéreo |
 | 10 | **Modos completos + Settings › Streaming** | Tela inteira: com o Discord excluído, ninguém ouve o Discord nem as vozes da chamada. Janela: só o áudio daquele app é transmitido. |
 | 11 | PiP desktop | o vídeo remoto flutua sobre outras janelas |
 | 12 | Modal do guia + renderer Markdown + imagens (com a porta de mídia e a nota sobre banda) | o guia renderiza com as 5 imagens nos dois temas |

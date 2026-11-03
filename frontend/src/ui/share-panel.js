@@ -2,6 +2,19 @@ import { h } from './dom.js';
 import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { STREAM_RESOLUTIONS, STREAM_FRAME_RATES } from '../core/media.js';
+import { screenAudioSupported } from '../core/screen-audio.js';
+
+let audioSupported = false;
+screenAudioSupported().then((supported) => (audioSupported = supported));
+
+function soundHint(call) {
+  if (call.sharing) {
+    return call.screenShare?.audio ? `Sound: ${call.screenShare.audio}. Changes apply right away.` : 'No sound is being shared. Changes apply right away.';
+  }
+  return audioSupported
+    ? "Sound: a window shares only that app's audio; the entire screen shares everything except Jay-C."
+    : "Sound from the shared screen isn't available on this device.";
+}
 
 const MODES = [
   ['screen', 'Entire screen', icons.monitor],
@@ -106,11 +119,7 @@ export function createSharePanel(call, { onError }) {
         h('span', { class: 'field-label' }, 'Optimize for'),
         segmented('share-optimize', OPTIMIZE, q.optimizeFor, (v) => updateQuality({ optimizeFor: v })),
       ),
-      h(
-        'p',
-        { class: 'hint' },
-        sharing ? 'Changes apply right away.' : "Sound from the shared screen or window isn't sent yet.",
-      ),
+      h('p', { class: 'hint' }, soundHint(call)),
       h(
         'div',
         { class: 'share-actions' },

@@ -6,6 +6,7 @@ App leve e open-source de chamadas e compartilhamento de tela para desktop e mob
 |---|---|
 | [`signaling-server/`](signaling-server/) | Servidor de sinalização (Node.js + `ws`) e SFU de mídia (mediasoup), com arquivos Docker |
 | [`frontend/`](frontend/) | App Tauri v2 + Vanilla JS (Vite) |
+| [`plugins/tauri-plugin-system-audio/`](plugins/tauri-plugin-system-audio/) | Captura de áudio por processo para as transmissões (Windows) |
 | `plugins/tauri-plugin-pip/` | Plugin de Picture-in-Picture para Android/iOS *(em construção)* |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas e etapas |
 

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-window-process"
+description = "Enables the window_process command without any pre-configured scope."
+commands.allow = ["window_process"]
+
+[[permission]]
+identifier = "deny-window-process"
+description = "Denies the window_process command without any pre-configured scope."
+commands.deny = ["window_process"]

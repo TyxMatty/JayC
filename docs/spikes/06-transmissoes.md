@@ -3,7 +3,7 @@
 **Data:** 2026-11-02 · **Máquina:** Windows 11 (build 26300), WebView2 156, Tauri 2.12, crate `wasapi` 0.26
 **Código:** [`frontend/src-tauri/src/spike.rs`](../../frontend/src-tauri/src/spike.rs), [`frontend/src/spike/`](../../frontend/src/spike/), [`frontend/src-tauri/examples/loopback_probe.rs`](../../frontend/src-tauri/examples/loopback_probe.rs)
 
-O código do spike só existe em builds de desenvolvimento. Ele vai virar `plugins/tauri-plugin-system-audio` na etapa 9, e então será removido.
+O código do spike foi removido na etapa 9, quando virou [`plugins/tauri-plugin-system-audio`](../../plugins/tauri-plugin-system-audio/). Ele continua disponível no histórico do git, no commit `5aa27f4`.
 
 ## Conclusão
 
@@ -54,10 +54,24 @@ As quatro últimas linhas rodaram **ao mesmo tempo**. Vários streams simultâne
 ## Decisões para as etapas 8 a 10
 
 1. **Modo janela:** `label` → HWND → PID da janela → um stream INCLUDE dessa árvore. O processo da janela é a raiz e o áudio sai de um filho, que fica incluído.
-2. **Tela inteira sem exclusões:** um stream EXCLUDE da árvore do Jay-C.
+2. **Tela inteira sem exclusões:** um stream EXCLUDE da árvore do **navegador do WebView2** (ver a correção abaixo).
 3. **Tela inteira com exclusões:**
    - Abrir um stream INCLUDE por **app raiz** com sessão de áudio, subindo pelos ancestrais até o processo mais alto com o mesmo `exe`.
    - Pular a árvore do Jay-C e os `exe` excluídos.
    - Misturar em Rust e reavaliar quando surgir uma sessão nova.
 4. Desligar `echoCancellation`, `noiseSuppression` e `autoGainControl` em tudo que for áudio de transmissão.
 5. Ainda não testado: sincronia A/V, apps cujo áudio sai de um processo fora da árvore e o custo de CPU de ~10 streams simultâneos. Fica para medir nas etapas 9 e 10.
+
+## Correção encontrada na etapa 9: a árvore do Jay-C não inclui o WebView2
+
+O spike mostrou que "EXCLUDE do Jay-C" capturava áudio de outros apps, mas o Jay-C não estava tocando nada naquele momento. Na etapa 9, o teste de ponta a ponta usou uma "voz" de 1500 Hz tocada pelo Jay-C e mostrou que **ela vazava**. Medição com INCLUDE em cada nível da cadeia de processos:
+
+| Captura INCLUDE de… | Voz de 1500 Hz tocada pelo Jay-C |
+|---|---|
+| `jay-c.exe` (35344) | silêncio (−120 dB) |
+| `msedgewebview2.exe`, navegador do WebView2 (26196, filho do 35344) | −10 dB |
+| `msedgewebview2.exe`, serviço de áudio (4780, filho do 26196) | −10 dB |
+
+Para o loopback do Windows, a "árvore de processos" do `jay-c.exe` **não** inclui os processos do WebView2, embora a lista de processos os mostre como filhos. A árvore do processo navegador do WebView2 inclui o serviço de áudio.
+
+**Correção:** o modo "tudo menos o Jay-C" exclui a árvore do `msedgewebview2.exe` que é filho direto do Jay-C. Todo o som do app sai do WebView2. Depois da correção, a voz caiu para −136/−153 dB, ou seja, ausente, enquanto o tom de teste continuou chegando.

@@ -240,6 +240,8 @@ export function createCallView(call, { displayName, onLeft }) {
   // People already in the room when we joined (their events fired before this view existed).
   for (const participant of call.participants.values()) renderParticipant(participant, { announce: false });
 
+  call.addEventListener('notice', (e) => showToast(e.detail.message));
+
   call.addEventListener('signaling-state', (e) => {
     const { state } = e.detail;
     banner.hidden = !(state === 'reconnecting' || state === 'connecting');

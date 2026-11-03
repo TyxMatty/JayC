@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
-    "mediasoup-client": "^3.26.0"
+    "mediasoup-client": "^3.26.0",
+    "tauri-plugin-system-audio-api": "^0.1.0"
   }
 }

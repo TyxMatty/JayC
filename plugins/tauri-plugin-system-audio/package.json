@@ -1,0 +1,12 @@
+{
+  "name": "tauri-plugin-system-audio-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JS API for tauri-plugin-system-audio (per-process audio capture)",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./guest-js/index.js",
+  "peerDependencies": {
+    "@tauri-apps/api": "^2"
+  }
+}
