@@ -2,6 +2,7 @@ import { h } from './dom.js';
 import { icons } from './icons.js';
 import { canShareScreen } from '../core/media.js';
 import { createSharePanel } from './share-panel.js';
+import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
 
 const CONNECTION_LABELS = {
   new: 'Connecting…',
@@ -153,6 +154,51 @@ export function createCallView(call, { displayName, onLeft }) {
     h('div', { class: 'room-chip' }, h('code', {}, call.room), copyButton),
   );
 
+  // ----- Picture-in-Picture: the featured remote video floats over other windows (desktop) -----
+  // Created before the tiles: rendering the people already in the room updates it.
+  const pip = pipSupported()
+    ? createPip({
+        togglemicrophone: () => micButton.click(),
+        togglecamera: () => camButton.click(),
+        hangup: () => call.leave(),
+        onLeave: () => renderPip(),
+      })
+    : null;
+  const pipButton = pip ? controlButton({ label: 'Pop out video' }) : null;
+  pipButton?.addEventListener('click', async () => {
+    try {
+      if (pip.open) await pip.exit();
+      else await pip.enter(pickPipTrack(call.participants.values()));
+    } catch (error) {
+      showToast(`Couldn't pop out the video: ${error?.message ?? error}`);
+    }
+    renderPip();
+  });
+
+  /** Keeps the PiP window on the featured video, and the button in sync. */
+  function renderPip() {
+    if (!pip) return;
+    // A remote track starts muted and unmutes when frames arrive, with no participant event: listen
+    // to the tracks too (the same function is only added once per track).
+    for (const p of call.participants.values()) {
+      for (const t of [...p.stream.getVideoTracks(), ...p.screenStream.getVideoTracks()]) {
+        for (const type of ['mute', 'unmute', 'ended']) t.addEventListener(type, renderPip);
+      }
+    }
+    const track = pickPipTrack(call.participants.values());
+    if (pip.open) {
+      if (track) pip.show(track);
+      else pip.exit().catch(() => {}); // nothing left to show
+    }
+    const open = pip.open && Boolean(track);
+    pipButton.innerHTML = icons.pip;
+    pipButton.disabled = !open && !track;
+    pipButton.setAttribute('aria-pressed', String(open));
+    pipButton.setAttribute('aria-label', open ? 'Close pop-out video' : 'Pop out video');
+    pipButton.title = track || open ? pipButton.getAttribute('aria-label') : 'Pop out video (no one has video on)';
+    pipButton.classList.toggle('active', open);
+  }
+
   // ----- Tiles -----
   const localTile = createTile({
     name: displayName,
@@ -207,6 +253,7 @@ export function createCallView(call, { displayName, onLeft }) {
     tile.setOverlay(CONNECTION_LABELS[participant.connectionState]);
     tile.refresh();
     renderScreen(participant);
+    renderPip();
   };
 
   /** Small preview of what we're sharing, floating in a corner. */
@@ -230,6 +277,7 @@ export function createCallView(call, { displayName, onLeft }) {
     const { participant } = e.detail;
     screenTiles.get(participant.id)?.el.remove();
     screenTiles.delete(participant.id);
+    renderPip();
     const tile = tiles.get(participant.id);
     if (!tile) return layout();
     tile.el.remove();
@@ -282,6 +330,7 @@ export function createCallView(call, { displayName, onLeft }) {
 
     localTile.refresh();
     renderLocalScreen();
+    pip?.setState({ micOn: call.micOn, cameraOn: call.cameraOn });
   };
 
   const guarded = (button, action, what) => async () => {
@@ -300,6 +349,7 @@ export function createCallView(call, { displayName, onLeft }) {
 
   call.addEventListener('ended', () => {
     clearTimeout(toastTimer);
+    pip?.exit().catch(() => {});
     onLeft();
   });
 
@@ -309,6 +359,7 @@ export function createCallView(call, { displayName, onLeft }) {
   call.addEventListener('ended', () => window.removeEventListener('pagehide', onPageHide));
 
   renderControls();
+  renderPip();
   layout();
 
   const problems = Object.entries(call.mediaErrors).map(
@@ -323,7 +374,7 @@ export function createCallView(call, { displayName, onLeft }) {
     stage,
     waiting,
     toast,
-    h('div', { class: 'call-controls' }, micButton, camButton, shareButton, leaveButton),
+    h('div', { class: 'call-controls' }, micButton, camButton, shareButton, pipButton, leaveButton),
     sharePanel,
   );
 }

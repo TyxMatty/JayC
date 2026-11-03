@@ -71,7 +71,7 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 
 ## 5. Estado atual
 
-**Etapas 0 a 10 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
+**Etapas 0 a 11 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
 
 | Etapa | O que entrega |
 |---|---|
@@ -79,11 +79,12 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 | Chamadas | câmera com simulcast de 3 camadas, layouts solo / 1:1 / grade, reconexão |
 | Transmissão de tela ou janela | painel de qualidade ao vivo (resolução, fps, texto/movimento) e layout de apresentação para quem assiste |
 | Som da transmissão (Windows) | captura nativa por processo. Janela = só o app; tela inteira = tudo menos o Jay-C e os apps excluídos em Settings › Streaming (aplicado ao vivo, apps reavaliados a cada 2 s). Opus estéreo 128 kbps. |
+| PiP (desktop) | o vídeo em destaque (tela compartilhada ou câmera) flutua sobre as outras janelas, troca sozinho e tem botões de mic, câmera e desligar |
 | Microfone nativo (Windows) | WASAPI + AudioProcessing do WebRTC (eco/ruído/ganho) para não abafar os outros apps, com opções em Settings › Microphone aplicadas ao vivo |
 
-**Próxima: etapa 11, PiP no desktop.** Antes do mobile (etapa 13), o usuário quer conversar sobre customização e plugins.
+**Próxima: etapa 12, guia de setup com o renderer Markdown.** Antes do mobile (etapa 13), o usuário quer conversar sobre customização e plugins.
 
-Depois vêm: 12 guia de setup com o renderer Markdown, 13 Android, 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
+Depois vêm: 13 Android, 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
 
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
@@ -92,6 +93,7 @@ Depois vêm: 12 guia de setup com o renderer Markdown, 13 Android, 14 iOS (códi
 - Sala com 16 pessoas com mídia real (foi testado com 6 abas, e com 16 só no protocolo).
 - IP de VPN (ZeroTier/Radmin).
 - Som no modo janela com o seletor real (o caminho foi validado por partes).
+- Botões de mic, câmera e desligar na janela do PiP: as ações da Media Session foram aceitas, mas os botões só aparecem com o mouse em cima e não foram clicados.
 - Exclusões com o Discord de verdade e alguém ouvindo do outro lado. Foram medidas com tons e com a faixa enviada ao WebRTC, usando um canvas falso no lugar do seletor.
 - Cancelamento de eco com alto-falante real, porque o microfone do notebook de teste não capta os próprios alto-falantes.
 

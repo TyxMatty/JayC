@@ -267,15 +267,22 @@ A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8
 
 ## 7. Picture-in-Picture
 
-`core/pip.js` expõe uma única API, `pip.enter(videoEl)`, e escolhe a implementação:
+`core/pip.js` dá a API (`createPip`, `pickPipTrack`, `pipSupported`) e escolhe a implementação:
 
 | Plataforma | Implementação |
 |---|---|
-| Windows (WebView2/Chromium) | `video.requestPictureInPicture()`. Se existir `documentPictureInPicture`, usa Document PiP com controles (mudo, desligar). |
+| Windows (WebView2/Chromium) ✅ | `video.requestPictureInPicture()` num `<video>` fora do DOM. A janela fica sempre no topo (`WS_EX_TOPMOST`, medido). Os botões de microfone, câmera e desligar vêm da Media Session API (`togglemicrophone`, `togglecamera`, `hangup`). O **Document PiP não funciona**: a API existe no WebView2, mas `requestWindow` falha com "Internal error: no window" (3 de 3 tentativas). |
 | macOS (WKWebView) | `video.requestPictureInPicture()` (Safari 13.1+) |
 | Linux (WebKitGTK) / fallback geral | **Mini-janela Tauri**: `WebviewWindow` pequena com `alwaysOnTop: true`, sem decoração, exibindo o stream remoto |
 | Android | Plugin Kotlin: `activity.enterPictureInPictureMode(PictureInPictureParams)` com aspect ratio 16:9. `setAutoEnterEnabled(true)` (API 31+) ou `onUserLeaveHint` entram em PiP sozinhos quando o app vai para segundo plano. Manifest: `android:supportsPictureInPicture="true"` e `resizeableActivity`. |
 | iOS | Plugin Swift: `AVPictureInPictureController` com `AVPictureInPictureVideoCallViewController` (iOS 15+), `canStartPictureInPictureAutomaticallyFromInline = true` e background modes `audio` + `voip`. Alternativa mais simples a avaliar: `video.webkitSetPresentationMode('picture-in-picture')` do próprio WKWebView. |
+
+**Desktop:**
+- **Abertura e vídeo mostrado:** o botão "Pop out video" fica nos controles da chamada. O PiP mostra a tela compartilhada de alguém; se não houver, mostra a primeira câmera ligada.
+- **Troca do vídeo:** como o mesmo `<video>` continua no PiP, a faixa troca sem novo clique quando alguém começa ou para de transmitir, desliga a câmera ou sai. O PiP fecha quando não sobra vídeo e quando a chamada acaba.
+- **Som:** sai dos tiles da chamada; o vídeo do PiP fica mudo.
+- **Sem entrada automática:** o PiP não abre sozinho ao minimizar, porque o pedido precisa de um clique do usuário.
+- **Faixas remotas:** chegam `muted` e só desmutam com os primeiros quadros, sem evento de participante. Por isso o botão também escuta `mute`/`unmute`/`ended` das faixas.
 
 ## 8. Riscos conhecidos (importante)
 
@@ -336,7 +343,7 @@ Cada etapa termina com algo testável.
 | 8 ✅ | **Transmissão: vídeo** (tela inteira e janela), tela em destaque para quem assiste e controles de qualidade | resolução e FPS mudam durante a transmissão sem a chamada cair, confirmado em `getStats()` |
 | 9 ✅ | **Plugin `system-audio` (Windows):** process loopback, mixer, ponte Channel → AudioWorklet → faixa WebRTC, Opus estéreo | quem assiste ouve o áudio de um app escolhido, em estéreo |
 | 10 ✅ | **Modos completos + Settings › Streaming** | Tela inteira: com o Discord excluído, ninguém ouve o Discord nem as vozes da chamada. Janela: só o áudio daquele app é transmitido. |
-| 11 | PiP desktop | o vídeo remoto flutua sobre outras janelas |
+| 11 ✅ | PiP desktop | o vídeo remoto flutua sobre outras janelas |
 | 12 | Modal do guia + renderer Markdown + imagens (com a porta de mídia e a nota sobre banda) | o guia renderiza com as 5 imagens nos dois temas |
 | 13 | Android: `tauri android init`, permissões, plugin PiP Kotlin | o APK roda no emulador ou no celular, entra em chamada e vai para PiP ao minimizar |
 | 14 | iOS: plugin Swift (código) | código escrito; build pendente de um Mac |
