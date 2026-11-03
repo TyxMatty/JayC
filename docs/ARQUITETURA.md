@@ -95,7 +95,7 @@ JayC/
 │  │  ├─ core/platform.js       # detecta desktop/android/ios via @tauri-apps/plugin-os
 │  │  ├─ ui/call-view.js, ui/settings-modal.js, ui/setup-guide-modal.js
 │  │  ├─ ui/markdown.js         # renderer mínimo
-│  │  ├─ content/setup-guide.md # importado com ?raw
+│  │  ├─ content/setup-guide-connect.md, setup-guide-host.md # abas do guia, importadas com ?raw
 │  │  └─ store/settings.js
 │  └─ src-tauri/
 │     ├─ tauri.conf.json, Cargo.toml, capabilities/default.json

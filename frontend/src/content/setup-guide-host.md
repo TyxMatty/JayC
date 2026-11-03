@@ -1,11 +1,9 @@
 # Host your own Jay-C server
 
-Calls go through a small server that **one** person in the group runs, usually on their PC. There are two roles:
+Calls go through a small server that **one** person in the group runs on their PC: the host. It takes about 10 minutes, once. Everyone else only connects (the **Connecting** tab).
 
-- **Hosting** (one person): installs and runs the server, steps 1 to 4. It takes about 10 minutes, once. That PC must be on, with the server running, for anyone to call, and its upload speed is what everyone's video goes through.
-- **Only connecting** (everyone else): nothing to install besides Jay-C. Ask the host for the server's address, for example `192.168.1.50:3000`, and do step 5 only.
-
-The host connects the same way, with step 5 on their own PC (`localhost:3000` works there).
+- Your PC must be on, with the server running, for anyone to call.
+- Everyone's video goes through your PC, so your upload speed matters (see step 4).
 
 ## 1. Install Docker Desktop
 
@@ -47,8 +45,8 @@ New-NetFirewallRule -DisplayName "Jay-C media" -Direction Inbound -Protocol UDP 
 
 ![Friends connecting to the server PC](/assets/setup/step4_address.svg)
 
-## 5. Connect the app
+## 5. Connect, and invite your friends
 
-In Jay-C, open **Settings › Server**, enter the address with the port, for example `192.168.1.50:3000`, and press **Test**. When it says "Connected", pick a room name and share it with your friends: everyone who enters the same room joins the same call.
+On this PC, open **Settings › Server** in Jay-C, enter `localhost:3000` and press **Test**. When it says "Connected", pick a room name.
 
-![Settings › Server with a working address](/assets/setup/step5_connect.png)
+Then send your friends two things: the server address from step 4 (for example `192.168.1.50:3000`) and the room name. They follow the **Connecting** tab.

@@ -95,7 +95,7 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 | Chamadas | câmera com simulcast de 3 camadas, layouts solo / 1:1 / grade, reconexão |
 | Transmissão de tela ou janela | painel de qualidade ao vivo (resolução, fps, texto/movimento) e layout de apresentação para quem assiste |
 | Som da transmissão (Windows) | captura nativa por processo. Janela = só o app; tela inteira = tudo menos o Jay-C e os apps excluídos em Settings › Streaming (aplicado ao vivo, apps reavaliados a cada 2 s). Opus estéreo 128 kbps. |
-| Guia de setup | modal "Server setup guide" (lobby e Settings › Server) com os 5 passos, portas, firewall, VPN e a conta de banda de upload; Markdown próprio e 5 imagens |
+| Guia de setup | modal "Server setup guide" (lobby e Settings › Server) com duas abas: **Connecting** (só conectar: endereço, sala, o que fazer se não conectar) e **Hosting** (os 5 passos, portas, firewall, VPN e a conta de banda de upload; Markdown próprio e 5 imagens) |
 | PiP (desktop) | o vídeo em destaque (tela compartilhada ou câmera) flutua sobre as outras janelas, troca sozinho e tem botões de mic, câmera e desligar |
 | Microfone nativo (Windows) | WASAPI + AudioProcessing do WebRTC (eco/ruído/ganho) para não abafar os outros apps, com opções em Settings › Microphone aplicadas ao vivo |
 | Customização | Settings › Appearance: cor dos botões e fundo em degradê (barra do topo translúcida). Barra da chamada arrastável em qualquer borda, com ordem livre (também por teclado em Settings › Call controls). Foto de perfil que aparece quando a câmera está desligada. |

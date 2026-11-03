@@ -541,6 +541,45 @@ fieldset > h3 {
   min-height: 0;
 }
 
+/* Setup guide: Connecting / Hosting. Pinned while the guide scrolls. */
+.guide-tabs {
+  position: sticky;
+  top: -20px; /* the body's padding: stick to its very top edge */
+  z-index: 1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  margin: -20px -20px 20px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.guide-tabs [role='tab'] {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guide-tabs [role='tab']:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.guide-tabs [role='tab']:last-child {
+  border-left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.guide-tabs [role='tab'][aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
 /* Rendered Markdown (setup guide). */
 .markdown {
   line-height: 1.6;
