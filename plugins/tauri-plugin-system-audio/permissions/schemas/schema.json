@@ -331,6 +331,18 @@
           "markdownDescription": "Denies the start_capture command without any pre-configured scope."
         },
         {
+          "description": "Enables the start_mic command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-mic",
+          "markdownDescription": "Enables the start_mic command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_mic command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-mic",
+          "markdownDescription": "Denies the start_mic command without any pre-configured scope."
+        },
+        {
           "description": "Enables the stop_capture command without any pre-configured scope.",
           "type": "string",
           "const": "allow-stop-capture",
@@ -341,6 +353,18 @@
           "type": "string",
           "const": "deny-stop-capture",
           "markdownDescription": "Denies the stop_capture command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_mic command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-stop-mic",
+          "markdownDescription": "Enables the stop_mic command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_mic command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-stop-mic",
+          "markdownDescription": "Denies the stop_mic command without any pre-configured scope."
         },
         {
           "description": "Enables the window_process command without any pre-configured scope.",
@@ -355,10 +379,10 @@
           "markdownDescription": "Denies the window_process command without any pre-configured scope."
         },
         {
-          "description": "Lets the app list audio-playing apps and capture their audio for screen sharing.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`",
+          "description": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Lets the app list audio-playing apps and capture their audio for screen sharing.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`"
+          "markdownDescription": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`"
         }
       ]
     }

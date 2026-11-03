@@ -3,18 +3,20 @@ import * as systemAudio from 'tauri-plugin-system-audio-api';
 
 const SAMPLE_RATE = 48_000;
 
-/** Turns pushed PCM chunks into a live stereo MediaStreamTrack (not played locally). */
+/** Turns pushed PCM chunks into a live MediaStreamTrack (not played locally). */
 export class PcmTrackSource {
-  static async create() {
+  /** @param {{ channels?: 1 | 2 }} [options] */
+  static async create({ channels = 2 } = {}) {
     const context = new AudioContext({ sampleRate: SAMPLE_RATE, latencyHint: 'interactive' });
     await context.audioWorklet.addModule(new URL('./pcm-player.worklet.js', import.meta.url));
     const node = new AudioWorkletNode(context, 'pcm-player', {
       numberOfInputs: 0,
       numberOfOutputs: 1,
-      outputChannelCount: [2],
+      outputChannelCount: [channels],
+      processorOptions: { channels },
     });
     const destination = context.createMediaStreamDestination();
-    destination.channelCount = 2;
+    destination.channelCount = channels;
     node.connect(destination);
     await context.resume();
     return new PcmTrackSource(context, node, destination);
@@ -26,7 +28,7 @@ export class PcmTrackSource {
     this.track = destination.stream.getAudioTracks()[0];
   }
 
-  /** @param {Float32Array} samples interleaved stereo */
+  /** @param {Float32Array} samples interleaved */
   push(samples) {
     this.node.port.postMessage(samples, [samples.buffer]);
   }

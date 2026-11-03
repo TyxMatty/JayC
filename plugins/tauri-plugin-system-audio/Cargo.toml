@@ -24,3 +24,4 @@ windows = { version = "0.62", features = [
 
 [build-dependencies]
 tauri-plugin = { version = "2.7", features = ["build"] }
+cc = "1"

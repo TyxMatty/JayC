@@ -11,6 +11,7 @@ import {
   DEFAULT_STREAM_QUALITY,
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
+import { nativeMicSupported, startNativeMic } from './native-mic.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
 const SCREEN_AUDIO_CODEC_OPTIONS = { opusStereo: true, opusFec: true, opusDtx: false, opusMaxAverageBitrate: 128_000 };
@@ -79,6 +80,8 @@ export class Call extends EventTarget {
   #producers = { mic: null, camera: null, screen: null, 'screen-audio': null };
   /** Native screen-share sound while sharing: { track, stop(), description }. */
   #screenAudio = null;
+  /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
+  #nativeMic = null;
   #micMuted = false;
   /** Bumped on every (re)setup so late async results from an old setup are discarded. */
   #generation = 0;
@@ -95,10 +98,18 @@ export class Call extends EventTarget {
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
   async join({ url, room, name }) {
     this.room = room;
-    const media = await openLocalMedia();
+    const native = await nativeMicSupported();
+    const media = await openLocalMedia({ audio: !native });
     this.local.audio = media.audio;
     this.local.video = media.video;
     this.mediaErrors = media.errors;
+    if (native) {
+      try {
+        this.local.audio = await this.#openNativeMic();
+      } catch (error) {
+        this.mediaErrors.audio = error?.name ?? 'Error';
+      }
+    }
     this.#syncLocalStream();
 
     const signaling = new SignalingClient(url);
@@ -125,7 +136,7 @@ export class Call extends EventTarget {
   async toggleMic() {
     if (!this.local.audio) {
       // No mic yet (denied or missing at join): try again now.
-      this.local.audio = await getMicTrack();
+      this.local.audio = (await nativeMicSupported()) ? await this.#openNativeMic() : await getMicTrack();
       this.#micMuted = false;
       if (this.#producers.mic) {
         await this.#producers.mic.replaceTrack({ track: this.local.audio });
@@ -550,7 +561,16 @@ export class Call extends EventTarget {
     this.#emit('local-updated', {});
   }
 
+  async #openNativeMic() {
+    this.#nativeMic = await startNativeMic({
+      onError: (message) => this.#emit('notice', { message: `Microphone stopped: ${message}` }),
+    });
+    return this.#nativeMic.track;
+  }
+
   #stopLocal() {
+    this.#nativeMic?.stop();
+    this.#nativeMic = null;
     this.#screenAudio?.stop();
     this.#screenAudio = null;
     for (const track of [this.local.audio, this.local.video, this.local.screen]) track?.stop();

@@ -1,6 +1,6 @@
 ## Default Permission
 
-Lets the app list audio-playing apps and capture their audio for screen sharing.
+Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.
 
 #### This default permission set includes the following:
 
@@ -9,6 +9,8 @@ Lets the app list audio-playing apps and capture their audio for screen sharing.
 - `allow-window-process`
 - `allow-start-capture`
 - `allow-stop-capture`
+- `allow-start-mic`
+- `allow-stop-mic`
 
 ## Permission Table
 
@@ -100,6 +102,32 @@ Denies the start_capture command without any pre-configured scope.
 <tr>
 <td>
 
+`system-audio:allow-start-mic`
+
+</td>
+<td>
+
+Enables the start_mic command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:deny-start-mic`
+
+</td>
+<td>
+
+Denies the start_mic command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `system-audio:allow-stop-capture`
 
 </td>
@@ -119,6 +147,32 @@ Enables the stop_capture command without any pre-configured scope.
 <td>
 
 Denies the stop_capture command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:allow-stop-mic`
+
+</td>
+<td>
+
+Enables the stop_mic command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:deny-stop-mic`
+
+</td>
+<td>
+
+Denies the stop_mic command without any pre-configured scope.
 
 </td>
 </tr>

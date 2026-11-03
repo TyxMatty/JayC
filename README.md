@@ -19,6 +19,8 @@ npm run dev
 
 Esse comando abre a janela do Jay-C (Tauri) com recarregamento automático. Para abrir só a interface no navegador, sem Tauri, use `npm run web`. A primeira compilação do Rust leva alguns minutos.
 
+No Windows, o build também precisa de **Python com Meson e Ninja** (`py -m pip install --user meson ninja`, com a pasta de Scripts do Python no PATH). Eles compilam o processamento de áudio do WebRTC, usado pelo microfone. O primeiro build baixa o abseil-cpp e leva alguns minutos a mais.
+
 ## Rodando o servidor localmente
 
 ```bash

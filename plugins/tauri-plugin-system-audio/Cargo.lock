@@ -3158,6 +3158,7 @@ dependencies = [
 name = "tauri-plugin-system-audio"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "log",
  "serde",
  "serde_json",

@@ -17,7 +17,8 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId};
 
-use crate::{AudioApp, CHANNELS, CHUNK_FRAMES, CaptureInfo, CaptureTarget, SAMPLE_RATE, WindowProcess};
+use crate::apm::Apm;
+use crate::{AudioApp, CHANNELS, CHUNK_FRAMES, CaptureInfo, CaptureTarget, MicInfo, MicOptions, SAMPLE_RATE, WindowProcess};
 
 const CHUNK_SAMPLES: usize = CHUNK_FRAMES * CHANNELS as usize;
 /// Secondary sources keep at most this much audio queued (drift / hiccups), in chunks.
@@ -330,6 +331,168 @@ fn run_stream(pid: u32, include_tree: bool, mut role: Role, stop: &AtomicBool, r
                     }
                     sink(&chunk);
                 }
+            }
+        }
+    }
+    let _ = client.stop_stream();
+}
+
+// ---------- Call microphone ----------
+
+/// The call microphone: a plain WASAPI capture (unlike WebView2's, it doesn't put the laptop's
+/// audio into "call mode"), cleaned by WebRTC's audio processing. The echo reference is a
+/// loopback of everything this app plays, so the voices coming out of the speakers are removed
+/// from the mic while the user's own music/games (not played by us) are left alone.
+pub struct Mic {
+    stop: Arc<AtomicBool>,
+    threads: Vec<JoinHandle<()>>,
+}
+
+impl Drop for Mic {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        for thread in self.threads.drain(..) {
+            let _ = thread.join();
+        }
+    }
+}
+
+impl Mic {
+    pub fn start(
+        options: MicOptions,
+        sink: impl FnMut(&[f32]) + Send + 'static,
+        on_error: impl Fn(String) + Send + Sync + 'static,
+    ) -> Result<(Mic, MicInfo), String> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let on_error: ErrorSink = Arc::new(on_error);
+        let mut mic = Mic { stop: stop.clone(), threads: Vec::new() };
+
+        // Echo reference: our own WebView2 process tree (all of the app's sound).
+        let mut reference = None;
+        if options.echo_cancellation {
+            let queue = SharedQueue::default();
+            let root = own_audio_root(&process_table());
+            let (ready_tx, ready_rx) = mpsc::channel();
+            let (stop, role, errors) = (stop.clone(), Role::Feed(queue.clone()), on_error.clone());
+            mic.threads.push(
+                std::thread::Builder::new()
+                    .name("system-audio-echo-reference".into())
+                    .spawn(move || run_stream(root, true, role, &stop, ready_tx, errors))
+                    .map_err(|e| e.to_string())?,
+            );
+            match ready_rx.recv() {
+                Ok(Ok(())) => reference = Some(queue),
+                Ok(Err(error)) => log::warn!("no echo reference, echo cancellation disabled: {error}"),
+                Err(_) => log::warn!("echo reference thread exited during start"),
+            }
+        }
+
+        let echo_reference = reference.is_some();
+        let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
+        let mut sink: Sink = Box::new(sink);
+        let thread_stop = stop.clone();
+        mic.threads.push(
+            std::thread::Builder::new()
+                .name("system-audio-mic".into())
+                .spawn(move || run_mic(reference, options.noise_suppression, options.auto_gain_control, &thread_stop, ready_tx, &mut sink, on_error))
+                .map_err(|e| e.to_string())?,
+        );
+        let device = match ready_rx.recv() {
+            Ok(Ok(device)) => device,
+            Ok(Err(error)) => return Err(error),
+            Err(_) => return Err("microphone thread exited during start".into()),
+        };
+
+        let info = MicInfo { sample_rate: SAMPLE_RATE, channels: 1, chunk_frames: CHUNK_FRAMES, device, echo_reference };
+        Ok((mic, info))
+    }
+}
+
+fn open_default_mic() -> Result<(String, AudioClient, AudioCaptureClient, Handle), String> {
+    let device = DeviceEnumerator::new()
+        .and_then(|e| e.get_default_device(&Direction::Capture))
+        .map_err(|e| format!("no microphone: {e}"))?;
+    let name = device.get_friendlyname().unwrap_or_default();
+    let mut client = device.get_iaudioclient().map_err(|e| e.to_string())?;
+    let format = WaveFormat::new(32, 32, &SampleType::Float, SAMPLE_RATE as usize, 1, None);
+    client
+        .initialize_client(&format, &Direction::Capture, &StreamMode::EventsShared { autoconvert: true, buffer_duration_hns: 0 })
+        .map_err(|e| format!("can't open the microphone: {e}"))?;
+    let event = client.set_get_eventhandle().map_err(|e| e.to_string())?;
+    let capture = client.get_audiocaptureclient().map_err(|e| e.to_string())?;
+    client.start_stream().map_err(|e| e.to_string())?;
+    Ok((name, client, capture, event))
+}
+
+fn run_mic(
+    reference: Option<SharedQueue>,
+    noise_suppression: bool,
+    auto_gain: bool,
+    stop: &AtomicBool,
+    ready: mpsc::Sender<Result<String, String>>,
+    sink: &mut Sink,
+    on_error: ErrorSink,
+) {
+    if let Err(e) = initialize_mta().ok() {
+        let _ = ready.send(Err(e.to_string()));
+        return;
+    }
+    let (name, client, capture, event) = match open_default_mic() {
+        Ok(mic) => mic,
+        Err(error) => {
+            let _ = ready.send(Err(error));
+            return;
+        }
+    };
+    let Some(mut apm) = Apm::new(SAMPLE_RATE, 1, CHANNELS as usize, reference.is_some(), noise_suppression, auto_gain) else {
+        let _ = ready.send(Err("couldn't start audio processing".into()));
+        return;
+    };
+    let _ = ready.send(Ok(name));
+
+    let (frame, render_frame) = (apm.capture_frame_len(), apm.render_frame_len());
+    let mut raw: VecDeque<u8> = VecDeque::new();
+    let mut pending: Vec<f32> = Vec::new();
+    let mut out: Vec<f32> = Vec::with_capacity(CHUNK_FRAMES * 2);
+
+    while !stop.load(Ordering::SeqCst) {
+        if event.wait_for_event(100).is_err() {
+            continue;
+        }
+        loop {
+            match capture.get_next_packet_size() {
+                Ok(Some(frames)) if frames > 0 => {
+                    if let Err(e) = capture.read_from_device_to_deque(&mut raw) {
+                        on_error(format!("microphone failed: {e}"));
+                        return;
+                    }
+                }
+                Ok(_) => break,
+                Err(e) => {
+                    on_error(format!("microphone failed: {e}"));
+                    return;
+                }
+            }
+        }
+        let usable = raw.len() / 4 * 4;
+        let bytes: Vec<u8> = raw.drain(..usable).collect();
+        pending.extend(bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
+
+        while pending.len() >= frame {
+            // Feed the echo canceller everything we played since the last mic frame.
+            if let Some(reference) = &reference {
+                let mut queue = reference.lock().unwrap();
+                while queue.len() >= render_frame {
+                    let played: Vec<f32> = queue.drain(..render_frame).collect();
+                    apm.process_render(&played);
+                }
+            }
+            let mut samples: Vec<f32> = pending.drain(..frame).collect();
+            apm.process_capture(&mut samples, 0); // AEC3 estimates the speaker->mic delay itself
+            out.extend(samples);
+            if out.len() >= CHUNK_FRAMES {
+                let chunk: Vec<f32> = out.drain(..CHUNK_FRAMES).collect();
+                sink(&chunk);
             }
         }
     }

@@ -64,6 +64,7 @@ Custo para quem hospeda: o servidor recebe cada faixa uma vez e reenvia para cad
 | Markdown do guia | Renderer próprio (~80 linhas) | O conteúdo é nosso e controlado. Basta suportar títulos, negrito, `code`, imagens e parágrafos, sem dependência extra. Escapa HTML por padrão. |
 | Assets do guia | `frontend/public/assets/setup/*.png` | A pasta `public/` do Vite é servida na raiz pelo Tauri. `src-tauri/icons/` é só para ícones do app. |
 | Áudio das transmissões | **Captura nativa** (WASAPI process loopback) num plugin Tauri | O `getDisplayMedia` não exclui apps do áudio do sistema nem captura áudio de janela. Detalhes na seção 6. |
+| Microfone das chamadas (Windows) | **Captura nativa** (WASAPI) + AudioProcessing do WebRTC (eco, ruído, ganho) no plugin; `getUserMedia` nas outras plataformas | O microfone do WebView2 coloca o áudio de alguns notebooks em "modo chamada" e abafa os outros apps. Ver [spikes/09](spikes/09-som-abafado.md). |
 | Persistência | `localStorage` | Guarda endereço do servidor, tema, preset de qualidade e nome. |
 
 ## 3. Estrutura do monorepo
@@ -310,6 +311,7 @@ A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8
 | Docker Desktop | testar a imagem do servidor | ✅ 29.9 |
 | Android Studio (JDK) + SDK 36/37, NDK 30, emulador | build Android | ✅ |
 | Alvos Rust Android (`aarch64-linux-android` etc.) | build Android | ✅ |
+| Python 3.13 + Meson + Ninja (`pip install --user meson ninja`) | compilar o processamento de áudio do WebRTC no Windows | ✅ |
 | Xcode | build iOS | ⛔ impossível no Windows |
 
 O Tauri CLI entra como `devDependency` (`@tauri-apps/cli`), sem instalação global.

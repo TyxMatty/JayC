@@ -27,16 +27,19 @@ export async function getCameraTrack() {
  * that track null (the call still works, receive-only for that kind).
  * @returns {Promise<{ audio: MediaStreamTrack | null, video: MediaStreamTrack | null, errors: Record<string, string> }>}
  */
-export async function openLocalMedia() {
+export async function openLocalMedia({ audio: wantAudio = true } = {}) {
   if (!navigator.mediaDevices?.getUserMedia) {
-    return { audio: null, video: null, errors: { audio: 'unsupported', video: 'unsupported' } };
+    return { audio: null, video: null, errors: { ...(wantAudio ? { audio: 'unsupported' } : {}), video: 'unsupported' } };
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS, video: CAMERA_CONSTRAINTS });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: wantAudio && MIC_CONSTRAINTS, video: CAMERA_CONSTRAINTS });
     return { audio: stream.getAudioTracks()[0] ?? null, video: stream.getVideoTracks()[0] ?? null, errors: {} };
   } catch {
     // One device failed (or the user denied one): try each separately.
-    const [audio, video] = await Promise.allSettled([getMicTrack(), getCameraTrack()]);
+    const [audio, video] = await Promise.allSettled([
+      wantAudio ? getMicTrack() : Promise.resolve(null),
+      getCameraTrack(),
+    ]);
     return {
       audio: audio.status === 'fulfilled' ? audio.value : null,
       video: video.status === 'fulfilled' ? video.value : null,

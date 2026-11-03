@@ -41,3 +41,23 @@ export function startCapture(target, { onAudio, onError }) {
 export function stopCapture() {
   return invoke('plugin:system-audio|stop_capture');
 }
+
+/**
+ * Starts the native call microphone (cleaned by WebRTC audio processing). Audio arrives in
+ * `onAudio(Float32Array)`: mono at 48 kHz, 20 ms per call.
+ * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean }} options
+ * @param {{ onAudio: (samples: Float32Array) => void, onError?: (message: string) => void }} handlers
+ * @returns {Promise<{ sampleRate: number, channels: number, chunkFrames: number, device: string, echoReference: boolean }>}
+ */
+export function startMic(options, { onAudio, onError }) {
+  const channel = new Channel();
+  channel.onmessage = (message) => {
+    if (message instanceof ArrayBuffer) onAudio(new Float32Array(message));
+    else if (message?.error) onError?.(message.error);
+  };
+  return invoke('plugin:system-audio|start_mic', { options, onAudio: channel });
+}
+
+export function stopMic() {
+  return invoke('plugin:system-audio|stop_mic');
+}
