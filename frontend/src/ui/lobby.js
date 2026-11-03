@@ -14,9 +14,9 @@ const JOIN_ERRORS = {
 
 /**
  * "Join a room" screen.
- * @param {{ openSettings: (focus?: string) => void, onJoin: (opts: { name: string, room: string }) => Promise<void> }} options
+ * @param {{ openSettings: (focus?: string) => void, openGuide: () => void, onJoin: (opts: { name: string, room: string }) => Promise<void> }} options
  */
-export function createLobby({ openSettings, onJoin }) {
+export function createLobby({ openSettings, openGuide, onJoin }) {
   const current = settings.get();
   const cleanups = [];
 
@@ -63,6 +63,8 @@ export function createLobby({ openSettings, onJoin }) {
       hint.replaceChildren(
         'Set your signaling server first in ',
         h('a', { href: '#', onClick: (e) => (e.preventDefault(), openSettings('server')) }, 'Settings › Server'),
+        '. No server yet? Read the ',
+        h('a', { href: '#', onClick: (e) => (e.preventDefault(), openGuide()) }, 'setup guide'),
         '.',
       );
     } else if (roomInput.value && !roomOk) {

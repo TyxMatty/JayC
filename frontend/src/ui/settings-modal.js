@@ -20,8 +20,11 @@ const THEMES = [
   ['dark', 'Dark'],
 ];
 
-/** Builds the Settings dialog. Changes apply immediately (theme switches live). */
-export function createSettingsModal() {
+/**
+ * Builds the Settings dialog. Changes apply immediately (theme switches live).
+ * @param {{ openGuide: () => void }} options
+ */
+export function createSettingsModal({ openGuide }) {
   const current = settings.get();
 
   const nameInput = h('input', {
@@ -238,6 +241,13 @@ export function createSettingsModal() {
             h('label', { for: 'settings-server' }, 'Signaling server address'),
             h('div', { class: 'input-row' }, serverInput, testButton),
             serverHint,
+            h(
+              'p',
+              { class: 'hint' },
+              'No server yet? ',
+              h('a', { href: '#', onClick: (e) => (e.preventDefault(), openGuide()) }, 'Read the setup guide'),
+              '.',
+            ),
           ),
         ),
       ),

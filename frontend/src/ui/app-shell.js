@@ -6,6 +6,7 @@ import { toWebSocketUrl } from '../core/server-address.js';
 import { Call } from '../core/call.js';
 import { toggleTheme, currentTheme } from './theme.js';
 import { createSettingsModal } from './settings-modal.js';
+import { createSetupGuideModal } from './setup-guide-modal.js';
 import { createLobby } from './lobby.js';
 import { createCallView } from './call-view.js';
 
@@ -59,7 +60,9 @@ function createThemeToggle() {
 }
 
 export function mountApp(root) {
-  const settingsModal = createSettingsModal();
+  const guideModal = createSetupGuideModal();
+  const openGuide = () => guideModal.open();
+  const settingsModal = createSettingsModal({ openGuide });
   const openSettings = (focus) => settingsModal.open(focus);
   const view = h('div', { class: 'view' });
   let destroyView = () => {};
@@ -71,7 +74,7 @@ export function mountApp(root) {
   };
 
   const showLobby = () => {
-    const lobby = createLobby({ openSettings, onJoin: join });
+    const lobby = createLobby({ openSettings, openGuide, onJoin: join });
     show(lobby.element, lobby.destroy);
   };
 
@@ -113,6 +116,6 @@ export function mountApp(root) {
     }),
   );
 
-  root.replaceChildren(header, view, settingsModal.element);
+  root.replaceChildren(header, view, settingsModal.element, guideModal.element);
   showLobby();
 }

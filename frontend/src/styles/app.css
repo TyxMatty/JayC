@@ -449,6 +449,89 @@ fieldset > h3 {
   border-top: 1px solid var(--border);
 }
 
+.modal-wide {
+  width: min(720px, calc(100vw - 32px));
+}
+
+/* Long content: header and footer stay put, the body scrolls. */
+.modal-wide[open] > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 34px);
+}
+
+.modal-wide .modal-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Rendered Markdown (setup guide). */
+.markdown {
+  line-height: 1.6;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.markdown h3 {
+  margin: 28px 0 8px;
+  font-size: 17px;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 0 0 12px;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 22px;
+}
+
+.markdown code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.markdown pre {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+  white-space: pre;
+}
+
+.markdown img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 4px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* App screenshots are captured at 2x: show them at their real size, not stretched. */
+.markdown img[src$='.png'] {
+  width: min(100%, 440px);
+}
+
 /* ---------- Views ---------- */
 
 .view {

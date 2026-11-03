@@ -62,7 +62,7 @@ Custo para quem hospeda: o servidor recebe cada faixa uma vez e reenvia para cad
 | Troca de qualidade | `track.applyConstraints()` + `RTCRtpSender.setParameters()` | Muda resolução, FPS e bitrate **sem renegociar SDP**. Para trocar a fonte (câmera ↔ tela) usa `sender.replaceTrack()`, também sem renegociar. |
 | Tema | CSS Custom Properties em `:root[data-theme]` | A troca é instantânea, só muda um atributo. Respeita `prefers-color-scheme` no primeiro uso. |
 | Markdown do guia | Renderer próprio (~80 linhas) | O conteúdo é nosso e controlado. Basta suportar títulos, negrito, `code`, imagens e parágrafos, sem dependência extra. Escapa HTML por padrão. |
-| Assets do guia | `frontend/public/assets/setup/*.png` | A pasta `public/` do Vite é servida na raiz pelo Tauri. `src-tauri/icons/` é só para ícones do app. |
+| Assets do guia | `frontend/public/assets/setup/`: 4 ilustrações SVG próprias e 1 captura PNG do próprio app | A pasta `public/` do Vite é servida na raiz pelo Tauri. `src-tauri/icons/` é só para ícones do app. As ilustrações são cartões escuros autocontidos (paleta do tema escuro), legíveis nos dois temas, sem logos nem cópias da interface de terceiros. Elas envelhecem menos que screenshots do Docker ou do Windows. A captura (Settings › Server, 2×) é refeita pelo CDP quando a tela mudar. |
 | Áudio das transmissões | **Captura nativa** (WASAPI process loopback) num plugin Tauri | O `getDisplayMedia` não exclui apps do áudio do sistema nem captura áudio de janela. Detalhes na seção 6. |
 | Microfone das chamadas (Windows) | **Captura nativa** (WASAPI) + AudioProcessing do WebRTC (eco, ruído, ganho) no plugin; `getUserMedia` nas outras plataformas | O microfone do WebView2 coloca o áudio de alguns notebooks em "modo chamada" e abafa os outros apps. Ver [spikes/09](spikes/09-som-abafado.md). |
 | Persistência | `localStorage` | Guarda endereço do servidor, tema, preset de qualidade e nome. |
@@ -83,7 +83,7 @@ JayC/
 ├─ frontend/
 │  ├─ index.html
 │  ├─ vite.config.js
-│  ├─ public/assets/setup/step1_docker.png … step5_connect.png
+│  ├─ public/assets/setup/step1_docker.svg … step4_address.svg, step5_connect.png
 │  ├─ src/
 │  │  ├─ main.js
 │  │  ├─ styles/theme.css       # tokens claro/escuro
@@ -344,7 +344,7 @@ Cada etapa termina com algo testável.
 | 9 ✅ | **Plugin `system-audio` (Windows):** process loopback, mixer, ponte Channel → AudioWorklet → faixa WebRTC, Opus estéreo | quem assiste ouve o áudio de um app escolhido, em estéreo |
 | 10 ✅ | **Modos completos + Settings › Streaming** | Tela inteira: com o Discord excluído, ninguém ouve o Discord nem as vozes da chamada. Janela: só o áudio daquele app é transmitido. |
 | 11 ✅ | PiP desktop | o vídeo remoto flutua sobre outras janelas |
-| 12 | Modal do guia + renderer Markdown + imagens (com a porta de mídia e a nota sobre banda) | o guia renderiza com as 5 imagens nos dois temas |
+| 12 ✅ | Modal do guia + renderer Markdown + imagens (com a porta de mídia e a nota sobre banda) | o guia renderiza com as 5 imagens nos dois temas |
 | 13 | Android: `tauri android init`, permissões, plugin PiP Kotlin | o APK roda no emulador ou no celular, entra em chamada e vai para PiP ao minimizar |
 | 14 | iOS: plugin Swift (código) | código escrito; build pendente de um Mac |
 | 15 | Release: imagem no GHCR + bundles Tauri (`.msi`/`.exe`, `.apk`) | o guia de 5 passos funciona do zero numa máquina limpa |

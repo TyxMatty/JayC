@@ -71,7 +71,7 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 
 ## 5. Estado atual
 
-**Etapas 0 a 11 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
+**Etapas 0 a 12 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
 
 | Etapa | O que entrega |
 |---|---|
@@ -79,12 +79,13 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 | Chamadas | câmera com simulcast de 3 camadas, layouts solo / 1:1 / grade, reconexão |
 | Transmissão de tela ou janela | painel de qualidade ao vivo (resolução, fps, texto/movimento) e layout de apresentação para quem assiste |
 | Som da transmissão (Windows) | captura nativa por processo. Janela = só o app; tela inteira = tudo menos o Jay-C e os apps excluídos em Settings › Streaming (aplicado ao vivo, apps reavaliados a cada 2 s). Opus estéreo 128 kbps. |
+| Guia de setup | modal "Server setup guide" (lobby e Settings › Server) com os 5 passos, portas, firewall, VPN e a conta de banda de upload; Markdown próprio e 5 imagens |
 | PiP (desktop) | o vídeo em destaque (tela compartilhada ou câmera) flutua sobre as outras janelas, troca sozinho e tem botões de mic, câmera e desligar |
 | Microfone nativo (Windows) | WASAPI + AudioProcessing do WebRTC (eco/ruído/ganho) para não abafar os outros apps, com opções em Settings › Microphone aplicadas ao vivo |
 
-**Próxima: etapa 12, guia de setup com o renderer Markdown.** Antes do mobile (etapa 13), o usuário quer conversar sobre customização e plugins.
+**Próxima: conversar sobre customização e plugins** (pedido do usuário, antes do mobile). Depois, a etapa 13 (Android).
 
-Depois vêm: 13 Android, 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
+Depois vêm: 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
 
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
@@ -101,4 +102,5 @@ Depois vêm: 13 Android, 14 iOS (código) e 15 release (imagem no GHCR e instala
 - Nome da imagem no GHCR (`ghcr.io/tyxmatty/jay-c-signaling`).
 - Tamanho da imagem Docker (379 MB).
 - Usar H.264 por hardware na transmissão de tela, para gastar menos CPU.
-- Bundle do frontend (~54 KB gzip, a maior parte do mediasoup-client).
+- Bundle do frontend (~58 KB gzip, a maior parte do mediasoup-client).
+- O guia manda baixar o `docker-compose.yml` da página de releases e conta com a imagem publicada no GHCR. As duas coisas só existem na etapa 15.
