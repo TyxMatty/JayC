@@ -2,7 +2,7 @@
 //! mixed on a 20 ms clock of their own), delivered in 20 ms stereo f32 chunks.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -202,6 +202,18 @@ type Sink = Box<dyn FnMut(&[f32]) + Send>;
 type ErrorSink = Arc<dyn Fn(String) + Send + Sync>;
 type SharedQueue = Arc<Mutex<VecDeque<f32>>>;
 
+/// A source of the mixer. `primed`: it had enough queued to start being read (see `run_mixer`).
+struct MixInput {
+    queue: SharedQueue,
+    primed: bool,
+}
+
+/// The mixer's sources; the per-app capture adds and removes them while it runs.
+type MixInputs = Arc<Mutex<Vec<MixInput>>>;
+
+/// How often the per-app capture re-checks which apps have audio sessions.
+const APPS_RECHECK: Duration = Duration::from_secs(2);
+
 /// What a capture thread does with its samples.
 enum Role {
     /// One of several sources (or the echo reference): queue samples for a consumer.
@@ -213,6 +225,8 @@ enum Role {
 pub struct Capture {
     stop: Arc<AtomicBool>,
     threads: Vec<JoinHandle<()>>,
+    /// Per-app capture: how many app streams are open right now.
+    apps: Arc<AtomicUsize>,
 }
 
 impl Drop for Capture {
@@ -230,77 +244,181 @@ impl Capture {
         sink: impl FnMut(&[f32]) + Send + 'static,
         on_error: impl Fn(String) + Send + Sync + 'static,
     ) -> Result<(Capture, CaptureInfo), String> {
-        // With exclusions, a stream that fails to open (e.g. the app just quit) is skipped.
-        let per_app = target.exclude_self && !target.exclude_exes.is_empty();
+        let stop = Arc::new(AtomicBool::new(false));
+        let mut capture = Capture { stop: stop.clone(), threads: Vec::new(), apps: Arc::default() };
+        let info = |streams| CaptureInfo { sample_rate: SAMPLE_RATE, channels: CHANNELS, chunk_frames: CHUNK_FRAMES, streams };
+
+        if target.exclude_self && !target.exclude_exes.is_empty() {
+            let inputs = MixInputs::default();
+            capture.threads.push(spawn_mixer(inputs.clone(), Box::new(sink), stop.clone())?);
+            let (ready_tx, ready_rx) = mpsc::channel();
+            let (stop, apps, exclude_exes) = (stop.clone(), capture.apps.clone(), target.exclude_exes);
+            capture.threads.push(
+                std::thread::Builder::new()
+                    .name("system-audio-apps".into())
+                    .spawn(move || run_apps(exclude_exes, inputs, &stop, ready_tx, &apps))
+                    .map_err(|e| e.to_string())?,
+            );
+            let opened = ready_rx.recv().map_err(|_| "capture thread exited during start".to_string())??;
+            return Ok((capture, info(opened)));
+        }
+
         // (pid, include_tree)
-        let streams: Vec<(u32, bool)> = if per_app {
-            let exclude_exes = target.exclude_exes.clone();
-            // COM must be MTA here; the caller's thread may be the (STA) main thread.
-            let roots = std::thread::spawn(move || included_roots(&exclude_exes))
-                .join()
-                .map_err(|_| "audio session listing panicked".to_string())??;
-            roots.into_iter().map(|pid| (pid, true)).collect()
-        } else if target.exclude_self {
+        let streams: Vec<(u32, bool)> = if target.exclude_self {
             vec![(own_audio_root(&process_table()), false)]
         } else {
             let mut seen = HashSet::new();
             target.include.iter().copied().filter(|pid| seen.insert(*pid)).map(|pid| (pid, true)).collect()
         };
-        if streams.is_empty() && !per_app {
+        if streams.is_empty() {
             return Err("nothing to capture".into());
         }
 
-        let stop = Arc::new(AtomicBool::new(false));
         let on_error: ErrorSink = Arc::new(on_error);
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
-        let mut capture = Capture { stop: stop.clone(), threads: Vec::new() };
 
-        let roles: Vec<Role> = if streams.len() == 1 && !per_app {
+        let roles: Vec<Role> = if streams.len() == 1 {
             vec![Role::Emit(Box::new(sink))]
         } else {
             let queues: Vec<SharedQueue> = streams.iter().map(|_| SharedQueue::default()).collect();
-            let (stop, sources, sink): (_, _, Sink) = (stop.clone(), queues.clone(), Box::new(sink));
-            capture.threads.push(
-                std::thread::Builder::new()
-                    .name("system-audio-mixer".into())
-                    .spawn(move || run_mixer(sources, sink, &stop))
-                    .map_err(|e| e.to_string())?,
-            );
+            let inputs = queues.iter().map(|queue| MixInput { queue: queue.clone(), primed: false }).collect();
+            capture.threads.push(spawn_mixer(Arc::new(Mutex::new(inputs)), Box::new(sink), stop.clone())?);
             queues.into_iter().map(Role::Feed).collect()
         };
 
         for ((pid, include), role) in streams.iter().copied().zip(roles) {
-            let (stop, ready, on_error) = (stop.clone(), ready_tx.clone(), on_error.clone());
-            let thread = std::thread::Builder::new()
-                .name(format!("system-audio-{pid}"))
-                .spawn(move || run_stream(pid, include, role, &stop, ready, on_error))
-                .map_err(|e| e.to_string())?;
-            capture.threads.push(thread);
+            capture.threads.push(spawn_stream(pid, include, role, stop.clone(), ready_tx.clone(), on_error.clone())?);
         }
         drop(ready_tx);
 
         // Fail start() if any stream can't be opened (dropping `capture` stops the others).
-        let mut opened = 0;
         for _ in 0..streams.len() {
             match ready_rx.recv() {
-                Ok(Ok(())) => opened += 1,
-                Ok(Err(error)) if per_app => log::warn!("system-audio: skipping an app: {error}"),
+                Ok(Ok(())) => {}
                 Ok(Err(error)) => return Err(error),
                 Err(_) => return Err("capture thread exited during start".into()),
             }
         }
+        Ok((capture, info(streams.len())))
+    }
 
-        let info = CaptureInfo { sample_rate: SAMPLE_RATE, channels: CHANNELS, chunk_frames: CHUNK_FRAMES, streams: opened };
-        Ok((capture, info))
+    #[cfg(test)]
+    fn app_streams(&self) -> usize {
+        self.apps.load(Ordering::SeqCst)
+    }
+}
+
+fn spawn_stream(
+    pid: u32,
+    include_tree: bool,
+    role: Role,
+    stop: Arc<AtomicBool>,
+    ready: mpsc::Sender<Result<(), String>>,
+    on_error: ErrorSink,
+) -> Result<JoinHandle<()>, String> {
+    std::thread::Builder::new()
+        .name(format!("system-audio-{pid}"))
+        .spawn(move || run_stream(pid, include_tree, role, &stop, ready, on_error))
+        .map_err(|e| e.to_string())
+}
+
+fn spawn_mixer(inputs: MixInputs, sink: Sink, stop: Arc<AtomicBool>) -> Result<JoinHandle<()>, String> {
+    std::thread::Builder::new()
+        .name("system-audio-mixer".into())
+        .spawn(move || run_mixer(inputs, sink, &stop))
+        .map_err(|e| e.to_string())
+}
+
+/// "Everything except us and `exclude_exes`": keeps one INCLUDE stream per app with an audio
+/// session, re-checking every `APPS_RECHECK` so apps that start or quit during the share are
+/// added or dropped. Reports the first round's stream count (or listing error) on `ready`.
+fn run_apps(
+    exclude_exes: Vec<String>,
+    inputs: MixInputs,
+    stop: &AtomicBool,
+    ready: mpsc::Sender<Result<usize, String>>,
+    apps: &AtomicUsize,
+) {
+    struct AppStream {
+        stop: Arc<AtomicBool>,
+        thread: JoinHandle<()>,
+        queue: SharedQueue,
+    }
+    if let Err(e) = initialize_mta().ok() {
+        let _ = ready.send(Err(e.to_string()));
+        return;
+    }
+    // One app's stream failing (e.g. it quit) must not stop the share's sound: only log it.
+    let log_error: ErrorSink = Arc::new(|error| log::warn!("system-audio: {error}"));
+    let mut running: HashMap<u32, AppStream> = HashMap::new();
+    let mut failed: HashSet<u32> = HashSet::new(); // don't retry (and re-log) these every round
+    let mut ready = Some(ready);
+
+    while !stop.load(Ordering::SeqCst) {
+        let roots = match included_roots(&exclude_exes) {
+            Ok(roots) => roots,
+            Err(error) => match ready.take() {
+                Some(ready) => {
+                    let _ = ready.send(Err(error));
+                    return;
+                }
+                None => {
+                    log::warn!("system-audio: can't list audio apps: {error}");
+                    Vec::from_iter(running.keys().copied()) // keep what's running
+                }
+            },
+        };
+
+        let gone: Vec<u32> = running.keys().copied().filter(|pid| !roots.contains(pid)).collect();
+        for pid in gone {
+            let app = running.remove(&pid).unwrap();
+            app.stop.store(true, Ordering::SeqCst);
+            let _ = app.thread.join();
+            inputs.lock().unwrap().retain(|input| !Arc::ptr_eq(&input.queue, &app.queue));
+        }
+        failed.retain(|pid| roots.contains(pid));
+        for pid in roots {
+            if running.contains_key(&pid) || failed.contains(&pid) {
+                continue;
+            }
+            let (queue, app_stop) = (SharedQueue::default(), Arc::new(AtomicBool::new(false)));
+            let (opened_tx, opened_rx) = mpsc::channel();
+            let Ok(thread) = spawn_stream(pid, true, Role::Feed(queue.clone()), app_stop.clone(), opened_tx, log_error.clone()) else {
+                continue;
+            };
+            match opened_rx.recv() {
+                Ok(Ok(())) => {
+                    inputs.lock().unwrap().push(MixInput { queue: queue.clone(), primed: false });
+                    running.insert(pid, AppStream { stop: app_stop, thread, queue });
+                }
+                result => {
+                    log::warn!("system-audio: skipping process {pid}: {:?}", result.map_err(|_| "thread exited"));
+                    failed.insert(pid);
+                    let _ = thread.join();
+                }
+            }
+        }
+        apps.store(running.len(), Ordering::SeqCst);
+        if let Some(ready) = ready.take() {
+            let _ = ready.send(Ok(running.len()));
+        }
+
+        let next = Instant::now() + APPS_RECHECK;
+        while !stop.load(Ordering::SeqCst) && Instant::now() < next {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+    for app in running.into_values() {
+        app.stop.store(true, Ordering::SeqCst);
+        let _ = app.thread.join();
     }
 }
 
 /// Mixes several sources on a steady 20 ms clock of its own, so it keeps going when any source
 /// goes quiet (a silent process may deliver no packets) or its process quits.
-fn run_mixer(sources: Vec<SharedQueue>, mut sink: Sink, stop: &AtomicBool) {
+fn run_mixer(inputs: MixInputs, mut sink: Sink, stop: &AtomicBool) {
     let period = Duration::from_secs_f64(CHUNK_FRAMES as f64 / SAMPLE_RATE as f64);
     let start = Instant::now();
-    let mut primed = vec![false; sources.len()];
     for tick in 1u32.. {
         if stop.load(Ordering::SeqCst) {
             break;
@@ -310,14 +428,14 @@ fn run_mixer(sources: Vec<SharedQueue>, mut sink: Sink, stop: &AtomicBool) {
             std::thread::sleep(wait);
         }
         let mut chunk = vec![0f32; CHUNK_SAMPLES];
-        for (queue, primed) in sources.iter().zip(primed.iter_mut()) {
-            let mut queue = queue.lock().unwrap();
+        for input in inputs.lock().unwrap().iter_mut() {
+            let mut queue = input.queue.lock().unwrap();
             // Read a source only once 40 ms are queued, so packet jitter doesn't cut its sound.
-            if !*primed && queue.len() < CHUNK_SAMPLES * 2 {
+            if !input.primed && queue.len() < CHUNK_SAMPLES * 2 {
                 continue;
             }
             let take = queue.len().min(CHUNK_SAMPLES);
-            *primed = take == CHUNK_SAMPLES;
+            input.primed = take == CHUNK_SAMPLES;
             for (out, s) in chunk.iter_mut().zip(queue.drain(..take)) {
                 *out += s;
             }
@@ -629,19 +747,26 @@ mod tests {
         10.0 * power.max(1e-12).log10()
     }
 
-    fn capture_for(exclude_exes: &[&str], seconds: u64) -> (Vec<f32>, usize) {
+    /// A running per-app capture (`exclude_exes`) that collects everything it emits.
+    fn start_capture(exclude_exes: &[&str]) -> (Capture, Arc<Mutex<Vec<f32>>>) {
         let collected = Arc::new(Mutex::new(Vec::new()));
         let sink = collected.clone();
         let target = CaptureTarget { include: vec![], exclude_self: true, exclude_exes: exclude_exes.iter().map(|s| s.to_string()).collect() };
-        let (capture, info) =
-            Capture::start(target, move |s: &[f32]| sink.lock().unwrap().extend_from_slice(s), |e| panic!("{e}")).unwrap();
-        std::thread::sleep(Duration::from_secs(seconds));
-        drop(capture);
-        let samples = collected.lock().unwrap().clone();
-        (samples, info.streams)
+        let (capture, _) = Capture::start(target, move |s: &[f32]| sink.lock().unwrap().extend_from_slice(s), |e| panic!("{e}")).unwrap();
+        (capture, collected)
     }
 
-    /// Live check with real audio: two tones from two different executables, one of them excluded.
+    /// The last `seconds` of what a capture emitted.
+    fn last(collected: &Mutex<Vec<f32>>, seconds: f64) -> Vec<f32> {
+        let samples = collected.lock().unwrap();
+        let n = ((seconds * SAMPLE_RATE as f64) as usize * 2).min(samples.len());
+        samples[samples.len() - n..].to_vec()
+    }
+
+    /// Live check with real audio, two tones from two different executables:
+    /// - both start *after* the captures, so they're heard only if the re-check picks them up;
+    /// - the capture excluding one of them must not contain it;
+    /// - when a player quits, its stream is dropped and the mix goes on in real time.
     /// Plays sound on the default speakers for ~10 s.
     ///   cargo test --lib -- --ignored --nocapture exclusion_live
     #[test]
@@ -661,31 +786,47 @@ mod tests {
             let exe = exe.to_str().unwrap();
             std::process::Command::new("cmd").args(["/c", "start", "", "/min", exe, "-NoProfile", "-c", &script]).status().unwrap();
         };
-        play(&ps, &wav_a);
-        play(&other, &wav_b);
-        std::thread::sleep(Duration::from_secs(3)); // let both audio sessions start
-        for app in std::thread::spawn(list_audio_apps).join().unwrap().unwrap() {
-            println!("app: {} {} active={}", app.pid, app.exe, app.active);
-        }
-
-        let (all, all_streams) = capture_for(&["jayc-nothing.exe"], 3);
-        let (excluded, excluded_streams) = capture_for(&["jayc-tone-b"], 3);
-        // Stop the players (the tones would play for 30 s); matched by their WAV path.
-        let stop = format!(
-            "Get-CimInstance Win32_Process | ? {{ $_.CommandLine -like '*{}*' }} | % {{ Stop-Process -Id $_.ProcessId }}",
-            dir.display()
-        );
-        std::process::Command::new(&ps).args(["-NoProfile", "-c", &stop]).status().unwrap();
-
-        let report = |name: &str, s: &[f32], streams: usize| {
+        // Stops the players whose command line contains `pattern` (the tones would play for 30 s).
+        let stop_players = |pattern: &std::path::Path| {
+            let script = format!(
+                "Get-CimInstance Win32_Process | ? {{ $_.CommandLine -like '*{}*' }} | % {{ Stop-Process -Id $_.ProcessId }}",
+                pattern.display()
+            );
+            std::process::Command::new(&ps).args(["-NoProfile", "-c", &script]).status().unwrap();
+        };
+        let report = |name: &str, s: &[f32]| {
             let (a, b) = (tone_db(s, 500.0), tone_db(s, 1500.0));
-            println!("{name}: {streams} streams, {:.2} s, 500 Hz {a:.1} dB, 1500 Hz {b:.1} dB", s.len() as f64 / 2.0 / SAMPLE_RATE as f64);
+            println!("{name}: 500 Hz {a:.1} dB, 1500 Hz {b:.1} dB");
             (a, b)
         };
-        let (all_a, all_b) = report("no exclusions", &all, all_streams);
-        let (ex_a, ex_b) = report("jayc-tone-b excluded", &excluded, excluded_streams);
-        assert!(all_a > -40.0 && all_b > -40.0, "both tones must be audible without exclusions");
-        assert!(ex_a > -40.0, "the other app must still be captured");
-        assert!(ex_b < all_b - 40.0, "the excluded app must be gone");
+
+        let (all, all_samples) = start_capture(&["jayc-nothing.exe"]);
+        let (excluded, excluded_samples) = start_capture(&["jayc-tone-b"]);
+        let before = excluded.app_streams();
+        println!("app streams before the players: {before}");
+
+        play(&ps, &wav_a);
+        play(&other, &wav_b);
+        std::thread::sleep(APPS_RECHECK * 2 + Duration::from_secs(1));
+        println!("app streams with the players: all {}, excluded {}", all.app_streams(), excluded.app_streams());
+        let (all_a, all_b) = report("no exclusions, last 1 s", &last(&all_samples, 1.0));
+        let (ex_a, ex_b) = report("jayc-tone-b excluded, last 1 s", &last(&excluded_samples, 1.0));
+        let with_players = excluded.app_streams();
+
+        stop_players(&wav_a);
+        let (emitted, since) = (excluded_samples.lock().unwrap().len(), Instant::now());
+        std::thread::sleep(APPS_RECHECK + Duration::from_secs(1));
+        let rate = (excluded_samples.lock().unwrap().len() - emitted) as f64 / 2.0 / since.elapsed().as_secs_f64();
+        let after_quit = excluded.app_streams();
+        println!("after powershell quit: excluded {after_quit} app streams, mixer at {rate:.0} frames/s");
+        stop_players(&dir);
+        drop((all, excluded));
+
+        assert!(all_a > -40.0 && all_b > -40.0, "both tones must be picked up without exclusions");
+        assert!(ex_a > -40.0, "the other app must be picked up");
+        assert!(ex_b < all_b - 40.0, "the excluded app must be left out");
+        assert_eq!(with_players, before + 1, "one new app stream (the excluded one isn't opened)");
+        assert_eq!(after_quit, before, "the quitting app's stream is dropped");
+        assert!((rate - SAMPLE_RATE as f64).abs() < SAMPLE_RATE as f64 * 0.02, "the mix keeps real time");
     }
 }
