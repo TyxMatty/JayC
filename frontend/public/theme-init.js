@@ -14,6 +14,7 @@
         '--app-background',
         'linear-gradient(' + Math.round(g.angle) + 'deg, ' + g.from + ', ' + g.to + ')',
       );
+      document.documentElement.dataset.background = 'gradient';
     }
   } catch (e) {}
   document.documentElement.dataset.theme = theme;

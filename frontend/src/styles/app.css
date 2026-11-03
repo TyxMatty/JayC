@@ -54,6 +54,13 @@ select {
   background: var(--surface);
 }
 
+/* With a background gradient, the bar lets it through; 75% surface keeps its text readable. */
+:root[data-background='gradient'] .topbar {
+  border-bottom-color: transparent;
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  backdrop-filter: blur(12px);
+}
+
 .brand {
   font-weight: 700;
   font-size: 18px;

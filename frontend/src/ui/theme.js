@@ -25,11 +25,15 @@ function apply() {
 
 /** Button color and background gradient from Settings › Appearance (inline, so both themes use them). */
 function applyAppearance() {
-  const style = document.documentElement.style;
-  for (const [name, value] of Object.entries(appearanceVars(settings.get().appearance))) {
-    if (value) style.setProperty(name, value);
-    else style.removeProperty(name);
+  const root = document.documentElement;
+  const vars = appearanceVars(settings.get().appearance);
+  for (const [name, value] of Object.entries(vars)) {
+    if (value) root.style.setProperty(name, value);
+    else root.style.removeProperty(name);
   }
+  // Lets the CSS let the gradient show through the top bar (public/theme-init.js sets it too).
+  if (vars['--app-background']) root.dataset.background = 'gradient';
+  else delete root.dataset.background;
 }
 
 export function initTheme() {
