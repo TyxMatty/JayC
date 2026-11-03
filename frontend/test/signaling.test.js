@@ -12,6 +12,10 @@ const config = {
   heartbeatMs: 60_000,
   allowedOrigins: [],
   iceServers: [],
+  rtcPort: 0,
+  rtcListenIp: '127.0.0.1',
+  announcedAddress: '',
+  mediasoupLogLevel: 'error',
 };
 
 const once = (target, type) => new Promise((resolve) => target.addEventListener(type, (e) => resolve(e.detail), { once: true }));
@@ -27,27 +31,38 @@ describe('SignalingClient', () => {
 
   after(() => server.close());
 
-  test('joins, sees peers and relays signals', async () => {
+  test('joins, sees peers and gets router capabilities', async () => {
     const alice = new SignalingClient(url);
     const bob = new SignalingClient(url);
 
     const aJoined = await alice.join('room-a', 'Alice');
     assert.deepEqual(aJoined.peers, []);
     assert.equal(alice.id, aJoined.id);
+    assert.ok(aJoined.routerRtpCapabilities.codecs.length > 0);
 
     const peerJoined = once(alice, 'peer-joined');
     const bJoined = await bob.join('room-a', 'Bob');
-    assert.deepEqual(bJoined.peers, [{ id: alice.id, name: 'Alice' }]);
+    assert.deepEqual(bJoined.peers, [{ id: alice.id, name: 'Alice', producers: [] }]);
     assert.equal((await peerJoined).name, 'Bob');
-
-    const signal = once(alice, 'signal');
-    bob.send(alice.id, { description: { type: 'offer', sdp: 'x' } });
-    assert.deepEqual(await signal, { type: 'signal', from: bob.id, data: { description: { type: 'offer', sdp: 'x' } } });
 
     const left = once(alice, 'peer-left');
     bob.close();
     assert.equal((await left).name, 'Bob');
     alice.close();
+  });
+
+  test('request() resolves with data or rejects with the server error code', async () => {
+    const client = new SignalingClient(url);
+    await client.join('room-req', 'Req');
+
+    const transport = await client.request('createTransport', { direction: 'recv' });
+    assert.ok(transport.id);
+    assert.equal(transport.iceCandidates[0].address, '127.0.0.1');
+
+    await assert.rejects(client.request('createTransport', { direction: 'nope' }), (err) => err instanceof SignalingError && err.code === 'bad-request');
+
+    client.close();
+    await assert.rejects(client.request('createTransport', { direction: 'send' }), (err) => err.code === 'not-connected');
   });
 
   test('rejects join with the server error code (room-full)', async () => {

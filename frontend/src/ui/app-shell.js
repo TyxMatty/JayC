@@ -79,6 +79,7 @@ export function mountApp(root) {
     const url = toWebSocketUrl(settings.get().serverAddress);
     const call = new Call();
     await call.join({ url, room, name });
+    if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
     settings.update({ lastRoom: room });
     show(createCallView(call, { displayName: name, onLeft: showLobby }), () => call.leave());
   }

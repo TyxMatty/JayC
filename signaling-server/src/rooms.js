@@ -57,12 +57,6 @@ export class RoomRegistry {
     }
   }
 
-  /** Returns the peer with `id` if it shares a room with `from`, else null. */
-  findRoommate(from, id) {
-    if (!from.room || id === from.id) return null;
-    return this.rooms.get(from.room)?.get(id) ?? null;
-  }
-
   othersInRoom(peer) {
     const room = this.rooms.get(peer.room);
     return room ? [...room.values()].filter((p) => p.id !== peer.id) : [];

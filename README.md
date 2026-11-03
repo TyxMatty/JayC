@@ -4,7 +4,7 @@ App leve e open-source de chamadas e compartilhamento de tela para desktop e mob
 
 | Pasta | Conteúdo |
 |---|---|
-| [`signaling-server/`](signaling-server/) | Servidor de sinalização WebRTC (Node.js + `ws`) e arquivos Docker |
+| [`signaling-server/`](signaling-server/) | Servidor de sinalização (Node.js + `ws`) e SFU de mídia (mediasoup), com arquivos Docker |
 | [`frontend/`](frontend/) | App Tauri v2 + Vanilla JS (Vite) |
 | `plugins/tauri-plugin-pip/` | Plugin de Picture-in-Picture para Android/iOS *(em construção)* |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas e etapas |
@@ -25,7 +25,7 @@ npm install
 npm run server
 ```
 
-O servidor escuta em `ws://0.0.0.0:3000`. O health check fica em `http://localhost:3000/health`.
+O servidor usa a porta **3000/tcp** para a sinalização (`ws://`) e a **40000** (UDP e TCP) para a mídia. Libere as duas no firewall. O health check fica em `http://localhost:3000/health`.
 
 ## Rodando o servidor com Docker
 

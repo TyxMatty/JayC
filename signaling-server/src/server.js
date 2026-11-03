@@ -5,9 +5,24 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { RoomRegistry } from './rooms.js';
 import { TokenBucket } from './rate-limit.js';
 import { loadConfig } from './config.js';
+import { Sfu, resolveAnnouncedAddress } from './sfu.js';
 
 const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_NAME_LENGTH = 32;
+
+/** SFU requests: `{ type, id, data }` -> `{ type: 'response', id, ok, data | error }`. */
+const REQUESTS = new Set([
+  'createTransport',
+  'connectTransport',
+  'restartIce',
+  'produce',
+  'closeProducer',
+  'pauseProducer',
+  'resumeProducer',
+  'consume',
+  'resumeConsumer',
+  'setPreferredLayers',
+]);
 
 function defaultLog(level, message, extra) {
   const line = `${new Date().toISOString()} [${level}] ${message}`;
@@ -21,22 +36,14 @@ function cleanName(value) {
   return name.length > 0 && name.length <= MAX_NAME_LENGTH ? name : null;
 }
 
-function isSignalPayload(data) {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    !Array.isArray(data) &&
-    ('description' in data || 'candidate' in data)
-  );
-}
-
 /**
- * Starts the HTTP + WebSocket signaling server.
+ * Starts the HTTP + WebSocket signaling server and its mediasoup SFU.
  * @param {ReturnType<typeof loadConfig>} config
  * @param {{ log?: typeof defaultLog }} [options]
  */
 export function startServer(config, { log = defaultLog } = {}) {
   const registry = new RoomRegistry({ maxPeersPerRoom: config.maxPeersPerRoom });
+  const sfuReady = Sfu.create(config, log);
   const startedAt = Date.now();
 
   const httpServer = createServer((req, res) => {
@@ -65,12 +72,24 @@ export function startServer(config, { log = defaultLog } = {}) {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });
 
+  /** Leaves the current room: membership (notifies roommates) and SFU state. */
+  async function leaveRoom(peer) {
+    const roomId = peer.room;
+    if (!roomId) return;
+    registry.leave(peer);
+    const sfu = await sfuReady;
+    (await sfu.room(roomId)).removePeer(peer.id);
+    await sfu.closeRoomIfEmpty(roomId);
+  }
+
   wss.on('connection', (ws, req) => {
-    const bucket = new TokenBucket({ capacity: 100, perSecond: 50 });
+    // Joining a full room costs ~2 requests per remote producer; leave headroom.
+    const bucket = new TokenBucket({ capacity: 300, perSecond: 100 });
     const peer = {
       id: randomUUID(),
       name: null,
       room: null,
+      announcedAddress: null,
       send(message) {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
       },
@@ -83,6 +102,46 @@ export function startServer(config, { log = defaultLog } = {}) {
     });
 
     log('info', 'connected', { peer: peer.id, ip: req.socket.remoteAddress });
+
+    async function join(msg) {
+      const name = cleanName(msg.name);
+      if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name) {
+        return fail('bad-message', 'join');
+      }
+      if (peer.room && peer.room !== msg.room) await leaveRoom(peer);
+
+      peer.name = name;
+      const result = registry.join(msg.room, peer);
+      if (!result.ok) return fail(result.code, 'join');
+
+      const room = await (await sfuReady).room(msg.room);
+      room.addPeer(peer);
+      peer.send({
+        type: 'joined',
+        id: peer.id,
+        room: msg.room,
+        peers: result.others.map((p) => ({ id: p.id, name: p.name, producers: room.producersOf(p.id) })),
+        iceServers: config.iceServers,
+        routerRtpCapabilities: room.rtpCapabilities,
+      });
+      log('info', 'joined', { peer: peer.id, room: msg.room, size: result.others.length + 1 });
+    }
+
+    async function request(msg) {
+      const respond = (body) => peer.send({ type: 'response', id: msg.id, ...body });
+      if (!peer.room) return respond({ ok: false, error: 'not-in-room' });
+      try {
+        const room = await (await sfuReady).room(peer.room);
+        peer.announcedAddress ??= await resolveAnnouncedAddress(req.headers.host, config.announcedAddress);
+        const data = await room[msg.type](peer.id, msg.data ?? {}, { announcedAddress: peer.announcedAddress });
+        respond({ ok: true, data: data ?? null });
+      } catch (error) {
+        // SfuError carries a protocol code; mediasoup throws TypeError for invalid parameters.
+        const code = error?.code ?? (error instanceof TypeError ? 'bad-request' : 'internal');
+        if (code === 'internal') log('error', `${msg.type} failed`, { peer: peer.id, error: error?.message });
+        respond({ ok: false, error: code });
+      }
+    }
 
     ws.on('message', (raw, isBinary) => {
       if (!bucket.take()) return fail('rate-limited');
@@ -98,48 +157,22 @@ export function startServer(config, { log = defaultLog } = {}) {
         return fail('bad-message');
       }
 
-      switch (msg.type) {
-        case 'join': {
-          const name = cleanName(msg.name);
-          if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name) {
-            return fail('bad-message', 'join');
-          }
-          peer.name = name;
-          const result = registry.join(msg.room, peer);
-          if (!result.ok) return fail(result.code, 'join');
-          peer.send({
-            type: 'joined',
-            id: peer.id,
-            room: msg.room,
-            peers: result.others.map((p) => ({ id: p.id, name: p.name })),
-            iceServers: config.iceServers,
-          });
-          log('info', 'joined', { peer: peer.id, room: msg.room, size: result.others.length + 1 });
-          return;
-        }
-
-        case 'signal': {
-          if (!peer.room) return fail('not-in-room', 'signal');
-          if (typeof msg.to !== 'string' || !isSignalPayload(msg.data)) {
-            return fail('bad-message', 'signal');
-          }
-          const target = registry.findRoommate(peer, msg.to);
-          if (!target) return fail('unknown-peer', 'signal');
-          target.send({ type: 'signal', from: peer.id, data: msg.data });
-          return;
-        }
-
-        case 'leave':
-          registry.leave(peer);
-          return;
-
-        default:
-          return fail('bad-message');
+      if (msg.type === 'join') {
+        join(msg).catch((error) => {
+          log('error', 'join failed', { peer: peer.id, error: error?.message });
+          fail('internal', 'join');
+        });
+      } else if (msg.type === 'leave') {
+        leaveRoom(peer).catch(() => {});
+      } else if (REQUESTS.has(msg.type) && (typeof msg.id === 'number' || typeof msg.id === 'string')) {
+        request(msg);
+      } else {
+        fail('bad-message');
       }
     });
 
     ws.on('close', () => {
-      registry.leave(peer);
+      leaveRoom(peer).catch(() => {});
       log('info', 'disconnected', { peer: peer.id });
     });
 
@@ -158,22 +191,27 @@ export function startServer(config, { log = defaultLog } = {}) {
   }, config.heartbeatMs);
   heartbeat.unref();
 
-  const ready = new Promise((resolve, reject) => {
-    httpServer.once('error', reject);
-    httpServer.listen(config.port, config.host, () => {
-      httpServer.off('error', reject);
-      resolve(httpServer.address().port);
-    });
-  });
+  // Accept connections only once the SFU is up.
+  const ready = sfuReady.then(
+    () =>
+      new Promise((resolve, reject) => {
+        httpServer.once('error', reject);
+        httpServer.listen(config.port, config.host, () => {
+          httpServer.off('error', reject);
+          resolve(httpServer.address().port);
+        });
+      }),
+  );
 
   async function close() {
     clearInterval(heartbeat);
     for (const ws of wss.clients) ws.close(1001, 'server shutting down');
     await new Promise((resolve) => wss.close(resolve));
-    await new Promise((resolve) => httpServer.close(resolve));
+    if (httpServer.listening) await new Promise((resolve) => httpServer.close(resolve));
+    (await sfuReady.catch(() => null))?.close();
   }
 
-  return { ready, close, registry, wss };
+  return { ready, close, registry, wss, sfu: sfuReady };
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -182,7 +220,7 @@ if (isMain) {
   const config = loadConfig();
   const server = startServer(config);
   const port = await server.ready;
-  defaultLog('info', `Jay-C signaling server listening on ${config.host}:${port}`);
+  defaultLog('info', `Jay-C signaling server listening on ${config.host}:${port}, media on port ${config.rtcPort || 'random'}`);
 
   const shutdown = async (signal) => {
     defaultLog('info', `${signal} received, shutting down`);

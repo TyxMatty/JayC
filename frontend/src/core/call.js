@@ -1,44 +1,67 @@
+import { Device } from 'mediasoup-client';
 import { SignalingClient } from './signaling.js';
-import { Peer } from './peer.js';
 import { openLocalMedia, getMicTrack, getCameraTrack } from './media.js';
 
+/** Camera simulcast: the SFU forwards one of these layers to each viewer. */
+const CAMERA_ENCODINGS = [
+  { scaleResolutionDownBy: 4, maxBitrate: 150_000 },
+  { scaleResolutionDownBy: 2, maxBitrate: 500_000 },
+  { scaleResolutionDownBy: 1, maxBitrate: 1_500_000 },
+];
+
+/** Which camera layer to receive, by how many cameras are on screen (bigger tiles -> higher layer). */
+function cameraLayerFor(cameraCount) {
+  if (cameraCount <= 2) return 2;
+  if (cameraCount <= 6) return 1;
+  return 0;
+}
+
 /**
- * A call in one room: local media + signaling + one Peer per remote participant (mesh).
+ * A call in one room, with media routed through the server's SFU (mediasoup): we upload each
+ * track once over a "send" transport and receive everyone else's over a "recv" transport.
  *
  * Events (CustomEvent):
  *   participant-added   { participant }
  *   participant-removed { participant }
- *   participant-updated { participant }   connection state or remote tracks changed
+ *   participant-updated { participant }   tracks, mute state or connection changed
  *   local-updated       {}                local tracks changed (mute, camera on/off)
  *   signaling-state     { state }
  *   ended               {}
  *
- * participant = { id, name, peer: Peer, connectionState, media: { audio, video } | null }
- *   `media` is what the remote says it is sending (null until its control channel opens).
+ * participant = { id, name, stream: MediaStream, media: { audio, video }, connectionState }
  */
 export class Call extends EventTarget {
-  /** Local tracks; Peers keep a reference to this object, so mutate it, never reassign. */
   local = { audio: null, video: null };
   /** For the local preview tile. */
   localStream = new MediaStream();
-  /** @type {Map<string, { id: string, name: string, peer: Peer, connectionState: string }>} */
+  /** @type {Map<string, object>} */
   participants = new Map();
   mediaErrors = {};
   room = null;
 
   #signaling = null;
+  #device = null;
   #iceServers = [];
+  #send = null;
+  #recv = null;
+  /** Resolves with the recv transport of the current setup (consumes wait for it). */
+  #recvReady = null;
+  /** @type {{ mic: import('mediasoup-client').types.Producer | null, camera: import('mediasoup-client').types.Producer | null }} */
+  #producers = { mic: null, camera: null };
+  #micMuted = false;
+  /** Bumped on every (re)setup so late async results from an old setup are discarded. */
+  #generation = 0;
   #ended = false;
 
   get micOn() {
-    return Boolean(this.local.audio?.enabled);
+    return Boolean(this.local.audio) && !this.#micMuted;
   }
 
   get cameraOn() {
     return Boolean(this.local.video);
   }
 
-  /** Opens local media, joins the room and connects to everyone already there. */
+  /** Opens local media, joins the room and starts sending/receiving through the SFU. */
   async join({ url, room, name }) {
     this.room = room;
     const media = await openLocalMedia();
@@ -50,91 +73,201 @@ export class Call extends EventTarget {
     const signaling = new SignalingClient(url);
     this.#signaling = signaling;
     signaling.addEventListener('state', (e) => this.#emit('signaling-state', e.detail));
-    signaling.addEventListener('peer-joined', (e) => this.#addParticipant(e.detail, { initiator: false }));
+    signaling.addEventListener('peer-joined', (e) => this.#addParticipant(e.detail));
     signaling.addEventListener('peer-left', (e) => this.#removeParticipant(e.detail.id));
-    signaling.addEventListener('signal', (e) => this.#onSignal(e.detail));
-    signaling.addEventListener('rejoined', (e) => this.#onRejoined(e.detail));
+    signaling.addEventListener('new-producer', (e) => this.#consume(e.detail));
+    signaling.addEventListener('producer-closed', (e) => this.#onProducerClosed(e.detail));
+    signaling.addEventListener('producer-state', (e) => this.#onProducerState(e.detail));
+    signaling.addEventListener('rejoined', (e) => this.#setup(e.detail).catch((err) => console.warn('[call] rejoin failed', err)));
 
     let joined;
     try {
       joined = await signaling.join(room, name);
+      await this.#setup(joined);
     } catch (error) {
+      signaling.close();
       this.#stopLocal();
       throw error;
     }
-    this.#iceServers = joined.iceServers ?? [];
-    // We are the newcomer: we offer to everyone already in the room.
-    for (const p of joined.peers) this.#addParticipant(p, { initiator: true });
   }
 
   async toggleMic() {
-    if (this.local.audio) {
-      this.local.audio.enabled = !this.local.audio.enabled;
-    } else {
+    if (!this.local.audio) {
       // No mic yet (denied or missing at join): try again now.
       this.local.audio = await getMicTrack();
-      await this.#replaceOnAllPeers('audio');
+      this.#micMuted = false;
+      if (this.#producers.mic) {
+        await this.#producers.mic.replaceTrack({ track: this.local.audio });
+        await this.#setProducerPaused('mic', false);
+      } else {
+        await this.#produce('mic', this.local.audio);
+      }
+    } else {
+      this.#micMuted = !this.#micMuted;
+      await this.#setProducerPaused('mic', this.#micMuted);
     }
     this.#syncLocalStream();
   }
 
   async toggleCamera() {
     if (this.local.video) {
-      // Stop the track so the camera light turns off; remote side sees the video track mute.
+      // Stop the track so the camera light turns off.
+      await this.#setProducerPaused('camera', true);
+      await this.#producers.camera?.replaceTrack({ track: null });
       this.local.video.stop();
       this.local.video = null;
     } else {
       this.local.video = await getCameraTrack();
+      if (this.#producers.camera) {
+        await this.#producers.camera.replaceTrack({ track: this.local.video });
+        await this.#setProducerPaused('camera', false);
+      } else {
+        await this.#produce('camera', this.local.video);
+      }
     }
-    await this.#replaceOnAllPeers('video');
     this.#syncLocalStream();
   }
 
   leave() {
     if (this.#ended) return;
     this.#ended = true;
+    this.#generation++;
     this.#signaling?.close();
+    this.#closeTransports();
     for (const id of [...this.participants.keys()]) this.#removeParticipant(id);
     this.#stopLocal();
     this.#emit('ended', {});
   }
 
-  #addParticipant({ id, name }, { initiator }) {
-    const existing = this.participants.get(id);
-    if (existing) {
-      if (name && existing.name !== name) {
-        existing.name = name;
-        this.#emit('participant-updated', { participant: existing });
-      }
-      return existing;
+  /** Stats of what we upload, e.g. to confirm each track is sent once regardless of room size. */
+  async sendStats() {
+    return this.#send ? this.#send.getStats() : null;
+  }
+
+  // ---------- Setup (first join and every reconnect) ----------
+
+  async #setup(joined) {
+    const generation = ++this.#generation;
+    this.#closeTransports();
+    for (const id of [...this.participants.keys()]) this.#removeParticipant(id);
+    this.#iceServers = joined.iceServers ?? [];
+
+    if (!this.#device) {
+      this.#device = new Device();
+      await this.#device.load({ routerRtpCapabilities: joined.routerRtpCapabilities });
     }
 
-    const peer = new Peer({
-      polite: !initiator,
-      iceServers: this.#iceServers,
-      sendSignal: (data) => this.#signaling.send(id, data),
-      local: this.local,
-    });
-    const participant = { id, name: name ?? 'Guest', peer, connectionState: peer.connectionState, media: null };
-    this.participants.set(id, participant);
+    // Participants first, so producers announced while we build transports aren't lost.
+    for (const p of joined.peers) this.#addParticipant(p);
 
-    peer.addEventListener('state', (e) => {
-      participant.connectionState = e.detail.connectionState;
-      this.#emit('participant-updated', { participant });
+    this.#recvReady = this.#createTransport('recv', generation);
+    const sendReady = this.#createTransport('send', generation);
+
+    for (const p of joined.peers) {
+      for (const producer of p.producers ?? []) {
+        this.#consume({ peerId: p.id, producerId: producer.id, kind: producer.kind, source: producer.source });
+      }
+    }
+
+    this.#send = await sendReady;
+    this.#recv = await this.#recvReady;
+    if (generation !== this.#generation) return;
+
+    if (this.local.audio) await this.#produce('mic', this.local.audio);
+    if (this.local.video) await this.#produce('camera', this.local.video);
+  }
+
+  async #createTransport(direction, generation) {
+    const params = await this.#signaling.request('createTransport', { direction });
+    const options = { ...params, iceServers: this.#iceServers };
+    const transport =
+      direction === 'send' ? this.#device.createSendTransport(options) : this.#device.createRecvTransport(options);
+
+    transport.on('connect', ({ dtlsParameters }, ok, fail) => {
+      this.#signaling.request('connectTransport', { transportId: transport.id, dtlsParameters }).then(ok, fail);
     });
-    peer.addEventListener('track', () => this.#emit('participant-updated', { participant }));
-    peer.addEventListener('channel-open', () => peer.sendMessage(this.#mediaMessage()));
-    peer.addEventListener('message', (e) => {
-      const { message } = e.detail;
-      if (message.type === 'media') {
-        participant.media = { audio: Boolean(message.audio), video: Boolean(message.video) };
-        this.#emit('participant-updated', { participant });
+
+    if (direction === 'send') {
+      transport.on('produce', ({ kind, rtpParameters, appData }, ok, fail) => {
+        this.#signaling
+          .request('produce', { transportId: transport.id, kind, rtpParameters, source: appData.source, paused: appData.paused })
+          .then(ok, fail);
+      });
+    }
+
+    transport.on('connectionstatechange', (state) => {
+      if (generation !== this.#generation) return;
+      if (state === 'failed') this.#restartIce(transport);
+      if (direction === 'recv') {
+        for (const participant of this.participants.values()) this.#updateParticipant(participant);
       }
     });
-    peer.addEventListener('error', (e) => console.warn(`[peer ${name}]`, e.detail.error));
+    return transport;
+  }
 
+  async #restartIce(transport) {
+    try {
+      const { iceParameters } = await this.#signaling.request('restartIce', { transportId: transport.id });
+      await transport.restartIce({ iceParameters });
+    } catch (error) {
+      console.warn('[call] ICE restart failed', error);
+    }
+  }
+
+  #closeTransports() {
+    // Closing transports closes their producers/consumers; our local tracks survive (stopTracks: false).
+    this.#send?.close();
+    this.#recv?.close();
+    this.#send = this.#recv = this.#recvReady = null;
+    this.#producers = { mic: null, camera: null };
+  }
+
+  // ---------- Sending ----------
+
+  async #produce(source, track) {
+    const options = {
+      track,
+      stopTracks: false,
+      appData: { source, paused: source === 'mic' && this.#micMuted },
+    };
+    if (source === 'camera') {
+      options.encodings = CAMERA_ENCODINGS;
+      options.codecOptions = { videoGoogleStartBitrate: 1000 };
+    } else if (source === 'mic') {
+      options.codecOptions = { opusDtx: true, opusFec: true };
+    }
+    const producer = await this.#send.produce(options);
+    if (options.appData.paused) producer.pause();
+    this.#producers[source] = producer;
+    return producer;
+  }
+
+  async #setProducerPaused(source, paused) {
+    const producer = this.#producers[source];
+    if (!producer || producer.paused === paused) return;
+    if (paused) producer.pause();
+    else producer.resume();
+    await this.#signaling
+      .request(paused ? 'pauseProducer' : 'resumeProducer', { producerId: producer.id })
+      .catch((error) => console.warn('[call] pause/resume failed', error));
+  }
+
+  // ---------- Receiving ----------
+
+  #addParticipant({ id, name }) {
+    if (this.participants.has(id)) return this.participants.get(id);
+    const participant = {
+      id,
+      name: name ?? 'Guest',
+      stream: new MediaStream(),
+      media: { audio: false, video: false },
+      connectionState: 'connected',
+      /** producerId -> { consumer, source, paused, layer } */
+      consumers: new Map(),
+      pending: new Set(),
+    };
+    this.participants.set(id, participant);
     this.#emit('participant-added', { participant });
-    if (initiator) peer.start();
     return participant;
   }
 
@@ -142,27 +275,88 @@ export class Call extends EventTarget {
     const participant = this.participants.get(id);
     if (!participant) return;
     this.participants.delete(id);
-    participant.peer.close();
+    for (const { consumer } of participant.consumers.values()) consumer.close();
+    for (const track of participant.stream.getTracks()) participant.stream.removeTrack(track);
     this.#emit('participant-removed', { participant });
+    this.#applyLayerPolicy();
   }
 
-  #onSignal({ from, data }) {
-    // An offer can only come from someone who joined after us, so peer-joined arrived first;
-    // fall back to creating the participant anyway.
-    const participant = this.participants.get(from) ?? this.#addParticipant({ id: from }, { initiator: false });
-    participant.peer.handleSignal(data);
+  async #consume({ peerId, producerId, source }) {
+    const participant = this.participants.get(peerId);
+    if (!participant || participant.consumers.has(producerId) || participant.pending.has(producerId)) return;
+    if (source !== 'mic' && source !== 'camera') return; // screen sources arrive with the streaming milestone
+
+    const generation = this.#generation;
+    participant.pending.add(producerId);
+    try {
+      const recv = await this.#recvReady;
+      const params = await this.#signaling.request('consume', { producerId, rtpCapabilities: this.#device.rtpCapabilities });
+      if (generation !== this.#generation || !this.participants.has(peerId)) return;
+
+      const consumer = await recv.consume({
+        id: params.id,
+        producerId,
+        kind: params.kind,
+        rtpParameters: params.rtpParameters,
+        appData: { source: params.source },
+      });
+      participant.consumers.set(producerId, { consumer, source: params.source, paused: params.producerPaused, layer: null });
+      participant.stream.addTrack(consumer.track);
+      await this.#signaling.request('resumeConsumer', { consumerId: consumer.id });
+      this.#updateParticipant(participant);
+      if (params.source === 'camera') this.#applyLayerPolicy();
+    } catch (error) {
+      // The producer may have closed in the meantime.
+      if (error?.code !== 'unknown-producer') console.warn('[call] consume failed', error);
+    } finally {
+      participant.pending.delete(producerId);
+    }
   }
 
-  /** The signaling connection dropped and came back with a new id: rebuild every peer connection. */
-  #onRejoined(joined) {
-    for (const id of [...this.participants.keys()]) this.#removeParticipant(id);
-    this.#iceServers = joined.iceServers ?? this.#iceServers;
-    for (const p of joined.peers) this.#addParticipant(p, { initiator: true });
+  #onProducerClosed({ peerId, producerId }) {
+    const participant = this.participants.get(peerId);
+    const entry = participant?.consumers.get(producerId);
+    if (!entry) return;
+    participant.consumers.delete(producerId);
+    participant.stream.removeTrack(entry.consumer.track);
+    entry.consumer.close();
+    this.#updateParticipant(participant);
+    if (entry.source === 'camera') this.#applyLayerPolicy();
   }
 
-  async #replaceOnAllPeers(kind) {
-    await Promise.all([...this.participants.values()].map((p) => p.peer.replaceTrack(kind, this.local[kind])));
+  #onProducerState({ peerId, producerId, paused }) {
+    const participant = this.participants.get(peerId);
+    const entry = participant?.consumers.get(producerId);
+    if (!entry) return;
+    entry.paused = paused;
+    this.#updateParticipant(participant);
   }
+
+  #updateParticipant(participant) {
+    const live = (source) => [...participant.consumers.values()].some((c) => c.source === source && !c.paused);
+    participant.media = { audio: live('mic'), video: live('camera') };
+    const recvState = this.#recv?.connectionState ?? 'new';
+    participant.connectionState = participant.consumers.size === 0 ? 'connected' : recvState;
+    this.#emit('participant-updated', { participant });
+  }
+
+  /** Ask the SFU for a camera layer that fits the tile size. */
+  #applyLayerPolicy() {
+    const cameras = [];
+    for (const participant of this.participants.values()) {
+      for (const entry of participant.consumers.values()) if (entry.source === 'camera') cameras.push(entry);
+    }
+    const layer = cameraLayerFor(cameras.length);
+    for (const entry of cameras) {
+      if (entry.layer === layer) continue;
+      entry.layer = layer;
+      this.#signaling
+        .request('setPreferredLayers', { consumerId: entry.consumer.id, spatialLayer: layer })
+        .catch(() => (entry.layer = null));
+    }
+  }
+
+  // ---------- Local media ----------
 
   #syncLocalStream() {
     for (const track of this.localStream.getTracks()) {
@@ -171,13 +365,7 @@ export class Call extends EventTarget {
     for (const track of [this.local.audio, this.local.video]) {
       if (track && !this.localStream.getTracks().includes(track)) this.localStream.addTrack(track);
     }
-    const message = this.#mediaMessage();
-    for (const { peer } of this.participants.values()) peer.sendMessage(message);
     this.#emit('local-updated', {});
-  }
-
-  #mediaMessage() {
-    return { type: 'media', audio: this.micOn, video: this.cameraOn };
   }
 
   #stopLocal() {

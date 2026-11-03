@@ -6,25 +6,29 @@ App leve e open-source de chamadas e compartilhamento de tela, para desktop e mo
 
 ```mermaid
 flowchart LR
-  subgraph A["Jay-C (peer A)"]
-    UIA[UI Vanilla JS] --> RTCA[RTCPeerConnection]
+  subgraph A["Jay-C (A)"]
+    UIA[UI Vanilla JS] --> MSA[mediasoup-client<br/>send + recv transports]
     UIA --> WSA[WebSocket client]
   end
-  subgraph B["Jay-C (peer B)"]
-    UIB[UI Vanilla JS] --> RTCB[RTCPeerConnection]
+  subgraph B["Jay-C (B … P, até 16)"]
+    UIB[UI Vanilla JS] --> MSB[mediasoup-client]
     UIB --> WSB[WebSocket client]
   end
-  WSA <-- "SDP / ICE (JSON)" --> S[(Signaling server<br/>Node + ws, Docker :3000)]
-  WSB <-- "SDP / ICE (JSON)" --> S
-  RTCA <== "áudio / vídeo / tela (P2P, SRTP)" ==> RTCB
+  subgraph S["Servidor Jay-C (Docker)"]
+    SIG[Sinalização<br/>Node + ws :3000]
+    SFU[SFU mediasoup<br/>:40000 UDP/TCP]
+  end
+  WSA <-- "JSON" --> SIG
+  WSB <-- "JSON" --> SIG
+  MSA <== "SRTP (1× upload)" ==> SFU
+  MSB <== "SRTP" ==> SFU
 ```
 
-- O servidor **só troca mensagens de sinalização**: oferta, resposta e candidatos ICE. Mídia nunca passa por ele, então ele consome quase nada de CPU e RAM.
-- A mídia vai direto entre os peers. Em LAN, ZeroTier ou Radmin VPN, os candidatos ICE do tipo *host* bastam, sem STUN ou TURN. Para uso pela internet sem VPN, o servidor repassa aos clientes os STUN/TURN definidos em `ICE_SERVERS`. Um serviço coturn opcional no compose fica para a etapa de release.
-- Topologia atual: **mesh**, em que cada pessoa envia a própria mídia direto para cada uma das outras. Funciona até 4 pessoas.
-- **Escopo final: salas de até 16 pessoas com SFU** (detalhes abaixo).
+- O servidor faz a **sinalização** (porta 3000) e **repassa a mídia** como SFU (porta 40000): recebe cada faixa uma vez e a encaminha a quem assiste, sem decodificar.
+- Em LAN, ZeroTier ou Radmin VPN, o cliente alcança o servidor direto, sem STUN ou TURN. Para uso pela internet sem VPN, o servidor repassa aos clientes os STUN/TURN definidos em `ICE_SERVERS`. Um serviço coturn opcional no compose fica para a etapa de release.
+- Salas de **até 16 pessoas**. Até a etapa 6 a topologia era mesh, com P2P entre todos e limite de 4.
 
-### Topologia final: SFU (até 16 pessoas)
+### Topologia: SFU (até 16 pessoas)
 
 Em mesh, cada participante envia N−1 cópias de cada faixa. Com 16 pessoas, quem transmite a tela em 1080p60 (~6 Mbps) precisaria de ~90 Mbps de upload. Com um **SFU** (*Selective Forwarding Unit*), cada pessoa envia **uma vez** para o servidor, que repassa para as outras sem decodificar.
 
@@ -43,7 +47,7 @@ flowchart LR
 | Portas | **Uma porta UDP/TCP** para toda a mídia (`WebRtcServer` do mediasoup), além da 3000 da sinalização | É fácil de liberar no firewall, de mapear no Docker Desktop e de explicar no guia |
 | IP anunciado | O servidor anuncia o IP/host que o cliente usou para conectar (cabeçalho `Host` do WebSocket) | O usuário não precisa configurar o IP no compose. Isso precisa ser validado na etapa do SFU. |
 | Câmeras | **Simulcast** em 3 camadas | A grade de 16 recebe a camada baixa e quem está em destaque recebe a alta |
-| Mesh | Removido quando o SFU entrar. Todas as salas passam pelo SFU. | Um só caminho de mídia para manter. Na LAN ou VPN, o salto extra pelo servidor é desprezível. |
+| Mesh | Removido na etapa 7. Todas as salas passam pelo SFU. | Um só caminho de mídia para manter. Na LAN ou VPN, o salto extra pelo servidor é desprezível. |
 
 Custo para quem hospeda: o servidor recebe cada faixa uma vez e reenvia para cada espectador. Uma tela em 1080p60 para 15 pessoas pede ~90 Mbps de **upload da máquina que hospeda**. Na LAN isso é tranquilo. Pela internet, via ZeroTier ou Radmin, o limite passa a ser a conexão do host, e o guia vai deixar isso claro.
 
@@ -114,33 +118,73 @@ Cliente → servidor:
 | type | campos | |
 |---|---|---|
 | `join` | `room`, `name` | entra na sala (cria se não existir) |
-| `signal` | `to`, `data` (`{description}` ou `{candidate}`) | repassado só para `to` |
 | `leave` | — | sai da sala |
+| *requisição SFU* | `id`, `data` | resposta: `{type: "response", id, ok, data}` ou `{…, ok: false, error}` |
+
+Requisições SFU, com os nomes da API do mediasoup:
+
+| type | `data` | resposta |
+|---|---|---|
+| `createTransport` | `direction: "send" \| "recv"` | `id`, `iceParameters`, `iceCandidates` (com o endereço que este cliente usou), `dtlsParameters` |
+| `connectTransport` | `transportId`, `dtlsParameters` | — |
+| `restartIce` | `transportId` | `iceParameters` |
+| `produce` | `transportId`, `kind`, `rtpParameters`, `source` (`mic` \| `camera` \| `screen` \| `screen-audio`), `paused?` | `id` |
+| `closeProducer` / `pauseProducer` / `resumeProducer` | `producerId` | — |
+| `consume` | `producerId`, `rtpCapabilities` | `id`, `peerId`, `kind`, `source`, `rtpParameters`, `producerPaused` (o consumer nasce pausado) |
+| `resumeConsumer` | `consumerId` | — |
+| `setPreferredLayers` | `consumerId`, `spatialLayer`, `temporalLayer?` | — (só tem efeito com simulcast) |
 
 Servidor → cliente:
 
 | type | campos | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name}]`, `iceServers` | confirmação, quem já está na sala e os STUN/TURN configurados no servidor (`ICE_SERVERS`) |
+| `joined` | `id`, `room`, `peers: [{id, name, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | quem já está na sala, o que cada um publica e as capacidades do router |
 | `peer-joined` / `peer-left` | `id`, `name` | |
-| `signal` | `from`, `data` | |
-| `error` | `code` (`room-full`, `bad-message`, `rate-limited`, `not-in-room`, `unknown-peer`), `ref` opcional | |
+| `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | alguém começou a publicar uma faixa |
+| `producer-state` | `peerId`, `producerId`, `paused` | só para quem consome: mutou ou desligou a câmera, ou voltou |
+| `producer-closed` | `peerId`, `producerId` | só para quem consome |
+| `error` | `code` (`room-full`, `bad-message`, `rate-limited`, `internal`), `ref` opcional | |
 
-Configuração por variáveis de ambiente: `PORT` (3000), `HOST` (0.0.0.0), `MAX_PEERS_PER_ROOM` (4), `MAX_MESSAGE_BYTES` (65536), `HEARTBEAT_MS` (30000), `ALLOWED_ORIGINS` (vazio = qualquer), `ICE_SERVERS` (JSON).
+Erros das requisições: `not-in-room`, `bad-request`, `unknown-transport`, `unknown-producer`, `unknown-consumer`, `duplicate-source`, `cannot-consume`, `internal`.
+
+O estado "mic/câmera ligados" de cada pessoa **é o estado de pausa dos producers dela**. Não existe uma mensagem separada para isso.
+
+Configuração por variáveis de ambiente:
+
+| Variável | Padrão | Para quê |
+|---|---|---|
+| `PORT` | 3000 | porta da sinalização |
+| `HOST` | 0.0.0.0 | interface da sinalização |
+| `MAX_PEERS_PER_ROOM` | 16 | tamanho máximo da sala |
+| `MAX_MESSAGE_BYTES` | 65536 | tamanho máximo de mensagem |
+| `HEARTBEAT_MS` | 30000 | intervalo do ping/pong |
+| `ALLOWED_ORIGINS` | vazio = qualquer | origens aceitas |
+| `ICE_SERVERS` | — | STUN/TURN, em JSON |
+| `RTC_PORT` | 40000 | porta única de mídia, UDP e TCP |
+| `RTC_LISTEN_IP` | 0.0.0.0 | interface da mídia |
+| `ANNOUNCED_ADDRESS` | vazio = o host que cada cliente usou | endereço anunciado nos candidatos ICE |
+| `MEDIASOUP_LOG_LEVEL` | warn | nível de log do mediasoup |
 
 Proteções:
-- Mensagem de no máximo 64 KB, no máximo 4 peers por sala e limite de mensagens por segundo.
+- Mensagem de no máximo 64 KB, no máximo 16 pessoas por sala e limite de mensagens por segundo (rajada de 300, 100/s).
 - Ping/pong a cada 30 s para derrubar conexões mortas.
 - IDs de peer gerados pelo servidor, com `crypto.randomUUID()`.
 - Endpoint `GET /health` para o `HEALTHCHECK` do Docker.
 
 ## 5. Fluxos principais
 
-**Iniciar chamada.** O app conecta em `ws://<ip>:3000` e envia `join`. Quem chega por último é quem oferece: para cada peer que já está na sala, cria um `RTCPeerConnection` com um data channel `control` e um transceiver `sendrecv` por tipo de mídia (áudio e vídeo). Isso dispara a oferta. Quem já estava na sala adota esses transceivers ao responder. Colisões posteriores seguem o "perfect negotiation": o recém-chegado é *impolite*.
+**Iniciar chamada (SFU).**
+1. O app conecta em `ws://<ip>:3000`, envia `join` e recebe `routerRtpCapabilities`, que carrega o `Device` do mediasoup-client.
+2. Cria **dois transportes**: `send` (upload) e `recv` (download). Cada um é um único `RTCPeerConnection` com o servidor, na porta de mídia.
+3. Publica `mic` e `camera` (*producers*) e consome (*consumers*) cada producer da lista do `joined`. Depois, também cada `new-producer` que chegar.
 
-**Estado da mídia.** O data channel `control` carrega mensagens JSON como `{type: "media", audio, video}`. Elas são necessárias porque o Chrome não marca a faixa remota como *muted* quando o outro lado para de enviar com `replaceTrack(null)`. Com elas, o avatar e o ícone de microfone mudo aparecem na hora.
+Os consumers nascem pausados e o cliente os retoma quando está pronto, para não perder o primeiro keyframe.
 
-**Queda do servidor.** As conexões P2P continuam durante a queda e um aviso aparece na tela. O cliente reconecta com backoff (1, 2, 4, 8 e 10 s) e recebe um novo id. Aí as conexões são refeitas com quem estiver na sala.
+**Câmera com simulcast.** São 3 camadas (÷4, ÷2 e cheia), com 150, 500 e 1500 kbps. O cliente pede ao SFU a camada que cabe no tamanho da tile: até 2 câmeras na tela recebem a camada alta, até 6 a média, e acima disso a baixa. O Chrome só gera as camadas que a resolução de entrada permite; com câmeras de 720p, saem as 3.
+
+**Estado da mídia.** Mutar ou desligar a câmera é `producer.pause()` no cliente mais `pauseProducer` no servidor. Quem consome recebe `producer-state` na hora e mostra o avatar ou o ícone de mudo. Desligar a câmera também faz `replaceTrack(null)` e para a faixa, para apagar a luz da câmera.
+
+**Queda do servidor.** Como a mídia passa pelo SFU, **a chamada para enquanto o servidor está fora**, e um aviso aparece na tela. O cliente reconecta com backoff (1, 2, 4, 8 e 10 s), recebe um novo id e refaz transportes, producers e consumers a partir do novo `joined`. No teste, com o servidor reiniciado, a volta levou ~1 s.
 
 ## 6. Transmissões ("lives")
 
@@ -188,8 +232,7 @@ WASAPI process loopback        mixer Rust                 tauri::ipc::Channel   
 ### Mídia e sinalização
 
 - Cada participante publica até **4 faixas**: microfone, câmera, vídeo da tela e áudio da tela. No SFU, cada uma é um *producer* do mediasoup. Iniciar ou parar uma transmissão é só `replaceTrack()`, sem renegociar, e dá para transmitir a tela com a câmera ligada.
-- O estado de cada pessoa (`{type: "media", …}` e `{type: "screen", active, mode, hasAudio}`) passa a ir pelo **servidor de sinalização**, como broadcast para a sala, em vez do data channel P2P, que não existe no SFU. Quem recebe mostra a tela em destaque, com as câmeras em miniatura.
-- `core/call.js` fala com uma interface de transporte. Assim a interface e as transmissões não dependem de a mídia ir por mesh ou SFU.
+- O estado da transmissão vem dos próprios producers. Um producer `screen`, e `screen-audio` se houver áudio, existe enquanto a pessoa transmite. O modo (tela ou janela) vai no `appData` do producer e chega aos outros no `new-producer`. Quem recebe mostra a tela em destaque, com as câmeras em miniatura.
 - O áudio da tela usa Opus **estéreo** a ~128 kbps. O Chrome envia mono por padrão, então é preciso acrescentar `stereo=1; sprop-stereo=1` ao fmtp do Opus no SDP.
 - `track.contentHint`: `detail` para texto e código, `motion` para jogos e vídeo.
 
@@ -238,7 +281,9 @@ Presets: resolução 360p, 480p, 720p, 1080p, 1440p ou original. FPS 5, 15, 24, 
 11. **SFU com 16 pessoas:**
     - A banda de upload de quem hospeda vira o limite (ver a seção 1).
     - A imagem Docker cresce por causa do worker do mediasoup.
-    - O mapeamento UDP no Docker Desktop do Windows e o IP anunciado em VPNs (ZeroTier/Radmin) precisam de teste real.
+    - ✅ Validado na etapa 7: o mapeamento UDP no Docker Desktop do Windows e o IP anunciado a partir do `Host`, tanto em `localhost` quanto no IP da LAN.
+    - Ainda falta testar o IP de VPN (ZeroTier/Radmin).
+    - A imagem passou a ter 379 MB, por causa da base Debian, necessária para o worker pré-compilado do mediasoup.
 
 ## 9. Ferramentas necessárias
 
@@ -270,7 +315,7 @@ Cada etapa termina com algo testável.
 | 4 ✅ | Frontend base: Vite + Tauri desktop, tema, settings | `npm run tauri dev` abre a janela e o tema alterna na hora |
 | 5 ✅ | Chamadas (câmera/mic), 1:1 e até 4 pessoas | duas instâncias do app se veem e se ouvem via servidor local |
 | 6 ✅ | **Spike das transmissões** (Windows), ver [spikes/06-transmissoes.md](spikes/06-transmissoes.md) | No Tauri: o `getDisplayMedia` abre o seletor e dá para descobrir a janela escolhida (ou o Plano B foi decidido). Um protótipo em Rust captura o áudio de um único processo. |
-| 7 | **SFU (mediasoup)** no container, interface de transporte no cliente, estado pela sinalização, simulcast; limite da sala vai a 16 | 16 abas ou instâncias numa sala se veem; cada cliente envia 1× (confirmado em `getStats()`); o Docker expõe só a 3000 e uma porta de mídia |
+| 7 ✅ | **SFU (mediasoup)** no container, interface de transporte no cliente, estado pela sinalização, simulcast; limite da sala vai a 16 | 16 abas ou instâncias numa sala se veem; cada cliente envia 1× (confirmado em `getStats()`); o Docker expõe só a 3000 e uma porta de mídia |
 | 8 | **Transmissão: vídeo** (tela inteira e janela), tela em destaque para quem assiste e controles de qualidade | resolução e FPS mudam durante a transmissão sem a chamada cair, confirmado em `getStats()` |
 | 9 | **Plugin `system-audio` (Windows):** process loopback, mixer, ponte Channel → AudioWorklet → faixa WebRTC, Opus estéreo | quem assiste ouve o áudio de um app escolhido, em estéreo |
 | 10 | **Modos completos + Settings › Streaming** | Tela inteira: com o Discord excluído, ninguém ouve o Discord nem as vozes da chamada. Janela: só o áudio daquele app é transmitido. |

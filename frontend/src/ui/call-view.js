@@ -130,25 +130,18 @@ export function createCallView(call, { displayName, onLeft }) {
     waiting.hidden = remotes > 0;
   };
 
-  const onParticipant = (type) => (e) => {
-    const { participant } = e.detail;
+  const renderParticipant = (participant, { announce }) => {
     let tile = tiles.get(participant.id);
-    if (type === 'removed') {
-      tile?.el.remove();
-      tiles.delete(participant.id);
-      if (tile) showToast(`${participant.name} left.`);
-      return layout();
-    }
     if (!tile) {
       tile = createTile({
         name: participant.name,
-        stream: participant.peer.remoteStream,
+        stream: participant.stream,
         local: false,
         getMedia: () => participant.media,
       });
       tiles.set(participant.id, tile);
       stage.insertBefore(tile.el, localTile.el);
-      showToast(`${participant.name} joined.`);
+      if (announce) showToast(`${participant.name} joined.`);
       layout();
     }
     tile.setName(participant.name);
@@ -156,9 +149,19 @@ export function createCallView(call, { displayName, onLeft }) {
     tile.refresh();
   };
 
-  call.addEventListener('participant-added', onParticipant('added'));
-  call.addEventListener('participant-updated', onParticipant('updated'));
-  call.addEventListener('participant-removed', onParticipant('removed'));
+  call.addEventListener('participant-added', (e) => renderParticipant(e.detail.participant, { announce: true }));
+  call.addEventListener('participant-updated', (e) => renderParticipant(e.detail.participant, { announce: false }));
+  call.addEventListener('participant-removed', (e) => {
+    const { participant } = e.detail;
+    const tile = tiles.get(participant.id);
+    if (!tile) return;
+    tile.el.remove();
+    tiles.delete(participant.id);
+    showToast(`${participant.name} left.`);
+    layout();
+  });
+  // People already in the room when we joined (their events fired before this view existed).
+  for (const participant of call.participants.values()) renderParticipant(participant, { announce: false });
 
   call.addEventListener('signaling-state', (e) => {
     const { state } = e.detail;
