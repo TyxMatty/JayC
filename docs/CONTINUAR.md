@@ -1,6 +1,16 @@
 # Continuar o Jay-C em outro PC
 
-Atualizado em 2026-11-03, no commit seguinte a `ae2f6f6`.
+Atualizado em 2026-11-03, no commit seguinte a `d8f7f8b`.
+
+## 0. No PC que já tem o projeto (ex.: o notebook)
+
+```powershell
+git pull
+npm install         # se os testes do servidor falharem com "mediasoup-worker ENOENT": npm rebuild mediasoup
+npm test
+```
+
+Depois, **reinicie o `npm run server`**. O protocolo mudou (foto de perfil), e um servidor antigo recusa a troca de foto durante a chamada. Em seguida, `npm run dev`. O primeiro build depois do pull recompila o plugin `system-audio`, mas não o WebRTC APM, que já está pronto no `target`.
 
 ## 1. Instalar as ferramentas (Windows)
 
@@ -11,7 +21,7 @@ winget install -e --id Git.Git
 winget install -e --id OpenJS.NodeJS.LTS
 winget install -e --id Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 winget install -e --id Rustlang.Rustup
-winget install -e --id Python.Python.3.13 --scope user
+winget install -e --id Python.Python.3.13 --scope user   # ou 3.14, que também serve
 ```
 
 Depois, **num terminal novo**, para pegar o PATH atualizado:
@@ -36,6 +46,8 @@ Opcionais:
 
 O WebView2 já vem no Windows 11.
 
+Se o PC tiver MSYS2 no PATH, não há problema: o build do áudio ignora o `pkg-config` dele.
+
 ## 2. Pegar o código
 
 Clone **fora do OneDrive**. O build do Rust gera vários GB e o OneDrive tentaria sincronizá-los.
@@ -45,6 +57,8 @@ git clone https://github.com/TyxMatty/JayC.git C:\dev\JayC
 cd C:\dev\JayC
 npm install
 ```
+
+O npm 12 bloqueia scripts de instalação. O `allowScripts` do `package.json` libera o do mediasoup. Se os testes do servidor falharem com `mediasoup-worker ENOENT`, rode `npm rebuild mediasoup`.
 
 - **Se clonar dentro do OneDrive mesmo:** crie `.cargo\config.toml` na raiz do repositório, que é local e não vai para o git, com:
   ```toml
@@ -64,10 +78,12 @@ npm test           # testes
 - **Firewall:** o Windows pode perguntar sobre o Node.js. Permita, porque é a porta de mídia.
 - **Primeira configuração do app:** em Settings › Server, use `localhost:3000`, ou o IP do PC que roda o servidor.
 - **Segundo participante para teste:** abra `http://localhost:5173` no Chrome.
+- **Terminal aberto antes de instalar algo** não enxerga o PATH novo (ex.: `cargo` não encontrado). Abra um terminal novo, ou use `scripts\dev-debug.ps1`.
+- **Rode os comandos na pasta do projeto**, não na pasta do usuário (`npm error ENOENT ... package.json`).
 
 ## 4. Claude Code no PC novo
 
-Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 10."*
+Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 13."*
 
 ## 5. Estado atual
 
@@ -82,8 +98,9 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 | Guia de setup | modal "Server setup guide" (lobby e Settings › Server) com os 5 passos, portas, firewall, VPN e a conta de banda de upload; Markdown próprio e 5 imagens |
 | PiP (desktop) | o vídeo em destaque (tela compartilhada ou câmera) flutua sobre as outras janelas, troca sozinho e tem botões de mic, câmera e desligar |
 | Microfone nativo (Windows) | WASAPI + AudioProcessing do WebRTC (eco/ruído/ganho) para não abafar os outros apps, com opções em Settings › Microphone aplicadas ao vivo |
+| Customização | Settings › Appearance: cor dos botões e fundo em degradê (barra do topo translúcida). Barra da chamada arrastável em qualquer borda, com ordem livre (também por teclado em Settings › Call controls). Foto de perfil que aparece quando a câmera está desligada. |
 
-**Customização pronta** (ARQUITETURA.md, seção 10, "Customização"): cores e degradê, barra da chamada arrastável e foto de perfil. Plugins ficaram para depois do release.
+Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Plugins ficaram para depois do release**: plugins sem isolamento no cliente estão descartados, porque alcançariam o IPC do Tauri (captura de áudio, tela e microfone).
 
 **Próxima: etapa 13 (Android).**
 
@@ -99,6 +116,13 @@ Depois vêm: 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
 - Botões de mic, câmera e desligar na janela do PiP: as ações da Media Session foram aceitas, mas os botões só aparecem com o mouse em cima e não foram clicados.
 - Exclusões com o Discord de verdade e alguém ouvindo do outro lado. Foram medidas com tons e com a faixa enviada ao WebRTC, usando um canvas falso no lugar do seletor.
 - Cancelamento de eco com alto-falante real, porque o microfone do notebook de teste não capta os próprios alto-falantes.
+- Customização:
+  - arrastar a barra por toque (só no Android);
+  - a barra lateral com 2+ pessoas na chamada;
+  - foto de perfil com uma foto real do disco (testado com imagens geradas);
+  - o fallback JPEG da foto no WebKit (macOS/iOS).
+- O link do guia no lobby, que só aparece sem servidor configurado.
+- Uma falha possível no som da tela inteira (stream único): duas medições deram 46–47,5 mil quadros/s em vez de 48 mil, sem se repetir depois. Ver ARQUITETURA.md, "CPU".
 
 **Decisões em aberto:**
 - Nome da imagem no GHCR (`ghcr.io/tyxmatty/jay-c-signaling`).
