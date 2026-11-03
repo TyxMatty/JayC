@@ -4,6 +4,13 @@ import { settings } from '../store/settings.js';
 import { toWebSocketUrl, DEFAULT_PORT } from '../core/server-address.js';
 import { checkServer } from '../core/server-check.js';
 
+/** [settings key, label, when to change it]. Changes apply right away, also during a call. */
+const MIC_OPTIONS = [
+  ['echoCancellation', 'Echo cancellation', 'Stops others from hearing themselves through your speakers. Can be off with headphones.'],
+  ['noiseSuppression', 'Noise suppression', 'Removes fans, hum and keyboard noise. Turn it off for music or instruments.'],
+  ['autoGainControl', 'Automatic volume', 'Keeps your voice at a steady level.'],
+];
+
 const THEMES = [
   ['system', 'System'],
   ['light', 'Light'],
@@ -108,6 +115,24 @@ export function createSettingsModal() {
           h('h3', {}, 'General'),
           h('div', { class: 'field' }, h('label', { for: 'settings-name' }, 'Display name'), nameInput),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
+        ),
+        h(
+          'fieldset',
+          {},
+          h('h3', {}, 'Microphone'),
+          MIC_OPTIONS.map(([key, title, description]) =>
+            h(
+              'label',
+              { class: 'toggle-row' },
+              h('input', {
+                type: 'checkbox',
+                role: 'switch',
+                checked: current.micProcessing[key],
+                onChange: (e) => settings.update({ micProcessing: { ...settings.get().micProcessing, [key]: e.target.checked } }),
+              }),
+              h('span', { class: 'toggle-text' }, h('span', { class: 'toggle-title' }, title), h('span', { class: 'hint' }, description)),
+            ),
+          ),
         ),
         h(
           'fieldset',

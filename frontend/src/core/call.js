@@ -9,6 +9,7 @@ import {
   streamBitrate,
   targetHeight,
   DEFAULT_STREAM_QUALITY,
+  DEFAULT_MIC_PROCESSING,
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic } from './native-mic.js';
@@ -64,6 +65,8 @@ export class Call extends EventTarget {
   /** { mode: 'screen' | 'window', windowHandle: number | null, audio: string | null } while sharing. */
   screenShare = null;
   screenQuality = { ...DEFAULT_STREAM_QUALITY };
+  /** { echoCancellation, noiseSuppression, autoGainControl } applied to the mic. */
+  micProcessing = { ...DEFAULT_MIC_PROCESSING };
   /** @type {Map<string, object>} */
   participants = new Map();
   mediaErrors = {};
@@ -96,10 +99,11 @@ export class Call extends EventTarget {
   }
 
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
-  async join({ url, room, name }) {
+  async join({ url, room, name, micProcessing = DEFAULT_MIC_PROCESSING }) {
     this.room = room;
+    this.micProcessing = { ...micProcessing };
     const native = await nativeMicSupported();
-    const media = await openLocalMedia({ audio: !native });
+    const media = await openLocalMedia({ audio: !native, micProcessing: this.micProcessing });
     this.local.audio = media.audio;
     this.local.video = media.video;
     this.mediaErrors = media.errors;
@@ -136,7 +140,9 @@ export class Call extends EventTarget {
   async toggleMic() {
     if (!this.local.audio) {
       // No mic yet (denied or missing at join): try again now.
-      this.local.audio = (await nativeMicSupported()) ? await this.#openNativeMic() : await getMicTrack();
+      this.local.audio = (await nativeMicSupported())
+        ? await this.#openNativeMic()
+        : await getMicTrack(this.micProcessing);
       this.#micMuted = false;
       if (this.#producers.mic) {
         await this.#producers.mic.replaceTrack({ track: this.local.audio });
@@ -149,6 +155,30 @@ export class Call extends EventTarget {
       await this.#setProducerPaused('mic', this.#micMuted);
     }
     this.#syncLocalStream();
+  }
+
+  /**
+   * Changes echo cancellation / noise suppression / auto gain during the call. The native mic is
+   * restarted with the new options and swapped in with replaceTrack (no renegotiation); a browser
+   * mic gets the new constraints.
+   */
+  async setMicProcessing(processing) {
+    this.micProcessing = { ...this.micProcessing, ...processing };
+    if (!this.local.audio) return;
+
+    if (this.#nativeMic) {
+      const old = this.#nativeMic;
+      const track = await this.#openNativeMic(); // replaces the Rust-side capture
+      old.close();
+      track.enabled = this.local.audio.enabled; // keep the mute state
+      this.local.audio = track;
+      await this.#producers.mic?.replaceTrack({ track });
+      this.#syncLocalStream();
+    } else {
+      await this.local.audio.applyConstraints({ ...this.micProcessing }).catch((error) => {
+        console.warn('[call] mic constraints not applied', error);
+      });
+    }
   }
 
   async toggleCamera() {
@@ -563,6 +593,7 @@ export class Call extends EventTarget {
 
   async #openNativeMic() {
     this.#nativeMic = await startNativeMic({
+      ...this.micProcessing,
       onError: (message) => this.#emit('notice', { message: `Microphone stopped: ${message}` }),
     });
     return this.#nativeMic.track;

@@ -78,10 +78,19 @@ export function mountApp(root) {
   async function join({ name, room }) {
     const url = toWebSocketUrl(settings.get().serverAddress);
     const call = new Call();
-    await call.join({ url, room, name });
+    await call.join({ url, room, name, micProcessing: settings.get().micProcessing });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
     settings.update({ lastRoom: room });
-    show(createCallView(call, { displayName: name, onLeft: showLobby }), () => call.leave());
+    // Microphone options changed in Settings apply to the running call.
+    const unsubscribe = settings.subscribe((next, prev) => {
+      if (next.micProcessing !== prev.micProcessing) {
+        call.setMicProcessing(next.micProcessing).catch((error) => console.warn('[app] mic options', error));
+      }
+    });
+    show(createCallView(call, { displayName: name, onLeft: showLobby }), () => {
+      unsubscribe();
+      call.leave();
+    });
   }
 
   const header = h(

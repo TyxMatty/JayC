@@ -55,4 +55,4 @@ Uma pequena camada C (`native/jayc_apm.cpp`) evita depender do `bindgen`.
 
 Observação: o primeiro teste determinístico usava tons puros e mostrou só 8 dB de remoção. Tons puros têm banda estreita demais para o filtro adaptativo aprender o caminho do eco. Com o sinal de banda larga, a remoção chegou a 33 dB. O AGC também precisa ficar desligado na comparação, porque ele aumenta o resíduo quando o eco some.
 
-Opções do `start_mic`: `echoCancellation`, `noiseSuppression` e `autoGainControl`, todas ligadas por padrão. Ainda não aparecem na tela de Settings.
+Opções do `start_mic`: `echoCancellation`, `noiseSuppression` e `autoGainControl`, todas ligadas por padrão. Ficam em **Settings › Microphone** e valem na hora, inclusive durante a chamada: o microfone nativo é reaberto com as novas opções e trocado via `replaceTrack`, sem renegociar e mantendo o mudo. Em outras plataformas elas viram restrições do `getUserMedia`.

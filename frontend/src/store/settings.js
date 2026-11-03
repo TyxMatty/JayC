@@ -1,4 +1,4 @@
-import { DEFAULT_STREAM_QUALITY } from '../core/media.js';
+import { DEFAULT_STREAM_QUALITY, DEFAULT_MIC_PROCESSING } from '../core/media.js';
 
 // User preferences persisted in localStorage. public/theme-init.js reads the same key.
 const STORAGE_KEY = 'jayc.settings';
@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   /** Last screen-share choices: 'screen' | 'window', and { resolution, fps, optimizeFor }. */
   shareMode: 'screen',
   streamQuality: DEFAULT_STREAM_QUALITY,
+  /** { echoCancellation, noiseSuppression, autoGainControl } for the call microphone. */
+  micProcessing: DEFAULT_MIC_PROCESSING,
 });
 
 function load() {
@@ -21,6 +23,7 @@ function load() {
       ...DEFAULT_SETTINGS,
       ...saved,
       streamQuality: { ...DEFAULT_STREAM_QUALITY, ...saved.streamQuality },
+      micProcessing: { ...DEFAULT_MIC_PROCESSING, ...saved.micProcessing },
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
