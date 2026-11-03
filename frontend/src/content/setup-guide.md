@@ -1,6 +1,11 @@
 # Host your own Jay-C server
 
-Calls go through a small server that **one** person in the group runs, usually on their PC. Everyone else only needs the app. It takes about 10 minutes, once.
+Calls go through a small server that **one** person in the group runs, usually on their PC. There are two roles:
+
+- **Hosting** (one person): installs and runs the server, steps 1 to 4. It takes about 10 minutes, once. That PC must be on, with the server running, for anyone to call, and its upload speed is what everyone's video goes through.
+- **Only connecting** (everyone else): nothing to install besides Jay-C. Ask the host for the server's address, for example `192.168.1.50:3000`, and do step 5 only.
+
+The host connects the same way, with step 5 on their own PC (`localhost:3000` works there).
 
 ## 1. Install Docker Desktop
 
