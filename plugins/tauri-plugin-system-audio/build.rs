@@ -100,7 +100,9 @@ mod webrtc_apm {
     }
 
     fn meson(cwd: &Path, args: &[&str]) {
-        let status = Command::new("meson").args(args).current_dir(cwd).status().unwrap_or_else(|e| {
+        // No pkg-config: everything comes from bundled sources. A system one (e.g. MSYS2's) could
+        // hand Meson MinGW-built libraries that don't link with MSVC, and a broken one aborts setup.
+        let status = Command::new("meson").args(args).env("PKG_CONFIG", "jayc-no-pkg-config").current_dir(cwd).status().unwrap_or_else(|e| {
             panic!(
                 "couldn't run meson ({e}). Building Jay-C on Windows needs Python with Meson and Ninja: \
                  `py -m pip install --user meson ninja`, then add Python's user Scripts folder to PATH."

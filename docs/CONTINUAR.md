@@ -20,10 +20,10 @@ Depois, **num terminal novo**, para pegar o PATH atualizado:
 py -m pip install --user meson ninja
 ```
 
-Por último, ponha a pasta de Scripts do Python no PATH do usuário. O caminho é este: `C:\Users\<você>\AppData\Roaming\Python\Python313\Scripts`
+Por último, ponha a pasta de Scripts do Python no PATH do usuário. Ela segue a versão (`Python313`, `Python314`...) e é mostrada pelo `pip` no aviso "not on PATH". O Python 3.14 também serve.
 
 ```powershell
-$scripts = "$env:APPDATA\Python\Python313\Scripts"
+$scripts = py -c "import sysconfig;print(sysconfig.get_path('scripts','nt_user'))"
 [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ";$scripts", 'User')
 ```
 
