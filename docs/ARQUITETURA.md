@@ -356,7 +356,7 @@ Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão
 | Parte | Entrega | Estado |
 |---|---|---|
 | 12.A | **Settings › Appearance:** cor dos botões e fundo do app em degradê (2 cores + ângulo) | ✅ |
-| 12.B | **Barra da chamada:** arrastar com o mouse para reordenar os botões e mover a barra para uma das 4 bordas, com alternativa por teclado no Settings | |
+| 12.B | **Barra da chamada:** arrastar com o mouse para reordenar os botões e mover a barra para uma das 4 bordas, com alternativa por teclado no Settings | ✅ |
 | 12.C | **Foto de perfil:** recortada em quadrado e reduzida (~128 px). Vai pelo servidor junto com o nome, com validação de tamanho e tipo, e aparece quando a câmera está desligada. | |
 
 **Como a aparência funciona** (`core/appearance.js`, aplicada em `ui/theme.js`):
@@ -365,3 +365,13 @@ Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão
 - **`--accent-text`:** onde a cor de destaque vira texto sobre as superfícies do tema (o hífen da marca e as iniciais do tile), ela é misturada a 35% com a cor de texto do tema. Medido no app: ≥ 5,4:1 nos dois temas, inclusive com branco ou preto puros. Com 55%, amarelo no tema claro dava 4,07.
 - **Degradê:** só no `body` (`--app-background`). Os painéis continuam com as superfícies do tema, então o texto não fica sobre o degradê. O `theme-init.js` aplica o degradê antes da primeira pintura, para não piscar.
 - **Barra do topo com degradê:** fica translúcida (75% da superfície do tema, com desfoque) e não ganha setting própria. No pior caso calculado (degradê branco no tema escuro), a marca fica a 6,38:1. O selo de status e os botões têm fundo opaco. A barra de título nativa do Windows continua na cor do tema.
+
+**Como a barra funciona** (`ui/control-bar.js`, lógica pura em `core/call-bar.js`, salva em `settings.callBar`):
+- **Layout:** a `section.call` tem duas partes, `.call-main` (aviso, palco, "waiting", toast) e a barra. A direção do flex segue `data-bar` (`column`, `column-reverse`, `row-reverse`, `row`). O painel de compartilhamento abre ao lado da barra.
+- **Arraste:** pointer events, então funciona com mouse, caneta e toque. Um arraste só começa depois de 6 px; abaixo disso é clique.
+  - `pointermove`/`pointerup` ficam na `window` enquanto o botão está pressionado, porque um arraste rápido sai de cima da barra antes do limiar. Esse bug foi achado no teste.
+  - A captura do ponteiro fica na barra, não no botão: mover o botão no DOM soltaria a captura.
+  - O clique que vem depois de um arraste é suprimido, então o painel de compartilhamento não abre sozinho.
+- **Alça (⋮⋮):** arrastar mostra onde a barra vai cair (a borda mais próxima). Clicar, inclusive pelo teclado, leva a barra para a próxima borda.
+- **Settings › Call controls:** posição e ordem com setas ↑/↓. O foco fica no botão que moveu.
+- Verificado com eventos de mouse reais pelo CDP (`Input.dispatchMouseEvent`): reordenar nos dois eixos, o clique normal ainda alternando o mic, a alça nas bordas esquerda e superior, e o clique na alça.

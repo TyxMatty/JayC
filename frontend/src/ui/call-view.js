@@ -3,6 +3,7 @@ import { icons } from './icons.js';
 import { canShareScreen } from '../core/media.js';
 import { createSharePanel } from './share-panel.js';
 import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
+import { createControlBar } from './control-bar.js';
 
 const CONNECTION_LABELS = {
   new: 'Connecting…',
@@ -347,9 +348,16 @@ export function createCallView(call, { displayName, onLeft }) {
   camButton.addEventListener('click', guarded(camButton, () => call.toggleCamera(), 'camera'));
   call.addEventListener('local-updated', renderControls);
 
+  const section = h('section', { class: 'call', 'aria-label': `Call in room ${call.room}` });
+  const controlBar = createControlBar({
+    section,
+    buttons: { mic: micButton, camera: camButton, share: shareButton, pip: pipButton, leave: leaveButton },
+  });
+
   call.addEventListener('ended', () => {
     clearTimeout(toastTimer);
     pip?.exit().catch(() => {});
+    controlBar.destroy();
     onLeft();
   });
 
@@ -367,14 +375,7 @@ export function createCallView(call, { displayName, onLeft }) {
   );
   if (problems.length) showToast(`${problems.join(' · ')}. You can still see and hear others.`);
 
-  return h(
-    'section',
-    { class: 'call', 'aria-label': `Call in room ${call.room}` },
-    banner,
-    stage,
-    waiting,
-    toast,
-    h('div', { class: 'call-controls' }, micButton, camButton, shareButton, pipButton, leaveButton),
-    sharePanel,
-  );
+  // The bar can sit on any edge (section[data-bar]), so the rest of the call is one column of its own.
+  section.append(h('div', { class: 'call-main' }, banner, stage, waiting, toast), controlBar.element, ...(sharePanel ? [sharePanel] : []));
+  return section;
 }

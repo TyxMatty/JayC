@@ -7,6 +7,9 @@ import { screenAudioSupported } from '../core/screen-audio.js';
 import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../core/excluded-apps.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { DEFAULT_GRADIENT } from '../core/appearance.js';
+import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
+
+const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', pip: 'Pop-out video', leave: 'Leave call' };
 
 /** [settings key, label, when to change it]. Changes apply right away, also during a call. */
 const MIC_OPTIONS = [
@@ -124,6 +127,50 @@ export function createSettingsModal({ openGuide }) {
   settings.subscribe((next, prev) => {
     if (next.appearance !== prev.appearance || next.theme !== prev.theme) queueMicrotask(renderAppearance);
   });
+
+  // Call controls: the keyboard way to do what dragging the call's bar does (ui/control-bar.js).
+  const setCallBar = (patch) => settings.update({ callBar: { ...settings.get().callBar, ...patch } });
+  const barPositionGroup = h(
+    'div',
+    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'bar-position-label' },
+    POSITIONS.map((value) =>
+      h(
+        'label',
+        {},
+        h('input', { type: 'radio', name: 'bar-position', value, onChange: () => setCallBar({ position: value }) }),
+        value[0].toUpperCase() + value.slice(1),
+      ),
+    ),
+  );
+  const barOrderList = h('ol', { class: 'order-list', 'aria-labelledby': 'bar-order-label' });
+  const renderCallBar = () => {
+    const { position, order } = settings.get().callBar;
+    for (const radio of barPositionGroup.querySelectorAll('input')) radio.checked = radio.value === normalizePosition(position);
+    const keys = normalizeOrder(order);
+    // Rebuilt on each change; keep focus on the button that moved so arrows can be pressed again.
+    const focused = document.activeElement?.dataset?.move;
+    barOrderList.replaceChildren(
+      ...keys.map((key, i) => {
+        const move = (delta, dir) =>
+          h('button', {
+            type: 'button',
+            class: 'icon-btn icon-btn-small',
+            'aria-label': `Move ${CONTROL_LABELS[key]} ${dir}`,
+            dataset: { move: `${key}:${dir}` },
+            disabled: (delta < 0 && i === 0) || (delta > 0 && i === keys.length - 1),
+            html: delta < 0 ? icons.arrowUp : icons.arrowDown,
+            onClick: () => setCallBar({ order: moveControl(settings.get().callBar.order, key, delta) }),
+          });
+        return h('li', {}, h('span', {}, CONTROL_LABELS[key]), move(-1, 'up'), move(1, 'down'));
+      }),
+    );
+    if (focused) {
+      const again = barOrderList.querySelector(`[data-move="${focused}"]`);
+      (again?.disabled ? barOrderList.querySelector(`[data-move^="${focused.split(':')[0]}:"]:not(:disabled)`) : again)?.focus();
+    }
+  };
+  settings.subscribe((next, prev) => next.callBar !== prev.callBar && renderCallBar());
+  renderCallBar();
 
   const serverHint = h('p', { class: 'hint', id: 'settings-server-hint', 'aria-live': 'polite' });
   const setHint = (text, tone) => {
@@ -298,6 +345,14 @@ export function createSettingsModal({ openGuide }) {
             backgroundGroup,
             gradientControls,
           ),
+        ),
+        h(
+          'fieldset',
+          {},
+          h('h3', {}, 'Call controls'),
+          h('p', { class: 'hint field' }, 'You can also drag the buttons, or the grip next to them, during a call.'),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-position-label' }, 'Position'), barPositionGroup),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-order-label' }, 'Order'), barOrderList),
         ),
         h(
           'fieldset',
