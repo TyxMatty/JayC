@@ -137,6 +137,48 @@ describe('signaling server', () => {
     a.client.close();
   });
 
+  test('profile pictures travel on join and live updates; anything else is refused', async () => {
+    const pixel = 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==';
+    const join = (name, avatar) => {
+      const client = connect(port);
+      return client.open().then(() => {
+        client.send({ type: 'join', room: 'room-avatar', name, avatar });
+        return client;
+      });
+    };
+
+    const a = await join('Alice', pixel);
+    const aJoined = await a.next('joined');
+    const b = await join('Bob');
+    const bJoined = await b.next('joined');
+    assert.deepEqual(bJoined.peers, [{ id: aJoined.id, name: 'Alice', avatar: pixel, producers: [] }]);
+    assert.deepEqual(await a.next('peer-joined'), { type: 'peer-joined', id: bJoined.id, name: 'Bob' });
+
+    b.send({ type: 'profile', avatar: pixel });
+    assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: pixel });
+    b.send({ type: 'profile', avatar: null });
+    assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: null });
+
+    for (const bad of [
+      'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', // SVG can carry scripts: raster only
+      'https://example.com/me.png', // no remote URLs (tracking)
+      `data:image/png;base64,${'A'.repeat(40_000)}`, // too big
+      'data:image/png;base64,not base64!',
+      42,
+    ]) {
+      b.send({ type: 'profile', avatar: bad });
+      assert.deepEqual(await b.next('error'), { type: 'error', code: 'bad-message', ref: 'profile' }, String(bad).slice(0, 30));
+    }
+    const c = connect(port);
+    await c.open();
+    c.send({ type: 'join', room: 'room-avatar-2', name: 'Carol', avatar: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' });
+    assert.deepEqual(await c.next('error'), { type: 'error', code: 'bad-message', ref: 'join' });
+    c.send({ type: 'profile', avatar: pixel });
+    assert.deepEqual(await c.next('error'), { type: 'error', code: 'not-in-room', ref: 'profile' });
+
+    for (const client of [a, b, c]) client.close();
+  });
+
   test('malformed messages get bad-message errors', async () => {
     const c = connect(port);
     await c.open();

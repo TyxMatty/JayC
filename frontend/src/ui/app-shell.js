@@ -82,7 +82,7 @@ export function mountApp(root) {
     const url = toWebSocketUrl(settings.get().serverAddress);
     const call = new Call();
     call.excludedApps = settings.get().excludedApps;
-    await call.join({ url, room, name, micProcessing: settings.get().micProcessing });
+    await call.join({ url, room, name, avatar: settings.get().avatar, micProcessing: settings.get().micProcessing });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
     settings.update({ lastRoom: room });
     // Microphone and streaming options changed in Settings apply to the running call.
@@ -90,6 +90,7 @@ export function mountApp(root) {
       if (next.micProcessing !== prev.micProcessing) {
         call.setMicProcessing(next.micProcessing).catch((error) => console.warn('[app] mic options', error));
       }
+      if (next.avatar !== prev.avatar) call.setAvatar(next.avatar);
       if (next.excludedApps !== prev.excludedApps) {
         call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
       }

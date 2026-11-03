@@ -16,8 +16,9 @@ export class SignalingError extends Error {
  * Events (CustomEvent, payload in `detail`):
  *   state           { state: 'connecting' | 'open' | 'reconnecting' | 'closed' }
  *   rejoined        the server's `joined` message after an automatic reconnect (new id!)
- *   peer-joined     { id, name }
+ *   peer-joined     { id, name, avatar? }
  *   peer-left       { id, name }
+ *   peer-updated    { id, avatar }       a roommate changed their profile picture (null = removed)
  *   new-producer    { peerId, producerId, kind, source, paused }
  *   producer-closed { peerId, producerId }
  *   producer-state  { peerId, producerId, paused }
@@ -31,6 +32,8 @@ export class SignalingClient extends EventTarget {
   #ws = null;
   #room = null;
   #name = null;
+  /** Profile picture (data URL) sent on every (re)join; null = none. */
+  #avatar = null;
   #attempt = 0;
   #reconnectTimer = null;
   #closed = true;
@@ -48,9 +51,10 @@ export class SignalingClient extends EventTarget {
   }
 
   /** Connects and joins `room`. Resolves with the server's `joined` message. */
-  join(room, name) {
+  join(room, name, avatar = null) {
     this.#room = room;
     this.#name = name;
+    this.#avatar = avatar;
     this.#closed = false;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.#failJoin(new SignalingError('timeout')), JOIN_TIMEOUT_MS);
@@ -76,6 +80,12 @@ export class SignalingClient extends EventTarget {
       this.#pendingRequests.set(id, { resolve, reject, timer });
       this.#ws.send(JSON.stringify({ type, id, data }));
     });
+  }
+
+  /** Changes the profile picture: roommates get it now if we're in the room, else on the next join. */
+  setAvatar(avatar) {
+    this.#avatar = avatar;
+    if (this.id && this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(JSON.stringify({ type: 'profile', avatar }));
   }
 
   close() {
@@ -107,7 +117,7 @@ export class SignalingClient extends EventTarget {
     this.#ws = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', room: this.#room, name: this.#name }));
+      ws.send(JSON.stringify({ type: 'join', room: this.#room, name: this.#name, ...(this.#avatar ? { avatar: this.#avatar } : {}) }));
     };
 
     ws.onmessage = (event) => {
@@ -171,6 +181,7 @@ export class SignalingClient extends EventTarget {
 
       case 'peer-joined':
       case 'peer-left':
+      case 'peer-updated':
       case 'new-producer':
       case 'producer-closed':
       case 'producer-state':

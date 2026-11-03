@@ -65,6 +65,22 @@ describe('SignalingClient', () => {
     await assert.rejects(client.request('createTransport', { direction: 'send' }), (err) => err.code === 'not-connected');
   });
 
+  test('profile pictures: sent on join, changed live', async () => {
+    const pixel = 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==';
+    const alice = new SignalingClient(url);
+    const bob = new SignalingClient(url);
+    alice.setAvatar(pixel); // before joining: kept for the join
+    await alice.join('room-avatar', 'Alice', pixel);
+    const bJoined = await bob.join('room-avatar', 'Bob');
+    assert.equal(bJoined.peers[0].avatar, pixel);
+
+    const updated = once(alice, 'peer-updated');
+    bob.setAvatar(pixel);
+    assert.deepEqual(await updated, { type: 'peer-updated', id: bob.id, avatar: pixel });
+    alice.close();
+    bob.close();
+  });
+
   test('rejects join with the server error code (room-full)', async () => {
     const a = new SignalingClient(url);
     const b = new SignalingClient(url);

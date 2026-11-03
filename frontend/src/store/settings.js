@@ -7,6 +7,8 @@ const STORAGE_KEY = 'jayc.settings';
 
 export const DEFAULT_SETTINGS = Object.freeze({
   displayName: '',
+  /** Profile picture as a small data URL (core/avatar.js), or null. */
+  avatar: null,
   serverAddress: '',
   /** 'system' | 'light' | 'dark' */
   theme: 'system',

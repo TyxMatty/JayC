@@ -7,6 +7,7 @@ import { screenAudioSupported } from '../core/screen-audio.js';
 import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../core/excluded-apps.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { DEFAULT_GRADIENT } from '../core/appearance.js';
+import { makeAvatar } from '../core/avatar.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', pip: 'Pop-out video', leave: 'Leave call' };
@@ -59,6 +60,36 @@ export function createSettingsModal({ openGuide }) {
       ),
     ),
   );
+
+  // Profile picture: cropped to a small square (core/avatar.js); others see it while our camera is off.
+  const avatarPreview = h('span', { class: 'avatar-preview', 'aria-hidden': 'true' });
+  const avatarHint = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const avatarFile = h('input', {
+    type: 'file',
+    accept: 'image/*',
+    hidden: true,
+    onChange: async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = ''; // picking the same file again still fires change
+      if (!file) return;
+      try {
+        settings.update({ avatar: await makeAvatar(file) });
+        delete avatarHint.dataset.tone;
+        avatarHint.textContent = '';
+      } catch {
+        avatarHint.dataset.tone = 'error';
+        avatarHint.textContent = "That file couldn't be read as an image.";
+      }
+    },
+  });
+  const avatarRemove = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => settings.update({ avatar: null }) }, 'Remove');
+  const renderAvatar = () => {
+    const { avatar, displayName } = settings.get();
+    avatarPreview.replaceChildren(avatar ? h('img', { src: avatar, alt: '' }) : (displayName.trim()[0] ?? '?').toUpperCase());
+    avatarRemove.hidden = !avatar;
+  };
+  settings.subscribe((next, prev) => (next.avatar !== prev.avatar || next.displayName !== prev.displayName) && renderAvatar());
+  renderAvatar();
 
   // Appearance: button color and background gradient, applied live (see ui/theme.js).
   const setAppearance = (patch) => settings.update({ appearance: { ...settings.get().appearance, ...patch } });
@@ -326,6 +357,21 @@ export function createSettingsModal({ openGuide }) {
           {},
           h('h3', {}, 'General'),
           h('div', { class: 'field' }, h('label', { for: 'settings-name' }, 'Display name'), nameInput),
+          h(
+            'div',
+            { class: 'field' },
+            h('span', { class: 'field-label' }, 'Profile picture'),
+            h(
+              'div',
+              { class: 'avatar-row' },
+              avatarPreview,
+              h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => avatarFile.click() }, 'Choose picture'),
+              avatarRemove,
+              avatarFile,
+            ),
+            avatarHint,
+            h('p', { class: 'hint' }, 'Shown to others while your camera is off.'),
+          ),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
         ),
         h(

@@ -118,7 +118,8 @@ Cliente → servidor:
 
 | type | campos | |
 |---|---|---|
-| `join` | `room`, `name` | entra na sala (cria se não existir) |
+| `join` | `room`, `name`, `avatar?` | entra na sala (cria se não existir) |
+| `profile` | `avatar` (data URL ou `null`) | troca a foto de perfil durante a chamada; os outros recebem `peer-updated` |
 | `leave` | — | sai da sala |
 | *requisição SFU* | `id`, `data` | resposta: `{type: "response", id, ok, data}` ou `{…, ok: false, error}` |
 
@@ -139,8 +140,9 @@ Servidor → cliente:
 
 | type | campos | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | quem já está na sala, o que cada um publica e as capacidades do router |
-| `peer-joined` / `peer-left` | `id`, `name` | |
+| `joined` | `id`, `room`, `peers: [{id, name, avatar?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | quem já está na sala, o que cada um publica e as capacidades do router |
+| `peer-joined` / `peer-left` | `id`, `name`, `avatar?` (só no `peer-joined`) | |
+| `peer-updated` | `id`, `avatar` | alguém trocou ou tirou (`null`) a foto de perfil |
 | `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | alguém começou a publicar uma faixa |
 | `producer-state` | `peerId`, `producerId`, `paused` | só para quem consome: mutou ou desligou a câmera, ou voltou |
 | `producer-closed` | `peerId`, `producerId` | só para quem consome |
@@ -170,6 +172,7 @@ Proteções:
 - Mensagem de no máximo 64 KB, no máximo 16 pessoas por sala e limite de mensagens por segundo (rajada de 300, 100/s).
 - Ping/pong a cada 30 s para derrubar conexões mortas.
 - IDs de peer gerados pelo servidor, com `crypto.randomUUID()`.
+- Foto de perfil (`avatar`): só `data:image/(webp|jpeg|png);base64,…` com até 32 000 caracteres. SVG fica de fora, porque pode carregar script, e URLs remotas também, porque rastreariam quem vê. Uma foto inválida recusa o `join` ou o `profile` com `bad-message`. O campo só vai nas mensagens quando existe.
 - Endpoint `GET /health` para o `HEALTHCHECK` do Docker.
 
 ## 5. Fluxos principais
@@ -357,7 +360,7 @@ Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão
 |---|---|---|
 | 12.A | **Settings › Appearance:** cor dos botões e fundo do app em degradê (2 cores + ângulo) | ✅ |
 | 12.B | **Barra da chamada:** arrastar com o mouse para reordenar os botões e mover a barra para uma das 4 bordas, com alternativa por teclado no Settings | ✅ |
-| 12.C | **Foto de perfil:** recortada em quadrado e reduzida (~128 px). Vai pelo servidor junto com o nome, com validação de tamanho e tipo, e aparece quando a câmera está desligada. | |
+| 12.C | **Foto de perfil:** recortada em quadrado e reduzida (~128 px). Vai pelo servidor junto com o nome, com validação de tamanho e tipo, e aparece quando a câmera está desligada. | ✅ |
 
 **Como a aparência funciona** (`core/appearance.js`, aplicada em `ui/theme.js`):
 - **Variáveis inline no `<html>`**, que valem nos dois temas: `--accent`, `--accent-hover`, `--accent-contrast`, `--accent-text` e `--app-background`. Valores vazios voltam aos tokens do tema.
@@ -375,3 +378,7 @@ Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão
 - **Alça (⋮⋮):** arrastar mostra onde a barra vai cair (a borda mais próxima). Clicar, inclusive pelo teclado, leva a barra para a próxima borda.
 - **Settings › Call controls:** posição e ordem com setas ↑/↓. O foco fica no botão que moveu.
 - Verificado com eventos de mouse reais pelo CDP (`Input.dispatchMouseEvent`): reordenar nos dois eixos, o clique normal ainda alternando o mic, a alça nas bordas esquerda e superior, e o clique na alça.
+
+**Foto de perfil** (`core/avatar.js`, Settings › General):
+- **Recorte e formato:** a imagem escolhida é recortada no quadrado central e reduzida para 128 px em WebP, baixando a qualidade se passar de 32 000 caracteres. No WebKit, que não codifica WebP, vira JPEG. Medido: uma foto 1600×900 deu 1 783 caracteres.
+- **Na chamada:** a foto aparece no lugar das iniciais quando a câmera está desligada. Uma troca durante a chamada chega aos outros por `profile`/`peer-updated`. Numa reconexão, o `join` leva a foto atual.

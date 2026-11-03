@@ -67,6 +67,8 @@ export class Call extends EventTarget {
   screenQuality = { ...DEFAULT_STREAM_QUALITY };
   /** { echoCancellation, noiseSuppression, autoGainControl } applied to the mic. */
   micProcessing = { ...DEFAULT_MIC_PROCESSING };
+  /** Our profile picture (data URL) or null; others see it while our camera is off. */
+  avatar = null;
   /** Executables left out of an entire-screen share's sound (see setExcludedApps). */
   excludedApps = [];
   /** @type {Map<string, object>} */
@@ -103,8 +105,9 @@ export class Call extends EventTarget {
   }
 
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
-  async join({ url, room, name, micProcessing = DEFAULT_MIC_PROCESSING }) {
+  async join({ url, room, name, avatar = null, micProcessing = DEFAULT_MIC_PROCESSING }) {
     this.room = room;
+    this.avatar = avatar;
     this.micProcessing = { ...micProcessing };
     const native = await nativeMicSupported();
     const media = await openLocalMedia({ audio: !native, micProcessing: this.micProcessing });
@@ -125,6 +128,12 @@ export class Call extends EventTarget {
     signaling.addEventListener('state', (e) => this.#emit('signaling-state', e.detail));
     signaling.addEventListener('peer-joined', (e) => this.#addParticipant(e.detail));
     signaling.addEventListener('peer-left', (e) => this.#removeParticipant(e.detail.id));
+    signaling.addEventListener('peer-updated', (e) => {
+      const participant = this.participants.get(e.detail.id);
+      if (!participant) return;
+      participant.avatar = e.detail.avatar ?? null;
+      this.#emit('participant-updated', { participant });
+    });
     signaling.addEventListener('new-producer', (e) => this.#consume(e.detail));
     signaling.addEventListener('producer-closed', (e) => this.#onProducerClosed(e.detail));
     signaling.addEventListener('producer-state', (e) => this.#onProducerState(e.detail));
@@ -132,7 +141,7 @@ export class Call extends EventTarget {
 
     let joined;
     try {
-      joined = await signaling.join(room, name);
+      joined = await signaling.join(room, name, avatar);
       await this.#setup(joined);
     } catch (error) {
       signaling.close();
@@ -166,6 +175,13 @@ export class Call extends EventTarget {
    * restarted with the new options and swapped in with replaceTrack (no renegotiation); a browser
    * mic gets the new constraints.
    */
+  /** Changes our profile picture during the call (null removes it). */
+  setAvatar(avatar) {
+    this.avatar = avatar;
+    this.#signaling?.setAvatar(avatar);
+    this.#emit('local-updated', {});
+  }
+
   async setMicProcessing(processing) {
     this.micProcessing = { ...this.micProcessing, ...processing };
     if (!this.local.audio) return;
@@ -497,11 +513,13 @@ export class Call extends EventTarget {
 
   // ---------- Receiving ----------
 
-  #addParticipant({ id, name }) {
+  #addParticipant({ id, name, avatar }) {
     if (this.participants.has(id)) return this.participants.get(id);
     const participant = {
       id,
       name: name ?? 'Guest',
+      /** Profile picture (data URL, validated by the server) or null. */
+      avatar: avatar ?? null,
       stream: new MediaStream(),
       screenStream: new MediaStream(),
       media: { audio: false, video: false, screen: false },

@@ -83,7 +83,9 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 | PiP (desktop) | o vídeo em destaque (tela compartilhada ou câmera) flutua sobre as outras janelas, troca sozinho e tem botões de mic, câmera e desligar |
 | Microfone nativo (Windows) | WASAPI + AudioProcessing do WebRTC (eco/ruído/ganho) para não abafar os outros apps, com opções em Settings › Microphone aplicadas ao vivo |
 
-**Em andamento: customização** (ARQUITETURA.md, seção 10, "Customização"). As partes 12.A (cores e degradê) e 12.B (barra da chamada arrastável) estão prontas; falta a 12.C (foto de perfil). Plugins ficaram para depois do release. Depois, a etapa 13 (Android).
+**Customização pronta** (ARQUITETURA.md, seção 10, "Customização"): cores e degradê, barra da chamada arrastável e foto de perfil. Plugins ficaram para depois do release.
+
+**Próxima: etapa 13 (Android).**
 
 Depois vêm: 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
 

@@ -35,10 +35,10 @@ function hasLiveVideo(stream) {
 }
 
 /**
- * @param {{ name: string, stream: MediaStream, local: boolean, getMedia: () => ({ audio: boolean, video: boolean } | null) }} options
- *   getMedia: what this participant is sending (null = unknown yet).
+ * @param {{ name: string, stream: MediaStream, local: boolean, getMedia: () => ({ audio: boolean, video: boolean } | null), getAvatar: () => string | null }} options
+ *   getMedia: what this participant is sending (null = unknown yet); getAvatar: their profile picture.
  */
-function createTile({ name, stream, local, getMedia }) {
+function createTile({ name, stream, local, getMedia, getAvatar }) {
   const video = h('video', { autoplay: true, playsinline: true, muted: local, srcObject: stream });
   const avatar = h('div', { class: 'tile-avatar', 'aria-hidden': 'true' }, initials(name));
   const nameText = h('span', {}, local ? `${name} (you)` : name);
@@ -49,9 +49,21 @@ function createTile({ name, stream, local, getMedia }) {
 
   const videoOn = () => (getMedia()?.video ?? true) && hasLiveVideo(stream);
 
+  let shownName = name;
+  let shownAvatar;
+  /** The profile picture when there is one, else the initials. */
+  const renderAvatar = () => {
+    const url = getAvatar();
+    if (url === shownAvatar) return;
+    shownAvatar = url;
+    avatar.classList.toggle('has-picture', Boolean(url));
+    avatar.replaceChildren(url ? h('img', { src: url, alt: '' }) : initials(shownName));
+  };
+
   const tile = {
     el,
     refresh() {
+      renderAvatar();
       el.dataset.video = videoOn() ? 'on' : 'off';
       mutedIcon.hidden = getMedia()?.audio !== false;
       // Re-attach so newly added tracks render everywhere (WebView2 and WebKit).
@@ -69,7 +81,9 @@ function createTile({ name, stream, local, getMedia }) {
     },
     setName(next) {
       nameText.textContent = local ? `${next} (you)` : next;
-      avatar.textContent = initials(next);
+      shownName = next;
+      shownAvatar = undefined; // re-render: the initials may have changed
+      renderAvatar();
     },
     setOverlay(text) {
       overlay.textContent = text ?? '';
@@ -206,6 +220,7 @@ export function createCallView(call, { displayName, onLeft }) {
     stream: call.localStream,
     local: true,
     getMedia: () => ({ audio: call.micOn, video: call.cameraOn }),
+    getAvatar: () => call.avatar,
   });
   cameras.append(localTile.el);
 
@@ -244,6 +259,7 @@ export function createCallView(call, { displayName, onLeft }) {
         stream: participant.stream,
         local: false,
         getMedia: () => participant.media,
+        getAvatar: () => participant.avatar,
       });
       tiles.set(participant.id, tile);
       cameras.insertBefore(tile.el, localTile.el);

@@ -2,13 +2,17 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
-import { RoomRegistry } from './rooms.js';
+import { RoomRegistry, describePeer } from './rooms.js';
 import { TokenBucket } from './rate-limit.js';
 import { loadConfig } from './config.js';
 import { Sfu, resolveAnnouncedAddress } from './sfu.js';
 
 const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_NAME_LENGTH = 32;
+/** A 128 px WebP from the app is ~5-15 KB as a data URL; this leaves room without letting it grow. */
+const MAX_AVATAR_LENGTH = 32_000;
+// Raster images only (an SVG can carry scripts), inline only (a remote URL would track viewers).
+const AVATAR_RE = /^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** SFU requests: `{ type, id, data }` -> `{ type: 'response', id, ok, data | error }`. */
 const REQUESTS = new Set([
@@ -34,6 +38,12 @@ function cleanName(value) {
   // Drop control characters, collapse whitespace.
   const name = value.replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/\s+/g, ' ').trim();
   return name.length > 0 && name.length <= MAX_NAME_LENGTH ? name : null;
+}
+
+/** The profile picture as sent: null when absent, undefined when invalid. */
+function cleanAvatar(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return typeof value === 'string' && value.length <= MAX_AVATAR_LENGTH && AVATAR_RE.test(value) ? value : undefined;
 }
 
 /**
@@ -88,6 +98,7 @@ export function startServer(config, { log = defaultLog } = {}) {
     const peer = {
       id: randomUUID(),
       name: null,
+      avatar: null,
       room: null,
       announcedAddress: null,
       send(message) {
@@ -105,12 +116,14 @@ export function startServer(config, { log = defaultLog } = {}) {
 
     async function join(msg) {
       const name = cleanName(msg.name);
-      if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name) {
+      const avatar = cleanAvatar(msg.avatar);
+      if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name || avatar === undefined) {
         return fail('bad-message', 'join');
       }
       if (peer.room && peer.room !== msg.room) await leaveRoom(peer);
 
       peer.name = name;
+      peer.avatar = avatar;
       const result = registry.join(msg.room, peer);
       if (!result.ok) return fail(result.code, 'join');
 
@@ -120,7 +133,7 @@ export function startServer(config, { log = defaultLog } = {}) {
         type: 'joined',
         id: peer.id,
         room: msg.room,
-        peers: result.others.map((p) => ({ id: p.id, name: p.name, producers: room.producersOf(p.id) })),
+        peers: result.others.map((p) => ({ ...describePeer(p), producers: room.producersOf(p.id) })),
         iceServers: config.iceServers,
         routerRtpCapabilities: room.rtpCapabilities,
       });
@@ -162,6 +175,13 @@ export function startServer(config, { log = defaultLog } = {}) {
           log('error', 'join failed', { peer: peer.id, error: error?.message });
           fail('internal', 'join');
         });
+      } else if (msg.type === 'profile') {
+        // A new profile picture mid-call: the others get it right away.
+        const avatar = cleanAvatar(msg.avatar);
+        if (avatar === undefined) return fail('bad-message', 'profile');
+        if (!peer.room) return fail('not-in-room', 'profile');
+        peer.avatar = avatar;
+        for (const other of registry.othersInRoom(peer)) other.send({ type: 'peer-updated', id: peer.id, avatar });
       } else if (msg.type === 'leave') {
         leaveRoom(peer).catch(() => {});
       } else if (REQUESTS.has(msg.type) && (typeof msg.id === 'number' || typeof msg.id === 'string')) {

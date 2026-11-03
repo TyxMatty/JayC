@@ -1,3 +1,6 @@
+/** How a peer is described to the others (`avatar` only when set, to keep messages small). */
+export const describePeer = (peer) => ({ id: peer.id, name: peer.name, ...(peer.avatar ? { avatar: peer.avatar } : {}) });
+
 /**
  * In-memory room registry. Transport-agnostic: a peer is any object with
  * `id`, `name`, `room` and a `send(message)` method.
@@ -33,7 +36,7 @@ export class RoomRegistry {
     peer.room = roomId;
 
     for (const other of others) {
-      other.send({ type: 'peer-joined', id: peer.id, name: peer.name });
+      other.send({ type: 'peer-joined', ...describePeer(peer) });
     }
     return { ok: true, others };
   }
