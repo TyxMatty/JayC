@@ -6,6 +6,7 @@ import { checkServer } from '../core/server-check.js';
 import { screenAudioSupported } from '../core/screen-audio.js';
 import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../core/excluded-apps.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
+import { DEFAULT_GRADIENT } from '../core/appearance.js';
 
 /** [settings key, label, when to change it]. Changes apply right away, also during a call. */
 const MIC_OPTIONS = [
@@ -55,6 +56,74 @@ export function createSettingsModal({ openGuide }) {
       ),
     ),
   );
+
+  // Appearance: button color and background gradient, applied live (see ui/theme.js).
+  const setAppearance = (patch) => settings.update({ appearance: { ...settings.get().appearance, ...patch } });
+  const setGradient = (patch) => setAppearance({ gradient: { ...settings.get().appearance.gradient, ...patch } });
+  const accentInput = h('input', {
+    type: 'color',
+    id: 'settings-accent',
+    class: 'color-input',
+    onInput: (e) => setAppearance({ accent: e.target.value }),
+  });
+  const accentReset = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => setAppearance({ accent: '' }) }, 'Default');
+  const backgroundGroup = h(
+    'div',
+    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'background-label' },
+    [
+      ['theme', 'Theme'],
+      ['gradient', 'Gradient'],
+    ].map(([value, label]) =>
+      h(
+        'label',
+        {},
+        h('input', {
+          type: 'radio',
+          name: 'background',
+          value,
+          onChange: () => setAppearance({ gradient: value === 'gradient' ? { ...DEFAULT_GRADIENT } : null }),
+        }),
+        label,
+      ),
+    ),
+  );
+  const gradientFrom = h('input', { type: 'color', class: 'color-input', 'aria-label': 'Gradient start color', onInput: (e) => setGradient({ from: e.target.value }) });
+  const gradientTo = h('input', { type: 'color', class: 'color-input', 'aria-label': 'Gradient end color', onInput: (e) => setGradient({ to: e.target.value }) });
+  const angleValue = h('output', { for: 'settings-angle', class: 'hint' });
+  const angleInput = h('input', {
+    type: 'range',
+    id: 'settings-angle',
+    'aria-label': 'Gradient angle',
+    min: 0,
+    max: 360,
+    step: 5,
+    onInput: (e) => setGradient({ angle: Number(e.target.value) }),
+  });
+  const gradientControls = h(
+    'div',
+    { class: 'gradient-controls' },
+    gradientFrom,
+    gradientTo,
+    angleInput,
+    angleValue,
+  );
+  const renderAppearance = () => {
+    const { accent, gradient } = settings.get().appearance;
+    // With no custom color, show the theme's own.
+    accentInput.value = accent || getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    accentReset.disabled = !accent;
+    for (const radio of backgroundGroup.querySelectorAll('input')) radio.checked = radio.value === (gradient ? 'gradient' : 'theme');
+    gradientControls.hidden = !gradient;
+    if (gradient) {
+      gradientFrom.value = gradient.from;
+      gradientTo.value = gradient.to;
+      angleInput.value = String(gradient.angle);
+      angleValue.textContent = `${gradient.angle}°`;
+    }
+  };
+  settings.subscribe((next, prev) => {
+    if (next.appearance !== prev.appearance || next.theme !== prev.theme) queueMicrotask(renderAppearance);
+  });
 
   const serverHint = h('p', { class: 'hint', id: 'settings-server-hint', 'aria-live': 'polite' });
   const setHint = (text, tone) => {
@@ -215,6 +284,24 @@ export function createSettingsModal({ openGuide }) {
         h(
           'fieldset',
           {},
+          h('h3', {}, 'Appearance'),
+          h(
+            'div',
+            { class: 'field' },
+            h('label', { for: 'settings-accent' }, 'Button color'),
+            h('div', { class: 'input-row' }, accentInput, accentReset),
+          ),
+          h(
+            'div',
+            { class: 'field' },
+            h('span', { class: 'field-label', id: 'background-label' }, 'Background'),
+            backgroundGroup,
+            gradientControls,
+          ),
+        ),
+        h(
+          'fieldset',
+          {},
           h('h3', {}, 'Microphone'),
           MIC_OPTIONS.map(([key, title, description]) =>
             h(
@@ -263,6 +350,7 @@ export function createSettingsModal({ openGuide }) {
   return {
     element: dialog,
     open(focus) {
+      renderAppearance();
       dialog.showModal();
       if (!streamingSection.hidden) refreshPlayingApps();
       if (focus === 'server') serverInput.focus();

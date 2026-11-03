@@ -16,7 +16,8 @@ body {
 }
 
 body {
-  background: var(--bg);
+  /* --app-background: the user's gradient (Settings › Appearance), if any. */
+  background: var(--app-background, var(--bg));
   color: var(--text);
   font: 15px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
@@ -61,7 +62,7 @@ select {
 }
 
 .brand span {
-  color: var(--accent);
+  color: var(--accent-text, var(--accent));
 }
 
 /* ---------- Buttons ---------- */
@@ -352,6 +353,36 @@ fieldset > h3 {
 
 .toggle-title {
   font-weight: 600;
+}
+
+/* Native color pickers (Settings › Appearance). */
+.color-input {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 40px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.gradient-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.gradient-controls input[type='range'] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.gradient-controls output {
+  width: 3.5em;
+  text-align: right;
 }
 
 /* Removable / addable app names (Settings › Streaming). */
@@ -706,7 +737,7 @@ fieldset > h3 {
   place-items: center;
   font-size: clamp(24px, 6vw, 56px);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-text, var(--accent));
 }
 
 .tile[data-video='off'] .tile-avatar {

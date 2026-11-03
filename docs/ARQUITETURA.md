@@ -348,3 +348,19 @@ Cada etapa termina com algo testável.
 | 13 | Android: `tauri android init`, permissões, plugin PiP Kotlin | o APK roda no emulador ou no celular, entra em chamada e vai para PiP ao minimizar |
 | 14 | iOS: plugin Swift (código) | código escrito; build pendente de um Mac |
 | 15 | Release: imagem no GHCR + bundles Tauri (`.msi`/`.exe`, `.apk`) | o guia de 5 passos funciona do zero numa máquina limpa |
+
+### Customização (entre a 12 e a 13, a pedido do usuário)
+
+Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão descartados: eles alcançariam o IPC do Tauri (captura de áudio, tela e microfone). A customização vem em três partes:
+
+| Parte | Entrega | Estado |
+|---|---|---|
+| 12.A | **Settings › Appearance:** cor dos botões e fundo do app em degradê (2 cores + ângulo) | ✅ |
+| 12.B | **Barra da chamada:** arrastar com o mouse para reordenar os botões e mover a barra para uma das 4 bordas, com alternativa por teclado no Settings | |
+| 12.C | **Foto de perfil:** recortada em quadrado e reduzida (~128 px). Vai pelo servidor junto com o nome, com validação de tamanho e tipo, e aparece quando a câmera está desligada. | |
+
+**Como a aparência funciona** (`core/appearance.js`, aplicada em `ui/theme.js`):
+- **Variáveis inline no `<html>`**, que valem nos dois temas: `--accent`, `--accent-hover`, `--accent-contrast`, `--accent-text` e `--app-background`. Valores vazios voltam aos tokens do tema.
+- **Texto dos botões:** branco ou quase preto, o que der mais contraste com a cor escolhida (WCAG). O hover clareia botões escuros e escurece os claros.
+- **`--accent-text`:** onde a cor de destaque vira texto sobre as superfícies do tema (o hífen da marca e as iniciais do tile), ela é misturada a 35% com a cor de texto do tema. Medido no app: ≥ 5,4:1 nos dois temas, inclusive com branco ou preto puros. Com 55%, amarelo no tema claro dava 4,07.
+- **Degradê:** só no `body` (`--app-background`). Os painéis continuam com as superfícies do tema, então o texto não fica sobre o degradê. O `theme-init.js` aplica o degradê antes da primeira pintura, para não piscar.

@@ -1,4 +1,5 @@
 import { DEFAULT_STREAM_QUALITY, DEFAULT_MIC_PROCESSING } from '../core/media.js';
+import { DEFAULT_APPEARANCE } from '../core/appearance.js';
 
 // User preferences persisted in localStorage. public/theme-init.js reads the same key.
 const STORAGE_KEY = 'jayc.settings';
@@ -14,6 +15,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   streamQuality: DEFAULT_STREAM_QUALITY,
   /** { echoCancellation, noiseSuppression, autoGainControl } for the call microphone. */
   micProcessing: DEFAULT_MIC_PROCESSING,
+  /** { accent: '#rrggbb' | '', gradient: { from, to, angle } | null }: '' / null = the theme's. */
+  appearance: DEFAULT_APPEARANCE,
   /** Executables left out of the entire-screen share's sound, e.g. ['Discord.exe']. */
   excludedApps: [],
 });
@@ -26,6 +29,7 @@ function load() {
       ...saved,
       streamQuality: { ...DEFAULT_STREAM_QUALITY, ...saved.streamQuality },
       micProcessing: { ...DEFAULT_MIC_PROCESSING, ...saved.micProcessing },
+      appearance: { ...DEFAULT_APPEARANCE, ...saved.appearance },
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

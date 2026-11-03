@@ -1,4 +1,5 @@
 import { settings } from '../store/settings.js';
+import { appearanceVars } from '../core/appearance.js';
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 const isTauri = '__TAURI_INTERNALS__' in window;
@@ -22,11 +23,22 @@ function apply() {
   }
 }
 
+/** Button color and background gradient from Settings › Appearance (inline, so both themes use them). */
+function applyAppearance() {
+  const style = document.documentElement.style;
+  for (const [name, value] of Object.entries(appearanceVars(settings.get().appearance))) {
+    if (value) style.setProperty(name, value);
+    else style.removeProperty(name);
+  }
+}
+
 export function initTheme() {
   document.documentElement.dataset.theme = ''; // force the first apply() to sync the title bar
   apply();
+  applyAppearance();
   settings.subscribe((next, prev) => {
     if (next.theme !== prev.theme) apply();
+    if (next.appearance !== prev.appearance) applyAppearance();
   });
   darkQuery.addEventListener('change', apply);
 }
