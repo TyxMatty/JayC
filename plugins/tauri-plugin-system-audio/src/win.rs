@@ -946,4 +946,47 @@ mod tests {
         assert!(all_a > -20.0 && all_b > -20.0 && all_b < -13.0, "both tones, each once (doubled would be +6 dB)");
         assert!(ex_b < all_b - 40.0, "the excluded child must not leak through its parent's tree");
     }
+
+    /// CPU cost of the per-app capture with many streams (10 players + whatever else plays),
+    /// against the single EXCLUDE stream, both over 10 s with the players running. Run in release
+    /// (JAYC_PLAYERS sets the number of players):
+    ///   cargo test --release --lib -- --ignored --nocapture cpu_many_streams
+    #[test]
+    #[ignore]
+    fn cpu_many_streams() {
+        let (dir, ps, _, wav_a, _) = tone_files();
+        // Our own CPU time, read from outside so the reading doesn't count.
+        let cpu = || -> Duration {
+            let script = format!("(Get-Process -Id {}).TotalProcessorTime.TotalMilliseconds", std::process::id());
+            let out = std::process::Command::new(&ps).args(["-NoProfile", "-c", &script]).output().unwrap();
+            Duration::from_secs_f64(String::from_utf8_lossy(&out.stdout).trim().replace(',', ".").parse::<f64>().unwrap() / 1000.0)
+        };
+        let cores = std::thread::available_parallelism().unwrap().get() as f64;
+        let measure = |name: &str, exclude_exes: &[&str]| {
+            let (capture, samples) = start_capture(exclude_exes);
+            std::thread::sleep(APPS_RECHECK + Duration::from_secs(1)); // streams open and primed
+            let (cpu0, t0, n0) = (cpu(), Instant::now(), samples.lock().unwrap().len());
+            std::thread::sleep(Duration::from_secs(10));
+            let (used, wall) = (cpu() - cpu0, t0.elapsed());
+            let frames = (samples.lock().unwrap().len() - n0) as f64 / 2.0 / wall.as_secs_f64();
+            let one_core = 100.0 * used.as_secs_f64() / wall.as_secs_f64();
+            println!(
+                "{name}: {} app streams, {one_core:.2}% of one core ({:.2}% of {cores} cores), {frames:.0} frames/s",
+                capture.app_streams(),
+                one_core / cores
+            );
+            drop(capture);
+            one_core
+        };
+
+        let players: usize = std::env::var("JAYC_PLAYERS").ok().and_then(|n| n.parse().ok()).unwrap_or(10);
+        for _ in 0..players {
+            play(&ps, &wav_a);
+        }
+        std::thread::sleep(Duration::from_secs(3));
+        let single = measure("single EXCLUDE stream", &[]);
+        let per_app = measure("per app", &["jayc-nothing.exe"]);
+        stop_players(&dir);
+        println!("per app costs {:.2} points of one core more", per_app - single);
+    }
 }
