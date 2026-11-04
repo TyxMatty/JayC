@@ -117,8 +117,8 @@ Cliente → servidor:
 
 | type | campos | |
 |---|---|---|
-| `join` | `room`, `name`, `avatar?` | entra na sala (cria se não existir) |
-| `profile` | `avatar` (data URL ou `null`) | troca a foto de perfil durante a chamada; os outros recebem `peer-updated` |
+| `join` | `room`, `name`, `avatar?`, `color?` | entra na sala (cria se não existir) |
+| `profile` | `avatar` (data URL ou `null`), `color` (`{from, to?, angle?}` ou `null`) | troca a foto ou a cor de perfil durante a chamada; os outros recebem `peer-updated`. A cor só aceita `#rrggbb` e ângulo inteiro 0–360 |
 | `chat` | `text` (1–500 caracteres) | mensagem para a sala; os outros recebem `chat`. Nada fica guardado no servidor |
 | `leave` | — | sai da sala |
 | *requisição SFU* | `id`, `data` | resposta: `{type: "response", id, ok, data}` ou `{…, ok: false, error}` |
@@ -140,9 +140,9 @@ Servidor → cliente:
 
 | type | campos | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name, avatar?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | quem já está na sala, o que cada um publica e as capacidades do router |
-| `peer-joined` / `peer-left` | `id`, `name`, `avatar?` (só no `peer-joined`) | |
-| `peer-updated` | `id`, `avatar` | alguém trocou ou tirou (`null`) a foto de perfil |
+| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | quem já está na sala, o que cada um publica e as capacidades do router |
+| `peer-joined` / `peer-left` | `id`, `name`, `avatar?`, `color?` (só no `peer-joined`) | |
+| `peer-updated` | `id`, `avatar`, `color` | alguém trocou ou tirou (`null`) a foto ou a cor de perfil |
 | `chat` | `id`, `name`, `text` | mensagem de alguém da sala (quebras de linha mantidas; caracteres de controle removidos) |
 | `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | alguém começou a publicar uma faixa |
 | `producer-state` | `peerId`, `producerId`, `paused` | só para quem consome: mutou ou desligou a câmera, ou voltou |

@@ -8,6 +8,7 @@ import { createAudioMenu } from './audio-menu.js';
 import { createChatPanel } from './chat-panel.js';
 import { createMixer } from '../core/playback.js';
 import { createSpeakingDetector } from '../core/speaking.js';
+import { profileBackground } from '../core/profile-color.js';
 import { settings } from '../store/settings.js';
 
 const CONNECTION_LABELS = {
@@ -40,11 +41,12 @@ function hasLiveVideo(stream) {
 }
 
 /**
- * @param {{ name: string, stream: MediaStream, local: boolean, getMedia: () => ({ audio: boolean, video: boolean } | null), getAvatar: () => string | null, onWatch?: () => void }} options
+ * @param {{ name: string, stream: MediaStream, local: boolean, getMedia: () => ({ audio: boolean, video: boolean } | null), getAvatar: () => string | null, getColor?: () => object | null, onWatch?: () => void }} options
  *   getMedia: what this participant is sending (null = unknown yet); getAvatar: their profile picture;
+ *   getColor: their profile color (the tile's background while the camera is off);
  *   onWatch: the "Watch stream" button on their tile while they share and we aren't watching.
  */
-function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
+function createTile({ name, stream, local, getMedia, getAvatar, getColor = () => null, onWatch }) {
   // Always muted: remote sound plays through the mixer (core/playback.js).
   const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
   const avatar = h('div', { class: 'tile-avatar', 'aria-hidden': 'true' }, initials(name));
@@ -64,13 +66,14 @@ function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
 
   let shownName = name;
   let shownAvatar;
-  /** The profile picture when there is one, else the initials. */
+  /** The profile picture when there is one, else the initials, in a circle on their profile color. */
   const renderAvatar = () => {
+    el.style.setProperty('--tile-bg', profileBackground(getColor(), shownName));
     const url = getAvatar();
     if (url === shownAvatar) return;
     shownAvatar = url;
     avatar.classList.toggle('has-picture', Boolean(url));
-    avatar.replaceChildren(url ? h('img', { src: url, alt: '' }) : initials(shownName));
+    avatar.replaceChildren(url ? h('img', { src: url, alt: '' }) : h('span', { class: 'tile-initials' }, initials(shownName)));
   };
 
   const tile = {
@@ -276,6 +279,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     local: true,
     getMedia: () => ({ audio: call.micOn, video: call.cameraOn }),
     getAvatar: () => call.avatar,
+    getColor: () => call.color,
   });
   cameras.append(localTile.el);
 
@@ -366,6 +370,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         local: false,
         getMedia: () => participant.media,
         getAvatar: () => participant.avatar,
+        getColor: () => participant.color,
         onWatch: () => call.watchStream(participant.id, true),
       });
       tile.el.addEventListener('contextmenu', (e) =>

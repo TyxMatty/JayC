@@ -1,5 +1,10 @@
-/** How a peer is described to the others (`avatar` only when set, to keep messages small). */
-export const describePeer = (peer) => ({ id: peer.id, name: peer.name, ...(peer.avatar ? { avatar: peer.avatar } : {}) });
+/** How a peer is described to the others (`avatar` and `color` only when set, to keep messages small). */
+export const describePeer = (peer) => ({
+  id: peer.id,
+  name: peer.name,
+  ...(peer.avatar ? { avatar: peer.avatar } : {}),
+  ...(peer.color ? { color: peer.color } : {}),
+});
 
 /**
  * In-memory room registry. Transport-agnostic: a peer is any object with

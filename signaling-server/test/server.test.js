@@ -155,10 +155,27 @@ describe('signaling server', () => {
     assert.deepEqual(await a.next('peer-joined'), { type: 'peer-joined', id: bJoined.id, name: 'Bob' });
 
     b.send({ type: 'profile', avatar: pixel });
-    assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: pixel });
+    assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: pixel, color: null });
     b.send({ type: 'profile', avatar: null });
-    assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: null });
+    assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: null, color: null });
 
+    // Profile color: hex colors (+ an integer angle for a gradient), lowercased; never free CSS.
+    b.send({ type: 'profile', avatar: null, color: { from: '#AA0000', to: '#0000BB', angle: 90 } });
+    assert.deepEqual((await a.next('peer-updated')).color, { from: '#aa0000', to: '#0000bb', angle: 90 });
+    b.send({ type: 'profile', avatar: null, color: { from: '#112233', angle: 45 } });
+    assert.deepEqual((await a.next('peer-updated')).color, { from: '#112233' });
+    for (const bad of [
+      { from: 'red' },
+      { from: '#123' },
+      { from: '#112233', to: 'url(x)' },
+      { from: '#112233', to: '#445566', angle: 400 },
+      { from: '#112233', to: '#445566', angle: '90deg' },
+      '#112233',
+      [],
+    ]) {
+      b.send({ type: 'profile', avatar: null, color: bad });
+      assert.deepEqual(await b.next('error'), { type: 'error', code: 'bad-message', ref: 'profile' }, JSON.stringify(bad));
+    }
     // Chat: relayed with the sender's id and name; control/bidi characters dropped, line breaks kept.
     b.send({ type: 'chat', text: '  hi\r\nthere\u202E\u0007  ' });
     assert.deepEqual(await a.next('chat'), { type: 'chat', id: bJoined.id, name: 'Bob', text: 'hi\nthere' });
@@ -177,6 +194,17 @@ describe('signaling server', () => {
       b.send({ type: 'profile', avatar: bad });
       assert.deepEqual(await b.next('error'), { type: 'error', code: 'bad-message', ref: 'profile' }, String(bad).slice(0, 30));
     }
+
+    // A latecomer gets Bob's color in the room snapshot (Alice leaves first: the test rooms hold 2).
+    a.close();
+    await b.next('peer-left');
+    const late = connect(port);
+    await late.open();
+    late.send({ type: 'join', room: 'room-avatar', name: 'Dan', color: { from: '#00ff00' } });
+    const lateJoined = await late.next('joined');
+    assert.deepEqual(lateJoined.peers.find((p) => p.id === bJoined.id)?.color, { from: '#112233' });
+    assert.deepEqual((await b.next('peer-joined')).color, { from: '#00ff00' });
+    late.close();
     const c = connect(port);
     await c.open();
     c.send({ type: 'join', room: 'room-avatar-2', name: 'Carol', avatar: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' });

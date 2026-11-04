@@ -10,6 +10,7 @@ import { DEFAULT_GRADIENT } from '../core/appearance.js';
 import { makeAvatar } from '../core/avatar.js';
 import { callDiagnostics } from '../core/diagnostics.js';
 import { createAudioSettings } from './audio-settings.js';
+import { createProfileColorField } from './profile-color-field.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
@@ -406,6 +407,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
             avatarHint,
             h('p', { class: 'hint' }, 'Shown to others while your camera is off.'),
           ),
+          createProfileColorField(),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
         ),
         h(

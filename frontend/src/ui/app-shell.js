@@ -89,6 +89,7 @@ export function mountApp(root) {
       room,
       name,
       avatar: prefs.avatar,
+      color: prefs.profileColor,
       micProcessing: prefs.micProcessing,
       micDeviceId: prefs.micDevice,
       micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
@@ -100,7 +101,9 @@ export function mountApp(root) {
       if (next.micProcessing !== prev.micProcessing) {
         call.setMicProcessing(next.micProcessing).catch((error) => console.warn('[app] mic options', error));
       }
-      if (next.avatar !== prev.avatar) call.setAvatar(next.avatar);
+      if (next.avatar !== prev.avatar || next.profileColor !== prev.profileColor) {
+        call.setProfile({ avatar: next.avatar, color: next.profileColor });
+      }
       if (next.micDevice !== prev.micDevice) {
         call.setMicDevice(next.micDevice).catch((error) => console.warn('[app] mic device', error));
       }

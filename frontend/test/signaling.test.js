@@ -65,18 +65,18 @@ describe('SignalingClient', () => {
     await assert.rejects(client.request('createTransport', { direction: 'send' }), (err) => err.code === 'not-connected');
   });
 
-  test('profile pictures: sent on join, changed live', async () => {
+  test('profile pictures and colors: sent on join, changed live', async () => {
     const pixel = 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==';
     const alice = new SignalingClient(url);
     const bob = new SignalingClient(url);
-    alice.setAvatar(pixel); // before joining: kept for the join
-    await alice.join('room-avatar', 'Alice', pixel);
+    await alice.join('room-avatar', 'Alice', pixel, { from: '#336699' });
     const bJoined = await bob.join('room-avatar', 'Bob');
     assert.equal(bJoined.peers[0].avatar, pixel);
+    assert.deepEqual(bJoined.peers[0].color, { from: '#336699' });
 
     const updated = once(alice, 'peer-updated');
-    bob.setAvatar(pixel);
-    assert.deepEqual(await updated, { type: 'peer-updated', id: bob.id, avatar: pixel });
+    bob.setProfile({ avatar: pixel, color: { from: '#ff0000', to: '#0000ff', angle: 90 } });
+    assert.deepEqual(await updated, { type: 'peer-updated', id: bob.id, avatar: pixel, color: { from: '#ff0000', to: '#0000ff', angle: 90 } });
     alice.close();
     bob.close();
   });

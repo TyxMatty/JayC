@@ -76,6 +76,8 @@ export class Call extends EventTarget {
   micLevel = -Infinity;
   /** Our profile picture (data URL) or null; others see it while our camera is off. */
   avatar = null;
+  /** Our profile color ({ from, to?, angle? }) or null = picked from the name (core/profile-color.js). */
+  color = null;
   /** Executables left out of an entire-screen share's sound (see setExcludedApps). */
   excludedApps = [];
   /** @type {Map<string, object>} */
@@ -119,9 +121,10 @@ export class Call extends EventTarget {
   }
 
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
-  async join({ url, room, name, avatar = null, micProcessing = DEFAULT_MIC_PROCESSING, micDeviceId = null, micShape = null }) {
+  async join({ url, room, name, avatar = null, color = null, micProcessing = DEFAULT_MIC_PROCESSING, micDeviceId = null, micShape = null }) {
     this.room = room;
     this.avatar = avatar;
+    this.color = color;
     this.micProcessing = { ...micProcessing };
     this.micDeviceId = micDeviceId;
     if (micShape) Object.assign(this.micShape, micShape);
@@ -149,6 +152,7 @@ export class Call extends EventTarget {
       const participant = this.participants.get(e.detail.id);
       if (!participant) return;
       participant.avatar = e.detail.avatar ?? null;
+      participant.color = e.detail.color ?? null;
       this.#emit('participant-updated', { participant });
     });
     signaling.addEventListener('new-producer', (e) => this.#consume(e.detail));
@@ -159,7 +163,7 @@ export class Call extends EventTarget {
 
     let joined;
     try {
-      joined = await signaling.join(room, name, avatar);
+      joined = await signaling.join(room, name, avatar, color);
       await this.#setup(joined);
     } catch (error) {
       signaling.close();
@@ -193,10 +197,11 @@ export class Call extends EventTarget {
    * restarted with the new options and swapped in with replaceTrack (no renegotiation); a browser
    * mic gets the new constraints.
    */
-  /** Changes our profile picture during the call (null removes it). */
-  setAvatar(avatar) {
+  /** Changes our profile picture and/or color during the call (null removes it). */
+  setProfile({ avatar = this.avatar, color = this.color }) {
     this.avatar = avatar;
-    this.#signaling?.setAvatar(avatar);
+    this.color = color;
+    this.#signaling?.setProfile({ avatar, color });
     this.#emit('local-updated', {});
   }
 
@@ -553,13 +558,15 @@ export class Call extends EventTarget {
 
   // ---------- Receiving ----------
 
-  #addParticipant({ id, name, avatar }) {
+  #addParticipant({ id, name, avatar, color }) {
     if (this.participants.has(id)) return this.participants.get(id);
     const participant = {
       id,
       name: name ?? 'Guest',
       /** Profile picture (data URL, validated by the server) or null. */
       avatar: avatar ?? null,
+      /** Profile color { from, to?, angle? } (validated by the server) or null. */
+      color: color ?? null,
       stream: new MediaStream(),
       screenStream: new MediaStream(),
       media: { audio: false, video: false, screen: false },

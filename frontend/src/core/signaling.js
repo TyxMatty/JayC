@@ -16,9 +16,9 @@ export class SignalingError extends Error {
  * Events (CustomEvent, payload in `detail`):
  *   state           { state: 'connecting' | 'open' | 'reconnecting' | 'closed' }
  *   rejoined        the server's `joined` message after an automatic reconnect (new id!)
- *   peer-joined     { id, name, avatar? }
+ *   peer-joined     { id, name, avatar?, color? }
  *   peer-left       { id, name }
- *   peer-updated    { id, avatar }       a roommate changed their profile picture (null = removed)
+ *   peer-updated    { id, avatar, color } a roommate changed their profile picture or color (null = none)
  *   new-producer    { peerId, producerId, kind, source, paused }
  *   producer-closed { peerId, producerId }
  *   producer-state  { peerId, producerId, paused }
@@ -34,6 +34,7 @@ export class SignalingClient extends EventTarget {
   #name = null;
   /** Profile picture (data URL) sent on every (re)join; null = none. */
   #avatar = null;
+  #color = null;
   #attempt = 0;
   #reconnectTimer = null;
   #closed = true;
@@ -51,10 +52,11 @@ export class SignalingClient extends EventTarget {
   }
 
   /** Connects and joins `room`. Resolves with the server's `joined` message. */
-  join(room, name, avatar = null) {
+  join(room, name, avatar = null, color = null) {
     this.#room = room;
     this.#name = name;
     this.#avatar = avatar;
+    this.#color = color;
     this.#closed = false;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.#failJoin(new SignalingError('timeout')), JOIN_TIMEOUT_MS);
@@ -82,10 +84,11 @@ export class SignalingClient extends EventTarget {
     });
   }
 
-  /** Changes the profile picture: roommates get it now if we're in the room, else on the next join. */
-  setAvatar(avatar) {
+  /** Changes the profile picture and color: roommates get them now if we're in the room, else on the next join. */
+  setProfile({ avatar, color }) {
     this.#avatar = avatar;
-    if (this.id && this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(JSON.stringify({ type: 'profile', avatar }));
+    this.#color = color;
+    if (this.id && this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(JSON.stringify({ type: 'profile', avatar, color }));
   }
 
   /** Sends a chat message to the room. False when not connected (the caller keeps the text). */
@@ -124,7 +127,8 @@ export class SignalingClient extends EventTarget {
     this.#ws = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'join', room: this.#room, name: this.#name, ...(this.#avatar ? { avatar: this.#avatar } : {}) }));
+      const profile = { ...(this.#avatar ? { avatar: this.#avatar } : {}), ...(this.#color ? { color: this.#color } : {}) };
+      ws.send(JSON.stringify({ type: 'join', room: this.#room, name: this.#name, ...profile }));
     };
 
     ws.onmessage = (event) => {

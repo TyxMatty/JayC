@@ -51,6 +51,22 @@ function cleanChat(value) {
   return text.length > 0 && text.length <= MAX_CHAT_LENGTH ? text : null;
 }
 
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/**
+ * The profile color as sent: { from, to?, angle? } (a solid color, or a gradient when `to` is set).
+ * Only hex colors and an integer angle get through, never free CSS. null when absent, undefined when invalid.
+ */
+function cleanColor(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { from, to = null, angle = 135 } = value;
+  if (typeof from !== 'string' || !HEX_COLOR.test(from)) return undefined;
+  if (to !== null && (typeof to !== 'string' || !HEX_COLOR.test(to))) return undefined;
+  if (!Number.isInteger(angle) || angle < 0 || angle > 360) return undefined;
+  return to ? { from: from.toLowerCase(), to: to.toLowerCase(), angle } : { from: from.toLowerCase() };
+}
+
 /** The profile picture as sent: null when absent, undefined when invalid. */
 function cleanAvatar(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -110,6 +126,7 @@ export function startServer(config, { log = defaultLog } = {}) {
       id: randomUUID(),
       name: null,
       avatar: null,
+      color: null,
       room: null,
       announcedAddress: null,
       send(message) {
@@ -128,13 +145,15 @@ export function startServer(config, { log = defaultLog } = {}) {
     async function join(msg) {
       const name = cleanName(msg.name);
       const avatar = cleanAvatar(msg.avatar);
-      if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name || avatar === undefined) {
+      const color = cleanColor(msg.color);
+      if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name || avatar === undefined || color === undefined) {
         return fail('bad-message', 'join');
       }
       if (peer.room && peer.room !== msg.room) await leaveRoom(peer);
 
       peer.name = name;
       peer.avatar = avatar;
+      peer.color = color;
       const result = registry.join(msg.room, peer);
       if (!result.ok) return fail(result.code, 'join');
 
@@ -187,12 +206,14 @@ export function startServer(config, { log = defaultLog } = {}) {
           fail('internal', 'join');
         });
       } else if (msg.type === 'profile') {
-        // A new profile picture mid-call: the others get it right away.
+        // A new profile picture or color mid-call: the others get it right away.
         const avatar = cleanAvatar(msg.avatar);
-        if (avatar === undefined) return fail('bad-message', 'profile');
+        const color = cleanColor(msg.color);
+        if (avatar === undefined || color === undefined) return fail('bad-message', 'profile');
         if (!peer.room) return fail('not-in-room', 'profile');
         peer.avatar = avatar;
-        for (const other of registry.othersInRoom(peer)) other.send({ type: 'peer-updated', id: peer.id, avatar });
+        peer.color = color;
+        for (const other of registry.othersInRoom(peer)) other.send({ type: 'peer-updated', id: peer.id, avatar, color });
       } else if (msg.type === 'chat') {
         // Relayed to the others in the room; nothing is stored (late joiners don't see history).
         if (!peer.room) return fail('not-in-room', 'chat');

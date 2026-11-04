@@ -9,6 +9,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   displayName: '',
   /** Profile picture as a small data URL (core/avatar.js), or null. */
   avatar: null,
+  /** Profile color others see behind us: { from, to?, angle? }, or null = picked from the name. */
+  profileColor: null,
   serverAddress: '',
   /** 'system' | 'light' | 'dark' */
   theme: 'system',

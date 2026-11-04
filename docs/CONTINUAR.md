@@ -132,6 +132,13 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 7. ✅ Chat da chamada: botão **Chat** na barra (com contador de não lidas) abre um painel lateral. Mensagens novas com o painel fechado também aparecem num aviso. O servidor só repassa (`chat`, 1–500 caracteres, sem caracteres de controle) e não guarda nada: quem entra depois não vê o histórico. Verificado no app com um bot: contador, aviso, resposta digitada no teclado chegando ao bot, HTML exibido como texto, Esc fechando o painel.
 8. ✅ Botões em destaque: mic, câmera e live com 64 px (os outros têm 52), "bounce" no hover e no clique em todos os botões da barra (desligado com "reduzir movimento" do sistema, que está ligado neste PC), e borda verde (#16a34a) no card de quem fala, inclusive o seu (`core/speaking.js`: -50 dBFS, 400 ms de espera; o nível vem dos analisadores do mixer). Medido no app: a borda acompanha um tom que liga e desliga a cada 1 s; o hover vai a 1,11 e assenta em 1,10, e o clique a 0,90. A sua própria borda não foi vista acender, porque ninguém falou no microfone durante o teste.
 
+**Revisão de design (04/11/2026), inspirada no Discord:**
+- ✅ A. Cor de perfil: Settings › General › Profile color (Auto pelo nome, Solid ou Gradient, com prévia). Vai aos outros no `join` e no `profile`, e o servidor só aceita `#rrggbb` e ângulo inteiro. Os cards sem câmera usam a cor de fundo, com o avatar num círculo. Quem não escolheu ganha um degradê estável pelo nome (`core/profile-color.js`). Verificado no app com 2 bots, nos temas escuro e claro: cada card com a sua cor, e a troca chegou aos dois ao vivo.
+- B. Settings com abas laterais (Perfil, Áudio, Aparência, Transmissão, Servidor, Ajuda) em vez de uma coluna de ~2400 px.
+- C. Lobby com cartão de perfil e salas recentes.
+- D. Cabeçalho da chamada com a sala, quantas pessoas e copiar o nome.
+- E. Animações: abrir e fechar o Settings e os painéis, entrada dos cards e dos avisos, troca de foco das lives. Respeitam "reduzir movimento".
+
 Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Recomendação dada: não. O Discord também é Chromium (Electron), e o que ele faz diferente é capturar e codificar em código nativo. Se os itens 2 e 3 apontarem para o WebView, a saída é uma etapa de captura de vídeo nativa (WGC/DXGI + H.264 por hardware).
 
 **Android em dev** (emulador ou celular com depuração USB):

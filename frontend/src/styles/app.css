@@ -896,6 +896,21 @@ fieldset > h3 {
   display: grid;
 }
 
+/* Camera off: the person's profile color behind their avatar (core/profile-color.js). */
+.tile[data-video='off'] {
+  background: var(--tile-bg, var(--surface-2));
+}
+
+.tile-initials {
+  display: grid;
+  place-items: center;
+  width: min(40%, 160px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
 .tile-label {
   position: absolute;
   left: 8px;
@@ -1547,4 +1562,45 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
 .chat-form .input {
   flex: 1;
   min-width: 0;
+}
+
+/* Settings › Profile color: a small card like the tile others see with your camera off. */
+.profile-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 72px;
+  margin-bottom: 8px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.profile-preview-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent-text, var(--accent));
+  font-size: 20px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+
+.profile-preview-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-preview-name {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-weight: 600;
 }
