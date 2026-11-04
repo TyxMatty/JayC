@@ -83,7 +83,7 @@ npm test           # testes
 
 ## 4. Claude Code no PC novo
 
-Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 14."*
+Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 14 (release)."*
 
 ## 5. Estado atual
 
@@ -103,9 +103,9 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 
 Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Plugins ficaram para depois do release**: plugins sem isolamento no cliente estão descartados, porque alcançariam o IPC do Tauri (captura de áudio, tela e microfone).
 
-**Próxima: etapa 14 (iOS, só o código).**
+**Próxima: etapa 14 (release: Windows `.exe` e Android `.apk`).**
 
-Depois vêm: 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
+O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
@@ -137,4 +137,4 @@ Depois vêm: 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
 - Tamanho da imagem Docker (379 MB).
 - Usar H.264 por hardware na transmissão de tela, para gastar menos CPU.
 - Bundle do frontend (~58 KB gzip, a maior parte do mediasoup-client).
-- O guia manda baixar o `docker-compose.yml` da página de releases e conta com a imagem publicada no GHCR. As duas coisas só existem na etapa 15.
+- O guia manda baixar o `docker-compose.yml` da página de releases e conta com a imagem publicada no GHCR. As duas coisas só existem na etapa 14.

@@ -108,7 +108,7 @@ JayC/
 │  └─ guest-js/index.js        # listAudioApps(), startCapture(), stopCapture()
 └─ plugins/tauri-plugin-pip/   # PiP da activity no Android; o app chama `invoke('plugin:pip|…')` direto
    ├─ build.rs, src/lib.rs, permissions/default.toml
-   └─ android/src/main/java/.../PipPlugin.kt   # (ios/ na etapa 14)
+   └─ android/src/main/java/.../PipPlugin.kt   # (ios/ na etapa 15)
 ```
 
 ## 4. Protocolo de sinalização (JSON via WebSocket)
@@ -359,8 +359,8 @@ Cada etapa termina com algo testável.
 | 11 ✅ | PiP desktop | o vídeo remoto flutua sobre outras janelas |
 | 12 ✅ | Modal do guia + renderer Markdown + imagens (com a porta de mídia e a nota sobre banda) | o guia renderiza com as 5 imagens nos dois temas |
 | 13 ✅ | Android: `tauri android init`, permissões, plugin PiP Kotlin | o APK roda no emulador ou no celular, entra em chamada e vai para PiP ao minimizar |
-| 14 | iOS: plugin Swift (código) | código escrito; build pendente de um Mac |
-| 15 | Release: imagem no GHCR + bundles Tauri (`.msi`/`.exe`, `.apk`) | o guia de 5 passos funciona do zero numa máquina limpa |
+| 14 | Release: imagem no GHCR + instalador Windows (`.exe`) + `.apk` | o guia de 5 passos funciona do zero numa máquina limpa |
+| 15 | iOS: plugin Swift (código), adiado para depois do lançamento | código escrito; build pendente de um Mac |
 
 ### Customização (entre a 12 e a 13, a pedido do usuário)
 
