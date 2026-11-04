@@ -110,7 +110,7 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
 
-**Instalador 0.2.1 (04/11/2026):** a 0.2.0 mais a live de tela inteira sem efeito espelho, o H.264 High pela placa de vídeo (com VP8 de reserva), o limite do chat e o guia com `npm run server`. O servidor também está em 0.2.1: o host precisa reiniciá-lo (perfil H.264 novo e limite do chat). É essa versão que os amigos devem instalar.
+**Instalador 0.2.1 (04/11/2026):** a 0.2.0 mais a live de tela inteira sem efeito espelho, o H.264 High pela placa de vídeo (com VP8 de reserva), o limite do chat e o guia com `npm run server`. O servidor também está em 0.2.1: o host precisa reiniciá-lo (perfil H.264 novo e limite do chat). É essa versão que os amigos devem instalar. **Quem já tem uma versão mais velha só roda o instalador:** ele atualiza por cima, sem a página "Desinstalar antes de instalar" (template NSIS próprio, ver CLAUDE.md). Medido: 0.2.0 instalada → instalador 0.2.1 com interface: boas-vindas, instalando, concluído; o registro foi para 0.2.1 e o executável foi trocado. A mesma versão ou um downgrade continuam perguntando.
 
 **Instalador 0.2.0 (04/11/2026):** traz o retorno do teste externo (itens 1–8) e a revisão de design (A–E). Para o próximo teste, os amigos instalam a 0.2.0, o host reinicia o servidor (o protocolo mudou: `pauseConsumer`, `chat`, `color`), e quem não ouvir manda o texto de Settings › Help › Copy call diagnostics.
 
