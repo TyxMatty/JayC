@@ -119,7 +119,9 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 2. Live trava com o app em foco e fica lisa no Alt+Tab. Suspeita: o app mostrando a própria tela (efeito espelho). Não medido.
 3. Atalhos do Windows (tecla Windows, Win+Shift+S) param durante a live. Eles dizem que outros apps de live também causam isso, menos o Discord. Não medido.
 4. ✅ Padrões: câmera começa desligada; a live dos outros começa sem som e fora de foco, e cada um escolhe assistir (como no Discord). Feito: o card de quem transmite mostra **LIVE · Watch stream**. Até clicar, a tela e o som da live ficam pausados no servidor (0 kbps, medido), sem layout de apresentação e fora do PiP. **Stop watching** pausa de novo. Uma live nova começa sem ser assistida.
-5. Áudio: escolher entrada e saída, sensibilidade e ganho do mic, volume por pessoa (acima de 100%), volume e mudo da live, mutar alguém só para si. Tudo no menu do botão direito sobre a pessoa.
+5. Áudio, no menu do botão direito.
+   - ✅ **5A:** volume por pessoa e por live (0–200%) e mudo só para si, no clique direito sobre o card (ou tecla Menu com o card em foco), além de um botão **Mute stream** na live assistida. O som remoto passa pelo WebAudio (`core/playback.js`), com um ganho por voz e por live; os `<video>` ficam mudos. Medido no alto-falante: 100% = -13,5 dB, 200% = -7,5 dB, mudo = silêncio. Os níveis valem só durante a chamada.
+   - 5B: escolher entrada e saída, sensibilidade e ganho do microfone.
 6. Focar numa live entre várias, ou na própria.
 7. Chat da chamada.
 8. Botões em destaque na tela (mic, câmera, live).

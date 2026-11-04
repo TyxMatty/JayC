@@ -942,7 +942,7 @@ fieldset > h3 {
 }
 
 .tile-watch:focus-visible,
-.tile-stop-watching:focus-visible {
+.tile:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -955,15 +955,58 @@ fieldset > h3 {
   letter-spacing: 0.04em;
 }
 
-.tile-stop-watching {
+.tile-stream-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 8px;
   opacity: 0.85;
 }
 
-.tile-stop-watching:hover {
+.tile-stream-actions:hover,
+.tile-stream-actions:focus-within {
   opacity: 1;
+}
+
+/* Right-click on a person or a stream: volume and mute, just for us. */
+.audio-menu {
+  position: fixed;
+  inset: auto;
+  width: 240px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.audio-menu-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-menu-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.audio-menu input[type='range'] {
+  width: 100%;
+  margin: 6px 0 12px;
+  accent-color: var(--accent);
+}
+
+.audio-menu-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .call-waiting {

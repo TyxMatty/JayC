@@ -4,6 +4,8 @@ import { canShareScreen } from '../core/media.js';
 import { createSharePanel } from './share-panel.js';
 import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
 import { createControlBar } from './control-bar.js';
+import { createAudioMenu } from './audio-menu.js';
+import { createMixer } from '../core/playback.js';
 
 const CONNECTION_LABELS = {
   new: 'Connecting…',
@@ -40,7 +42,8 @@ function hasLiveVideo(stream) {
  *   onWatch: the "Watch stream" button on their tile while they share and we aren't watching.
  */
 function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
-  const video = h('video', { autoplay: true, playsinline: true, muted: local, srcObject: stream });
+  // Always muted: remote sound plays through the mixer (core/playback.js).
+  const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
   const avatar = h('div', { class: 'tile-avatar', 'aria-hidden': 'true' }, initials(name));
   const nameText = h('span', {}, local ? `${name} (you)` : name);
   const mutedIcon = h('span', { class: 'tile-muted', title: 'Microphone off', html: icons.micOff, hidden: true });
@@ -52,7 +55,7 @@ function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
     h('span', { class: 'live-badge' }, 'LIVE'),
     'Watch stream',
   );
-  const el = h('div', { class: local ? 'tile tile-local' : 'tile' }, video, avatar, overlay, watchButton, label);
+  const el = h('div', { class: local ? 'tile tile-local' : 'tile', tabindex: local ? false : 0 }, video, avatar, overlay, watchButton, label);
 
   const videoOn = () => (getMedia()?.video ?? true) && hasLiveVideo(stream);
 
@@ -107,8 +110,9 @@ function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
 }
 
 /** A shared screen/window. Double-click toggles fullscreen. Audio (later) plays from the same element. */
-function createScreenTile({ name, stream, local, onStop }) {
-  const video = h('video', { autoplay: true, playsinline: true, muted: local, srcObject: stream });
+function createScreenTile({ name, stream, local, onStop, onToggleMute }) {
+  const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
+  const muteButton = local ? null : h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onToggleMute?.() });
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
   const nameText = h('span', {}, local ? 'Your screen' : `${name}'s screen`);
   const el = h(
@@ -116,8 +120,11 @@ function createScreenTile({ name, stream, local, onStop }) {
     { class: local ? 'tile tile-screen tile-screen-local' : 'tile tile-screen', title: local ? '' : 'Double-click for fullscreen' },
     video,
     h('div', { class: 'tile-label' }, icon, nameText),
-    ...(local ? [] : [h('button', { type: 'button', class: 'btn btn-secondary tile-stop-watching', onClick: () => onStop?.() }, 'Stop watching')]),
+    ...(local
+      ? []
+      : [h('div', { class: 'tile-stream-actions' }, muteButton, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onStop?.() }, 'Stop watching'))]),
   );
+  if (!local) el.tabIndex = 0;
   if (!local) {
     el.addEventListener('dblclick', () => {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -126,6 +133,12 @@ function createScreenTile({ name, stream, local, onStop }) {
   }
   return {
     el,
+    /** The stream's sound is muted just for us. */
+    setMuted(muted) {
+      if (!muteButton) return;
+      muteButton.textContent = muted ? 'Unmute stream' : 'Mute stream';
+      muteButton.setAttribute('aria-pressed', String(muted));
+    },
     refresh({ name: next, mode }) {
       icon.innerHTML = mode === 'window' ? icons.appWindow : icons.monitor;
       nameText.textContent = local ? `Your ${mode === 'window' ? 'window' : 'screen'}` : `${next}'s ${mode === 'window' ? 'window' : 'screen'}`;
@@ -153,6 +166,11 @@ export function createCallView(call, { displayName, onLeft }) {
   const stage = h('div', { class: 'call-stage' }, screens, cameras);
   const banner = h('div', { class: 'call-banner', role: 'status', hidden: true });
   const toast = h('div', { class: 'call-toast', role: 'status', 'aria-live': 'polite', hidden: true });
+  // Each voice and stream sound has its own volume and mute, just for us (right-click a tile).
+  const mixer = createMixer();
+  const audioMenu = createAudioMenu();
+  const voiceKey = (participant) => `${participant.id}:voice`;
+  const streamKey = (participant) => `${participant.id}:stream`;
   const tiles = new Map();
   const screenTiles = new Map();
   let localScreenTile = null;
@@ -256,6 +274,7 @@ export function createCallView(call, { displayName, onLeft }) {
       sharing.delete(participant.id);
     }
     let tile = screenTiles.get(participant.id);
+    mixer.play(streamKey(participant), (participant.watching && participant.screenStream.getAudioTracks()[0]) || null);
     if (!participant.media.screen || !participant.watching) {
       if (tile) {
         tile.el.remove();
@@ -270,7 +289,17 @@ export function createCallView(call, { displayName, onLeft }) {
         stream: participant.screenStream,
         local: false,
         onStop: () => call.watchStream(participant.id, false),
+        onToggleMute: () => tile.setMuted(mixer.set(streamKey(participant), { muted: !mixer.get(streamKey(participant)).muted }).muted),
       });
+      tile.el.addEventListener('contextmenu', (e) =>
+        audioMenu.open(e, {
+          title: `${participant.name}'s stream`,
+          muteLabel: 'Mute stream',
+          get: () => mixer.get(streamKey(participant)),
+          set: (patch) => tile.setMuted(mixer.set(streamKey(participant), patch).muted),
+        }),
+      );
+      tile.setMuted(mixer.get(streamKey(participant)).muted);
       screenTiles.set(participant.id, tile);
       screens.append(tile.el);
       layout();
@@ -289,6 +318,14 @@ export function createCallView(call, { displayName, onLeft }) {
         getAvatar: () => participant.avatar,
         onWatch: () => call.watchStream(participant.id, true),
       });
+      tile.el.addEventListener('contextmenu', (e) =>
+        audioMenu.open(e, {
+          title: participant.name,
+          muteLabel: `Mute ${participant.name} for me`,
+          get: () => mixer.get(voiceKey(participant)),
+          set: (patch) => mixer.set(voiceKey(participant), patch),
+        }),
+      );
       tiles.set(participant.id, tile);
       cameras.insertBefore(tile.el, localTile.el);
       if (announce) showToast(`${participant.name} joined.`);
@@ -298,6 +335,7 @@ export function createCallView(call, { displayName, onLeft }) {
     tile.setOverlay(CONNECTION_LABELS[participant.connectionState]);
     tile.refresh();
     tile.setLive(participant.media.screen && !participant.watching);
+    mixer.play(voiceKey(participant), participant.stream.getAudioTracks()[0] ?? null);
     renderScreen(participant);
     renderPip();
   };
@@ -322,6 +360,8 @@ export function createCallView(call, { displayName, onLeft }) {
   call.addEventListener('participant-removed', (e) => {
     const { participant } = e.detail;
     sharing.delete(participant.id);
+    mixer.stop(voiceKey(participant));
+    mixer.stop(streamKey(participant));
     screenTiles.get(participant.id)?.el.remove();
     screenTiles.delete(participant.id);
     renderPip();
@@ -402,6 +442,7 @@ export function createCallView(call, { displayName, onLeft }) {
 
   call.addEventListener('ended', () => {
     clearTimeout(toastTimer);
+    mixer.close();
     pip?.exit().catch(() => {});
     pip?.destroy?.();
     controlBar.destroy();
@@ -423,6 +464,6 @@ export function createCallView(call, { displayName, onLeft }) {
   if (problems.length) showToast(`${problems.join(' · ')}. You can still see and hear others.`);
 
   // The bar can sit on any edge (section[data-bar]), so the rest of the call is one column of its own.
-  section.append(h('div', { class: 'call-main' }, banner, stage, waiting, toast), controlBar.element, ...(sharePanel ? [sharePanel] : []));
+  section.append(h('div', { class: 'call-main' }, banner, stage, waiting, toast), controlBar.element, audioMenu.element, ...(sharePanel ? [sharePanel] : []));
   return section;
 }
