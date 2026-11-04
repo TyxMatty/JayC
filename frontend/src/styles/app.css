@@ -755,6 +755,35 @@ fieldset > h3 {
   width: 160px;
 }
 
+/* One stream focused among several: big on the left, the others in a column on the right. */
+.call-stage[data-layout='presenting'] .stage-screens[data-focus] {
+  grid-template-columns: minmax(0, 1fr) clamp(140px, 20%, 260px);
+  grid-template-rows: repeat(var(--others), min-content) minmax(0, 1fr);
+  grid-auto-rows: unset;
+}
+
+.stage-screens[data-focus] > .tile.tile-screen {
+  grid-column: 2;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+.stage-screens[data-focus] > .tile.tile-screen.is-focused {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+/* Small streams in the column: room for the name only. */
+.stage-screens[data-focus] > .tile-screen:not(.is-focused) .tile-stream-actions {
+  display: none;
+}
+
+.tile.tile-screen {
+  cursor: pointer;
+}
+
 /* `.tile.` raises specificity above the generic 16:9 `.tile` rule further down. */
 .tile.tile-screen {
   aspect-ratio: auto;

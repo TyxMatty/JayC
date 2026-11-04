@@ -111,21 +111,32 @@ function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
 }
 
 /** A shared screen/window. Double-click toggles fullscreen. Audio (later) plays from the same element. */
-function createScreenTile({ name, stream, local, onStop, onToggleMute }) {
+function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus }) {
   const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
   const muteButton = local ? null : h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onToggleMute?.() });
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
   const nameText = h('span', {}, local ? 'Your screen' : `${name}'s screen`);
   const el = h(
     'div',
-    { class: local ? 'tile tile-screen tile-screen-local' : 'tile tile-screen', title: local ? '' : 'Double-click for fullscreen' },
+    {
+      class: local ? 'tile tile-screen tile-screen-local' : 'tile tile-screen',
+      title: local ? 'Click to show it bigger, or back in the corner' : 'Click to focus · double-click for fullscreen',
+    },
     video,
     h('div', { class: 'tile-label' }, icon, nameText),
     ...(local
       ? []
       : [h('div', { class: 'tile-stream-actions' }, muteButton, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onStop?.() }, 'Stop watching'))]),
   );
-  if (!local) el.tabIndex = 0;
+  el.tabIndex = 0;
+  // Focus this stream (a double-click's two clicks cancel out, then it goes fullscreen).
+  el.addEventListener('click', (e) => !e.target.closest('button') && onFocus?.());
+  el.addEventListener('keydown', (e) => {
+    if (e.target === el && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onFocus?.();
+    }
+  });
   if (!local) {
     el.addEventListener('dblclick', () => {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -134,6 +145,10 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute }) {
   }
   return {
     el,
+    /** After the tile moved in the page (moving a <video> pauses it). */
+    play() {
+      video.play().catch(() => {});
+    },
     /** The stream's sound is muted just for us. */
     setMuted(muted) {
       if (!muteButton) return;
@@ -262,10 +277,37 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   });
   cameras.append(localTile.el);
 
+  /** The stream shown big: a participant id, 'local' (our own), or null (all streams share the stage). */
+  let focusedScreen = null;
+  const toggleFocus = (id) => {
+    focusedScreen = focusedScreen === id ? null : id;
+    layout();
+  };
+
   const layout = () => {
     const remotes = tiles.size;
-    stage.dataset.layout =
-      screenTiles.size > 0 ? 'presenting' : remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
+    if (focusedScreen === 'local' ? !localScreenTile : focusedScreen && !screenTiles.has(focusedScreen)) focusedScreen = null;
+    // Our own preview floats in a corner, or joins the streams on the stage when focused.
+    if (localScreenTile) {
+      const onStage = focusedScreen === 'local';
+      const parent = onStage ? screens : stage;
+      if (localScreenTile.el.parentNode !== parent) {
+        parent.append(localScreenTile.el);
+        localScreenTile.play();
+      }
+      localScreenTile.el.classList.toggle('tile-screen-local', !onStage);
+      localScreenTile.el.classList.toggle('is-focused', onStage);
+    }
+    for (const [id, tile] of screenTiles) tile.el.classList.toggle('is-focused', id === focusedScreen);
+    // Several streams and one focused: it takes the stage, the others make a column beside it.
+    const streams = screens.children.length;
+    if (focusedScreen && streams > 1) {
+      screens.dataset.focus = '';
+      screens.style.setProperty('--others', String(streams - 1));
+    } else {
+      delete screens.dataset.focus;
+    }
+    stage.dataset.layout = streams > 0 ? 'presenting' : remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
     waiting.hidden = remotes > 0;
   };
 
@@ -293,6 +335,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         name: participant.name,
         stream: participant.screenStream,
         local: false,
+        onFocus: () => toggleFocus(participant.id),
         onStop: () => call.watchStream(participant.id, false),
         onToggleMute: () => tile.setMuted(mixer.set(streamKey(participant), { muted: !mixer.get(streamKey(participant)).muted }).muted),
       });
@@ -348,14 +391,21 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   /** Small preview of what we're sharing, floating in a corner. */
   const renderLocalScreen = () => {
     if (!call.screenStream) {
-      localScreenTile?.el.remove();
-      localScreenTile = null;
+      if (localScreenTile) {
+        localScreenTile.el.remove();
+        localScreenTile = null;
+        layout();
+      }
       return;
     }
     if (!localScreenTile || localScreenTile.stream !== call.screenStream) {
       localScreenTile?.el.remove();
-      localScreenTile = { ...createScreenTile({ name: displayName, stream: call.screenStream, local: true }), stream: call.screenStream };
+      localScreenTile = {
+        ...createScreenTile({ name: displayName, stream: call.screenStream, local: true, onFocus: () => toggleFocus('local') }),
+        stream: call.screenStream,
+      };
       stage.append(localScreenTile.el);
+      layout();
     }
     localScreenTile.refresh({ mode: call.screenShare?.mode });
   };
