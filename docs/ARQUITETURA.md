@@ -362,6 +362,31 @@ Cada etapa termina com algo testável.
 | 14 | Release: imagem no GHCR + instalador Windows (`.exe`) + `.apk` | o guia de 5 passos funciona do zero numa máquina limpa |
 | 15 | iOS: plugin Swift (código), adiado para depois do lançamento | código escrito; build pendente de um Mac |
 
+### Release (etapa 14)
+
+| Parte | Entrega | Estado |
+|---|---|---|
+| 14.A | **Instalador Windows** (NSIS, `.exe`) gerado localmente | ✅ |
+| 14.B | **APK de release** assinado (ARM 64 e 32 bits) | |
+| 14.C | **GitHub Actions:** com uma tag `v*`, gera `.exe`, `.apk` e a imagem no GHCR, e monta um rascunho de Release com o `docker-compose.yml` | |
+| 14.D | **Ícone** do usuário em todos os tamanhos (`tauri icon`) | |
+| 14.E | **Publicação** e teste do guia do zero numa máquina limpa | |
+
+**Instalador Windows** (`npm run build`, ~7–9 min com LTO):
+- **Tipo:** NSIS por usuário (`installMode: currentUser`). Instala em `%LOCALAPPDATA%\Jay-C` sem UAC, com atalho no menu Iniciar e entrada em "Aplicativos" (publisher TyxMatty). O WebView2 vem pelo bootstrapper se faltar (Windows 10 antigo).
+- **Tamanho:** instalador de 1,47 MiB e `jay-c.exe` de 3,9 MB.
+- **Sem assinatura de código:** o SmartScreen avisa na primeira execução. Um certificado é pago (decisão em aberto).
+- **Reinstalar por cima** atualiza o exe. O instalador fecha só um `jay-c.exe` que rode da pasta de instalação (Restart Manager no caminho exato), e não o de `tauri dev`.
+- **Câmera e microfone sem o aviso do WebView2:** num perfil novo, o WebView2 perguntava "tauri.localhost wants to use your camera", e a entrada na sala ficava parada em "Joining…" até a resposta. Agora `src-tauri/src/media_permissions.rs` libera câmera e microfone no evento `PermissionRequested`, só para a página do próprio app (`http://tauri.localhost/`, e `localhost:5173` em dev). Outras permissões seguem o padrão do WebView2. As configurações de privacidade do Windows continuam valendo.
+
+**Verificado no app instalado** (perfil WebView2 isolado, servidor de teste, um bot na sala):
+- Modo release: a página vem de `http://tauri.localhost/`, e `window.__jaycCall` não existe.
+- **Entrada na sala:** pelo lobby, sem aviso de permissão e sem violações de CSP.
+- **Câmera:** chega ao bot em 1280×720.
+- **Microfone nativo:** WASAPI → AudioWorklet → faixa → WebRTC. Medido no envio (`media-source`: nível variando, energia subindo), e no bot chega áudio real (pico −50,9 dBFS numa sala silenciosa, com supressão de ruído).
+- **Tela inteira com som:** com o seletor trocado por um canvas, um tom de teste tocado em outro processo chega ao bot em estéreo, a −37 dBFS (L 445 Hz, R 656 Hz; o tom era 440/660 Hz).
+- **Não testado:** o seletor de tela real e o SmartScreen numa máquina sem o projeto.
+
 ### Customização (entre a 12 e a 13, a pedido do usuário)
 
 Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão descartados: eles alcançariam o IPC do Tauri (captura de áudio, tela e microfone). A customização vem em três partes:

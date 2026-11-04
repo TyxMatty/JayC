@@ -37,7 +37,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "TyxMatty",
+    "copyright": "© 2026 TyxMatty. MIT License.",
+    "homepage": "https://github.com/TyxMatty/JayC",
     "category": "SocialNetworking",
     "shortDescription": "Lightweight calls and screen sharing",
     "icon": [
@@ -47,6 +50,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

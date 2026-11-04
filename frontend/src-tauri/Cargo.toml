@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Jay-C — lightweight calls and screen sharing"
 authors = ["TyxMatty"]
 license = "MIT"
-repository = ""
+repository = "https://github.com/TyxMatty/JayC"
 edition = "2024"
 rust-version = "1.90"
 
@@ -24,6 +24,11 @@ tauri = { version = "2.12.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-system-audio = { path = "../../plugins/tauri-plugin-system-audio" }
 tauri-plugin-pip = { path = "../../plugins/tauri-plugin-pip" }
+
+[target.'cfg(windows)'.dependencies]
+# Same versions as wry's, to reach the WebView2 controller it creates.
+webview2-com = "0.39"
+windows = "0.62"
 
 [profile.release]
 # Smaller, leaner binaries.

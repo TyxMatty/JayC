@@ -1,3 +1,6 @@
+#[cfg(windows)]
+mod media_permissions;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -10,6 +13,13 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+            #[cfg(windows)]
+            {
+                use tauri::Manager;
+                if let Some(window) = app.get_webview_window("main") {
+                    media_permissions::allow_for_app(&window);
+                }
             }
             Ok(())
         })

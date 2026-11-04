@@ -87,7 +87,7 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 
 ## 5. Estado atual
 
-**Etapas 0 a 13 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
+**Etapas 0 a 13 prontas, e a 14.A (instalador Windows)** (detalhes em `docs/ARQUITETURA.md`, seção 10).
 
 | Etapa | O que entrega |
 |---|---|
@@ -103,12 +103,14 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 
 Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Plugins ficaram para depois do release**: plugins sem isolamento no cliente estão descartados, porque alcançariam o IPC do Tauri (captura de áudio, tela e microfone).
 
-**Próxima: etapa 14 (release: Windows `.exe` e Android `.apk`).**
+**Próxima: 14.B (APK de release assinado).** As partes da etapa 14 estão em ARQUITETURA.md, seção 10, "Release".
 
 O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
+
+**Instalador Windows:** `npm run build` gera `<target>\release\bundle\nsis\Jay-C_<versão>_x64-setup.exe`. Leva ~7–9 min, por causa do LTO.
 
 **Android em dev** (emulador ou celular com depuração USB):
 - **Modo de Desenvolvedor do Windows ligado:** o Tauri cria symlinks para a `.so` em `jniLibs`.

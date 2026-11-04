@@ -1547,6 +1547,8 @@ dependencies = [
  "tauri-plugin-log",
  "tauri-plugin-pip",
  "tauri-plugin-system-audio",
+ "webview2-com",
+ "windows",
 ]
 
 [[package]]

@@ -41,7 +41,10 @@ npm test             # testes do servidor e do frontend (node:test)
   - **cdp-eval no Android:** `adb forward tcp:9223 localabstract:webview_devtools_remote_<pid do app>` e passe `9223` como porta. A página é `http://tauri.localhost/`.
   - **Screenshot do emulador:** use `adb exec-out screencap -p > arquivo.png` no **Bash**. O PowerShell 5.1 corrompe o binário no redirecionamento.
   - **Vite em dev:** no primeiro uso de um módulo novo, o otimizador de dependências pode recarregar a página e derrubar a chamada. Entre de novo.
-- **Diagnóstico de áudio:** `cargo run --example output_meter` (nível do que sai no alto-falante) e `--example mic_open` (abre o microfone com WASAPI puro), dentro de `plugins/tauri-plugin-system-audio`. `node scripts/make-tone.mjs` gera um tom estéreo de teste.
+- **Testar o app instalado (release)** sem mexer no de dev: rode `%LOCALAPPDATA%\Jay-C\jay-c.exe` com `WEBVIEW2_USER_DATA_FOLDER` apontando para uma pasta de teste e `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9224`. O release e o dev têm o mesmo identificador e dividiriam o perfil do WebView2. Em release não existe `window.__jaycCall`: dirija pelo DOM.
+- **Screenshot de uma janela:** use `PrintWindow` (flag 2) no HWND do app. O `CopyFromScreen` pega o que estiver na frente, e pegou um app pessoal do usuário.
+- **Medir o áudio recebido no bot:** a página do bot precisa de um clique real (user activation), e a faixa remota precisa estar num `<audio>` mudo tocando. Sem isso, o Chrome entrega silêncio ao WebAudio, e o `totalAudioEnergy` fica 0 para qualquer participante. Isso parece um bug do app, mas não é.
+- **Diagnóstico de áudio:** `cargo run --example output_meter` (nível do que sai no alto-falante) e `--example mic_open` (abre o microfone com WASAPI puro e mostra o nível; zeros = mic mudo ou bloqueado), dentro de `plugins/tauri-plugin-system-audio`. `node scripts/make-tone.mjs` gera um tom estéreo de teste.
 
 ## Fatos técnicos que custaram para descobrir
 
