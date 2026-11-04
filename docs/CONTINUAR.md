@@ -42,7 +42,7 @@ Opcionais:
 | Ferramenta | Para quê | Como |
 |---|---|---|
 | Docker Desktop | rodar o servidor em container (`docker compose`) | `winget install -e --id Docker.DockerDesktop` |
-| Android Studio + SDK/NDK | só na etapa 13 (Android) | ver `docs/ARQUITETURA.md`, seção 9 |
+| Android Studio + SDK/NDK | só para o Android | ver `docs/ARQUITETURA.md`, seção 9 |
 
 O WebView2 já vem no Windows 11.
 
@@ -83,11 +83,11 @@ npm test           # testes
 
 ## 4. Claude Code no PC novo
 
-Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 13."*
+Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 14."*
 
 ## 5. Estado atual
 
-**Etapas 0 a 12 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
+**Etapas 0 a 13 prontas** (detalhes em `docs/ARQUITETURA.md`, seção 10).
 
 | Etapa | O que entrega |
 |---|---|
@@ -98,18 +98,26 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.
 | Guia de setup | modal "Server setup guide" (lobby e Settings › Server) com duas abas: **Connecting** (só conectar: endereço, sala, o que fazer se não conectar) e **Hosting** (os 5 passos, portas, firewall, VPN e a conta de banda de upload; Markdown próprio e 5 imagens) |
 | PiP (desktop) | o vídeo em destaque (tela compartilhada ou câmera) flutua sobre as outras janelas, troca sozinho e tem botões de mic, câmera e desligar |
 | Microfone nativo (Windows) | WASAPI + AudioProcessing do WebRTC (eco/ruído/ganho) para não abafar os outros apps, com opções em Settings › Microphone aplicadas ao vivo |
+| Android | APK de debug com câmera e microfone; entra na chamada e, ao sair do app, vira uma mini-janela (PiP) com o vídeo em destaque. Testado no emulador. |
 | Customização | Settings › Appearance: cor dos botões e fundo em degradê (barra do topo translúcida). Barra da chamada arrastável em qualquer borda, com ordem livre (também por teclado em Settings › Call controls). Foto de perfil que aparece quando a câmera está desligada. |
 
 Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Plugins ficaram para depois do release**: plugins sem isolamento no cliente estão descartados, porque alcançariam o IPC do Tauri (captura de áudio, tela e microfone).
 
-**Próxima: etapa 13 (Android).**
+**Próxima: etapa 14 (iOS, só o código).**
 
 Depois vêm: 14 iOS (código) e 15 release (imagem no GHCR e instaladores).
 
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
 
+**Android em dev** (emulador ou celular com depuração USB):
+- **Modo de Desenvolvedor do Windows ligado:** o Tauri cria symlinks para a `.so` em `jniLibs`.
+- `scriptsndroid-dev.ps1` recarrega PATH, `JAVA_HOME`, `ANDROID_HOME` e `NDK_HOME` e roda `tauri android dev`. O app carrega o Vite pelo IP do PC na porta 5173.
+- **Servidor no emulador:** use `10.0.2.2:3000`, que é o PC visto de dentro do emulador. No celular, use o IP do PC na rede.
+- **Permissões:** o app pede câmera e microfone na primeira chamada. Em testes automáticos, conceda antes com `adb shell pm grant io.github.tyxmatty.jayc.debug android.permission.CAMERA` (e `RECORD_AUDIO`).
+
 **Ainda não verificado:**
+- Android num celular real, e o PiP no Android 8–11 (entrada pelo user-leave hint).
 - Sala com 16 pessoas com mídia real (foi testado com 6 abas, e com 16 só no protocolo).
 - IP de VPN (ZeroTier/Radmin).
 - Som no modo janela com o seletor real (o caminho foi validado por partes).

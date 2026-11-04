@@ -36,6 +36,11 @@ npm test             # testes do servidor e do frontend (node:test)
   - **Arraste e clique reais:** `Input.dispatchMouseEvent` do CDP gera pointer events de verdade.
   - **Segundo participante:** um `new Call()` na mesma página, com `getUserMedia`/`getDisplayMedia` trocados por canvas, entra na sala como "bot".
   - **Servidor de teste sem mexer no do usuário:** `PORT=3001 RTC_PORT=40001 node src/server.js` em `signaling-server/`.
+- **Android:** `scripts/android-dev.ps1` (precisa do Modo de Desenvolvedor do Windows, por causa dos symlinks). Rode-o pela ferramenta PowerShell em segundo plano, com log: no terminal do painel, o `tauri android dev` não achou o SDK.
+  - **Emulador:** chega ao PC por `10.0.2.2`. Permissões de câmera e mic: `adb shell pm grant io.github.tyxmatty.jayc.debug android.permission.CAMERA`.
+  - **cdp-eval no Android:** `adb forward tcp:9223 localabstract:webview_devtools_remote_<pid do app>` e passe `9223` como porta. A página é `http://tauri.localhost/`.
+  - **Screenshot do emulador:** use `adb exec-out screencap -p > arquivo.png` no **Bash**. O PowerShell 5.1 corrompe o binário no redirecionamento.
+  - **Vite em dev:** no primeiro uso de um módulo novo, o otimizador de dependências pode recarregar a página e derrubar a chamada. Entre de novo.
 - **Diagnóstico de áudio:** `cargo run --example output_meter` (nível do que sai no alto-falante) e `--example mic_open` (abre o microfone com WASAPI puro), dentro de `plugins/tauri-plugin-system-audio`. `node scripts/make-tone.mjs` gera um tom estéreo de teste.
 
 ## Fatos técnicos que custaram para descobrir
@@ -51,4 +56,5 @@ npm test             # testes do servidor e do frontend (node:test)
 - **PiP no WebView2:** `video.requestPictureInPicture()` funciona e a janela fica sempre no topo. O **Document PiP não funciona**: a API existe, mas falha com "no window". Os controles do PiP vêm da Media Session.
 - **Faixas remotas chegam `muted`** e só desmutam com os primeiros quadros, sem evento de participante. Uma interface que depende de "tem vídeo?" precisa ouvir `mute`/`unmute` da faixa.
 - **Cor escolhida pelo usuário como texto** (o hífen da marca, as iniciais) usa `--accent-text`, misturada com a cor de texto do tema. Medido: ≥ 5,4:1 nos dois temas.
+- **PiP no Android = a activity inteira** (a WebView não tem PiP de `<video>`). Em PiP, o Android pausa a activity e o wry pausa a WebView junto: a mini-janela congela e a página fica `hidden`. O plugin `pip` chama `webView.onResume()` enquanto está em PiP. O evento `pipModeChanged` só chega no fim da animação do sistema (~4,5 s no emulador).
 - **Python no Windows grava CRLF** com `write_text`. Use `newline="\n"`, ou o arquivo aparece como modificado.

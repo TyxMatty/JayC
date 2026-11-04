@@ -201,7 +201,9 @@ export function createCallView(call, { displayName, onLeft }) {
       }
     }
     const track = pickPipTrack(call.participants.values());
-    if (pip.open) {
+    if (pip.followsFeatured) {
+      pip.show(track); // Android: the app may float on its own at any moment (leaving the app)
+    } else if (pip.open) {
       if (track) pip.show(track);
       else pip.exit().catch(() => {}); // nothing left to show
     }
@@ -373,6 +375,7 @@ export function createCallView(call, { displayName, onLeft }) {
   call.addEventListener('ended', () => {
     clearTimeout(toastTimer);
     pip?.exit().catch(() => {});
+    pip?.destroy?.();
     controlBar.destroy();
     onLeft();
   });

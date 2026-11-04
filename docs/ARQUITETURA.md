@@ -92,6 +92,7 @@ JayC/
 │  │  ├─ core/media.js          # getUserMedia / getDisplayMedia
 │  │  ├─ core/quality.js        # presets → constraints + sender params
 │  │  ├─ core/pip.js            # abstração de PiP por plataforma
+│  │  ├─ core/activity-pip.js   # PiP do Android (a activity inteira flutua)
 │  │  ├─ core/platform.js       # detecta desktop/android/ios via @tauri-apps/plugin-os
 │  │  ├─ ui/call-view.js, ui/settings-modal.js, ui/setup-guide-modal.js
 │  │  ├─ ui/markdown.js         # renderer mínimo
@@ -105,11 +106,9 @@ JayC/
 │  ├─ src/lib.rs, src/commands.rs
 │  ├─ src/windows/{loopback.rs, sessions.rs, mixer.rs}
 │  └─ guest-js/index.js        # listAudioApps(), startCapture(), stopCapture()
-└─ plugins/tauri-plugin-pip/
-   ├─ src/lib.rs, src/mobile.rs, src/desktop.rs, src/commands.rs
-   ├─ android/src/main/java/.../PipPlugin.kt
-   ├─ ios/Sources/PipPlugin.swift
-   └─ guest-js/index.js         # enterPip(), isPipSupported(), onPipChanged()
+└─ plugins/tauri-plugin-pip/   # PiP da activity no Android; o app chama `invoke('plugin:pip|…')` direto
+   ├─ build.rs, src/lib.rs, permissions/default.toml
+   └─ android/src/main/java/.../PipPlugin.kt   # (ios/ na etapa 14)
 ```
 
 ## 4. Protocolo de sinalização (JSON via WebSocket)
@@ -277,7 +276,7 @@ A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8
 | Windows (WebView2/Chromium) ✅ | `video.requestPictureInPicture()` num `<video>` fora do DOM. A janela fica sempre no topo (`WS_EX_TOPMOST`, medido). Os botões de microfone, câmera e desligar vêm da Media Session API (`togglemicrophone`, `togglecamera`, `hangup`). O **Document PiP não funciona**: a API existe no WebView2, mas `requestWindow` falha com "Internal error: no window" (3 de 3 tentativas). |
 | macOS (WKWebView) | `video.requestPictureInPicture()` (Safari 13.1+) |
 | Linux (WebKitGTK) / fallback geral | **Mini-janela Tauri**: `WebviewWindow` pequena com `alwaysOnTop: true`, sem decoração, exibindo o stream remoto |
-| Android | Plugin Kotlin: `activity.enterPictureInPictureMode(PictureInPictureParams)` com aspect ratio 16:9. `setAutoEnterEnabled(true)` (API 31+) ou `onUserLeaveHint` entram em PiP sozinhos quando o app vai para segundo plano. Manifest: `android:supportsPictureInPicture="true"` e `resizeableActivity`. |
+| Android ✅ | Plugin Kotlin `tauri-plugin-pip`: a **activity inteira** flutua, porque a Android WebView não tem PiP de `<video>`. `setAutoEnterEnabled(true)` (API 31+) ou o user-leave hint (API 26–30) entram em PiP ao sair do app durante a chamada; o botão "Pop out video" chama `enter`. Manifest: `android:supportsPictureInPicture="true"` e `resizeableActivity`. |
 | iOS | Plugin Swift: `AVPictureInPictureController` com `AVPictureInPictureVideoCallViewController` (iOS 15+), `canStartPictureInPictureAutomaticallyFromInline = true` e background modes `audio` + `voip`. Alternativa mais simples a avaliar: `video.webkitSetPresentationMode('picture-in-picture')` do próprio WKWebView. |
 
 **Desktop:**
@@ -287,6 +286,17 @@ A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8
 - **Sem entrada automática:** o PiP não abre sozinho ao minimizar, porque o pedido precisa de um clique do usuário.
 - **Faixas remotas:** chegam `muted` e só desmutam com os primeiros quadros, sem evento de participante. Por isso o botão também escuta `mute`/`unmute`/`ended` das faixas.
 
+**Android** (`core/activity-pip.js` + `plugins/tauri-plugin-pip`):
+- **Entrada:** durante a chamada, a página liga a entrada automática com a proporção do vídeo em destaque (o Android limita entre 1:2,39 e 2,39:1). Sair do app (Home, recentes) ou o botão encolhem a activity.
+- **Layout compacto:** o plugin manda o evento `pipModeChanged`. A página marca `html[data-activity-pip]` e o CSS mostra só um `<video>` em tela cheia com a faixa em destaque, que troca como no desktop.
+- **WebView pausada:** o Android pausa a activity em PiP, e o `WryActivity.onPause` pausa a WebView junto. A mini-janela congelava no último quadro (o topo da interface), e a página ficava `hidden`. Por isso o plugin chama `webView.onResume()` enquanto está em PiP. O `onPause` dos plugins roda depois do da WryActivity. Se o PiP fechar sem voltar ao app, o plugin pausa a WebView de novo.
+- **Medido no emulador (Android 16, API 36):**
+  - Pelo Home, o evento chega à página ~4,5 s depois. É o tempo da animação do sistema (`sendOnPipTransitionFinished` nos logs); o app soma ~0,2 s. A primeira entrada depois de instalar levou 17 s e não se repetiu.
+  - Pelo botão, o PiP abre em 4,5 s.
+  - Em PiP, a página fica visível a 228×128 e o vídeo roda a 10–16 fps.
+  - Ao expandir, o layout volta em ~2 s e a chamada continua.
+  - Não testado num celular real nem no Android 8–11.
+
 ## 8. Riscos conhecidos (importante)
 
 1. **Compartilhar tela no mobile não funciona via `getDisplayMedia`.** Android WebView e iOS WKWebView não implementam essa API.
@@ -295,7 +305,7 @@ A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8
    - Proposta: **no mobile, o v1 só recebe tela e faz chamada de câmera e áudio**. Compartilhar tela pelo celular fica para uma fase posterior.
 2. **iOS só compila num Mac com Xcode.** Neste PC Windows dá para escrever o código Swift, mas não para compilar nem testar.
 3. **Linux/WebKitGTK** tem suporte parcial a `getDisplayMedia` e WebRTC, dependendo da versão. O alvo principal é Windows, com macOS em seguida.
-4. **Permissões no Android**: câmera e microfone precisam estar declarados no manifest e ser concedidos em runtime. A WebView também precisa aceitar o `onPermissionRequest`. Isso será validado na etapa Android.
+4. **Permissões no Android**: câmera e microfone precisam estar declarados no manifest e ser concedidos em runtime. A WebView também precisa aceitar o `onPermissionRequest`. Validado na etapa 13: o wry já pede CAMERA e RECORD_AUDIO no `onPermissionRequest`, então basta declarar no manifest.
 5. **Guia de setup**:
    - Para `docker compose up -d` "baixar o servidor automaticamente", a imagem precisa estar **publicada num registry** (GHCR ou Docker Hub). Isso exige um repositório GitHub público.
    - O comando atual é `docker compose` (com espaço). `docker-compose` é o v1, descontinuado. Vou ajustar o texto do guia.
@@ -348,7 +358,7 @@ Cada etapa termina com algo testável.
 | 10 ✅ | **Modos completos + Settings › Streaming** | Tela inteira: com o Discord excluído, ninguém ouve o Discord nem as vozes da chamada. Janela: só o áudio daquele app é transmitido. |
 | 11 ✅ | PiP desktop | o vídeo remoto flutua sobre outras janelas |
 | 12 ✅ | Modal do guia + renderer Markdown + imagens (com a porta de mídia e a nota sobre banda) | o guia renderiza com as 5 imagens nos dois temas |
-| 13 | Android: `tauri android init`, permissões, plugin PiP Kotlin | o APK roda no emulador ou no celular, entra em chamada e vai para PiP ao minimizar |
+| 13 ✅ | Android: `tauri android init`, permissões, plugin PiP Kotlin | o APK roda no emulador ou no celular, entra em chamada e vai para PiP ao minimizar |
 | 14 | iOS: plugin Swift (código) | código escrito; build pendente de um Mac |
 | 15 | Release: imagem no GHCR + bundles Tauri (`.msi`/`.exe`, `.apk`) | o guia de 5 passos funciona do zero numa máquina limpa |
 

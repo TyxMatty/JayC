@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-auto-enter"
+description = "Enables the set_auto_enter command without any pre-configured scope."
+commands.allow = ["set_auto_enter"]
+
+[[permission]]
+identifier = "deny-set-auto-enter"
+description = "Denies the set_auto_enter command without any pre-configured scope."
+commands.deny = ["set_auto_enter"]

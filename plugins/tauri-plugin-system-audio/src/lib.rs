@@ -127,6 +127,7 @@ type RunningMic = ();
 struct MicState(Mutex<Option<RunningMic>>);
 
 /// Sends interleaved f32 samples to the webview as little-endian bytes.
+#[cfg(windows)]
 fn send_samples(channel: &Channel<InvokeResponseBody>, samples: &[f32]) {
     let mut bytes = Vec::with_capacity(samples.len() * 4);
     for s in samples {
@@ -135,6 +136,7 @@ fn send_samples(channel: &Channel<InvokeResponseBody>, samples: &[f32]) {
     let _ = channel.send(InvokeResponseBody::Raw(bytes));
 }
 
+#[cfg(windows)]
 fn send_error(channel: &Channel<InvokeResponseBody>, error: String) {
     log::warn!("system-audio: {error}");
     let _ = channel.send(InvokeResponseBody::Json(serde_json::json!({ "error": error }).to_string()));

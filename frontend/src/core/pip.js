@@ -1,8 +1,10 @@
 // Picture-in-Picture on the desktop: WebView2's video PiP, an always-on-top window, with the call's
 // mic / camera / hang-up buttons through the Media Session API. Document PiP exists in WebView2 but
 // can't open its window ("no window"), see docs/ARQUITETURA.md section 7.
+// On Android the whole app floats instead (activity-pip.js); createPip() picks the right one.
+import { isAndroidApp, createActivityPip } from './activity-pip.js';
 
-export const pipSupported = () => globalThis.document?.pictureInPictureEnabled === true;
+export const pipSupported = () => globalThis.document?.pictureInPictureEnabled === true || isAndroidApp();
 
 const showing = (track) => track?.readyState === 'live' && !track.muted && track.enabled;
 
@@ -33,7 +35,8 @@ const ACTIONS = ['togglemicrophone', 'togglecamera', 'hangup'];
  *   onLeave: the window closed (also from its own close button).
  */
 export function createPip(handlers) {
-  const video = Object.assign(document.createElement('video'), { muted: true, autoplay: true, playsInline: true });
+  if (isAndroidApp()) return createActivityPip(handlers);
+  const video =Object.assign(document.createElement('video'), { muted: true, autoplay: true, playsInline: true });
   const setHandlers = (on) => {
     for (const action of ACTIONS) {
       try {

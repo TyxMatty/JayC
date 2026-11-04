@@ -23,6 +23,7 @@ log = "0.4"
 tauri = { version = "2.12.5", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-system-audio = { path = "../../plugins/tauri-plugin-system-audio" }
+tauri-plugin-pip = { path = "../../plugins/tauri-plugin-pip" }
 
 [profile.release]
 # Smaller, leaner binaries.

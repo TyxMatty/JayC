@@ -1,0 +1,15 @@
+[package]
+name = "tauri-plugin-pip"
+version = "0.1.0"
+description = "Picture-in-Picture for Jay-C on mobile (Android: the activity shrinks to a floating window)"
+authors = ["TyxMatty"]
+license = "MIT"
+edition = "2024"
+rust-version = "1.90"
+links = "tauri-plugin-pip"
+
+[dependencies]
+tauri = { version = "2.12" }
+
+[build-dependencies]
+tauri-plugin = { version = "2.7", features = ["build"] }

@@ -1,0 +1,9 @@
+[default]
+description = "Lets the app put itself in Picture-in-Picture during a call and hear when it does (mobile)."
+permissions = [
+  "allow-is-supported",
+  "allow-set-auto-enter",
+  "allow-enter",
+  "allow-register-listener",
+  "allow-remove-listener",
+]

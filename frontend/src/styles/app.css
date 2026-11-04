@@ -1144,6 +1144,29 @@ fieldset > h3 {
   background: var(--accent-hover);
 }
 
+/* ---------- Android PiP (core/activity-pip.js) ---------- */
+
+/* While the whole app floats, show only the featured video. `visibility` (not `display`) keeps the
+   rest laid out and the call's audio playing from the hidden tiles. */
+.activity-pip-video {
+  display: none;
+}
+
+html[data-activity-pip] .activity-pip-video {
+  display: block;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+  z-index: 1000;
+}
+
+html[data-activity-pip] body > :not(.activity-pip-video) {
+  visibility: hidden;
+}
+
 /* ---------- Share panel (popover) ---------- */
 
 .share-panel {
