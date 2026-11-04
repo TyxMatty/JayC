@@ -107,6 +107,8 @@ Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Pl
 
 O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
+**Tour "Welcome!" (04/11/2026):** W1 pronta: 7 cards, abre na primeira vez e reabre por Settings › Help. Falta a **W2**, com as ilustrações animadas no lugar dos ícones. Plano e detalhes em ARQUITETURA.md, seção 10, "Tour Welcome!".
+
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
 

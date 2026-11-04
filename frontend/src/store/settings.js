@@ -38,6 +38,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   micGate: null,
   /** Speakers for the call's sound: a deviceId from enumerateDevices, or '' = the default. */
   outputDevice: '',
+  /** The "Welcome!" tour (core/welcome.js) already opened by itself once; Settings › Help reopens it. */
+  welcomeSeen: false,
 });
 
 function load() {

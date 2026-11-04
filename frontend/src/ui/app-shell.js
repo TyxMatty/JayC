@@ -7,6 +7,8 @@ import { Call } from '../core/call.js';
 import { toggleTheme, currentTheme } from './theme.js';
 import { createSettingsModal } from './settings-modal.js';
 import { createSetupGuideModal } from './setup-guide-modal.js';
+import { createWelcomeModal } from './welcome-modal.js';
+import { shouldShowWelcome } from '../core/welcome.js';
 import { createLobby } from './lobby.js';
 import { createCallView } from './call-view.js';
 import { addRecentRoom } from '../core/recent-rooms.js';
@@ -64,8 +66,10 @@ export function mountApp(root) {
   const guideModal = createSetupGuideModal();
   const openGuide = () => guideModal.open();
   let currentCall = null;
-  const settingsModal = createSettingsModal({ openGuide, getCall: () => currentCall });
+  let welcomeModal = null;
+  const settingsModal = createSettingsModal({ openGuide, getCall: () => currentCall, openWelcome: () => welcomeModal.open() });
   const openSettings = (focus) => settingsModal.open(focus);
+  welcomeModal = createWelcomeModal({ openGuide, openSettings });
   const view = h('div', { class: 'view' });
   let destroyView = () => {};
 
@@ -137,6 +141,12 @@ export function mountApp(root) {
     }),
   );
 
-  root.replaceChildren(header, view, settingsModal.element, guideModal.element);
+  root.replaceChildren(header, view, settingsModal.element, guideModal.element, welcomeModal.element);
   showLobby();
+  // Marked as seen when it opens (not on close): it shows by itself once, even if the app is
+  // closed mid-tour, and doesn't depend on the dialog's close event.
+  if (shouldShowWelcome(settings.get())) {
+    settings.update({ welcomeSeen: true });
+    welcomeModal.open();
+  }
 }
