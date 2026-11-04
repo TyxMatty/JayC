@@ -9,6 +9,7 @@ import { createSettingsModal } from './settings-modal.js';
 import { createSetupGuideModal } from './setup-guide-modal.js';
 import { createLobby } from './lobby.js';
 import { createCallView } from './call-view.js';
+import { addRecentRoom } from '../core/recent-rooms.js';
 
 const STATUS_LABELS = {
   unset: 'No server',
@@ -95,7 +96,7 @@ export function mountApp(root) {
       micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
     });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
-    settings.update({ lastRoom: room });
+    settings.update({ lastRoom: room, recentRooms: addRecentRoom(settings.get().recentRooms, room) });
     // Microphone and streaming options changed in Settings apply to the running call.
     const unsubscribe = settings.subscribe((next, prev) => {
       if (next.micProcessing !== prev.micProcessing) {

@@ -194,6 +194,91 @@ select {
   box-shadow: var(--shadow);
 }
 
+/* Lobby: your profile card on top (banner in your profile color, avatar overlapping it). */
+.lobby-card {
+  overflow: hidden;
+}
+
+.lobby-profile {
+  margin: -24px -24px 20px;
+}
+
+.lobby-profile-banner {
+  height: 72px;
+  background: var(--tile-bg, var(--surface-2));
+}
+
+.lobby-profile-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: -32px;
+  padding: 0 24px;
+}
+
+.lobby-profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 4px solid var(--surface);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--accent-text, var(--accent));
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.lobby-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lobby-profile-name {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 6px;
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn.btn-small {
+  margin-bottom: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.recent-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-chip-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.room-chip-btn:hover {
+  border-color: var(--accent);
+}
+
+.room-chip-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .card h1 {
   margin: 0 0 4px;
   font-size: 22px;

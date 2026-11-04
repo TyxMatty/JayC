@@ -1,12 +1,13 @@
 import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import { serverStatus } from '../core/server-status.js';
+import { profileBackground } from '../core/profile-color.js';
 
 // Must match the signaling server's room-name rule.
 const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 const JOIN_ERRORS = {
-  'room-full': 'This room is full (4 people max).',
+  'room-full': 'This room is full.',
   unreachable: "Couldn't reach the server. Check Settings › Server.",
   timeout: "The server didn't answer. Check Settings › Server.",
   'bad-message': 'The server rejected that name or room.',
@@ -46,6 +47,63 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     placeholder: 'e.g. friday-game-night',
     value: current.lastRoom,
   });
+
+  // Rooms joined lately: one click joins again.
+  const recentList = h('div', { class: 'recent-rooms', role: 'group', 'aria-labelledby': 'recent-rooms-label' });
+  const recentField = h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'recent-rooms-label' }, 'Recent rooms'), recentList);
+  const renderRecent = () => {
+    const { recentRooms, lastRoom } = settings.get();
+    const rooms = recentRooms.length ? recentRooms : lastRoom ? [lastRoom] : [];
+    recentField.hidden = rooms.length === 0;
+    recentList.replaceChildren(
+      ...rooms.map((room) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'room-chip-btn',
+            'aria-label': `Join ${room}`,
+            onClick: () => {
+              roomInput.value = room;
+              clearError();
+              if (!joinButton.disabled) form.requestSubmit();
+              else roomInput.focus();
+            },
+          },
+          room,
+        ),
+      ),
+    );
+  };
+
+  // How others see you: profile color, picture or initial, and name (Settings › Profile edits it).
+  const profileAvatar = h('div', { class: 'lobby-profile-avatar', 'aria-hidden': 'true' });
+  const profileName = h('strong', { class: 'lobby-profile-name' });
+  const profile = h(
+    'div',
+    { class: 'lobby-profile' },
+    h('div', { class: 'lobby-profile-banner' }),
+    h(
+      'div',
+      { class: 'lobby-profile-row' },
+      profileAvatar,
+      profileName,
+      h('button', { type: 'button', class: 'btn btn-secondary btn-small', onClick: () => openSettings('profile') }, 'Edit profile'),
+    ),
+  );
+  const renderProfile = () => {
+    const { displayName, avatar, profileColor } = settings.get();
+    const name = displayName.trim();
+    profile.style.setProperty('--tile-bg', profileBackground(profileColor, name));
+    profileName.textContent = name || 'Pick a name below';
+    profileAvatar.replaceChildren(avatar ? h('img', { src: avatar, alt: '' }) : (name[0] ?? '?').toUpperCase());
+  };
+  cleanups.push(
+    settings.subscribe((next, prev) => {
+      if (next.displayName !== prev.displayName || next.avatar !== prev.avatar || next.profileColor !== prev.profileColor) renderProfile();
+      if (next.recentRooms !== prev.recentRooms || next.lastRoom !== prev.lastRoom) renderRecent();
+    }),
+  );
 
   const joinButton = h('button', { type: 'submit', class: 'btn' }, 'Join room');
   const hint = h('p', { class: 'hint', 'aria-live': 'polite' });
@@ -105,19 +163,20 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     }
   };
 
-  const element = h(
-    'main',
-    { class: 'lobby' },
-    h(
-      'form',
-      { class: 'card', onSubmit },
-      h('h1', {}, 'Join a room'),
-      h('p', {}, 'Share the room name with friends on the same server.'),
-      h('div', { class: 'field' }, h('label', { for: 'lobby-name' }, 'Display name'), nameInput),
-      h('div', { class: 'field' }, h('label', { for: 'lobby-room' }, 'Room'), roomInput),
-      h('div', { class: 'field' }, joinButton, hint),
-    ),
+  const form = h(
+    'form',
+    { class: 'card lobby-card', onSubmit },
+    profile,
+    h('h1', {}, 'Join a room'),
+    h('p', {}, 'Share the room name with friends on the same server.'),
+    h('div', { class: 'field' }, h('label', { for: 'lobby-name' }, 'Display name'), nameInput),
+    h('div', { class: 'field' }, h('label', { for: 'lobby-room' }, 'Room'), roomInput),
+    recentField,
+    h('div', { class: 'field' }, joinButton, hint),
   );
+  const element = h('main', { class: 'lobby' }, form);
+  renderProfile();
+  renderRecent();
 
   return {
     element,

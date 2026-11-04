@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   /** 'system' | 'light' | 'dark' */
   theme: 'system',
   lastRoom: '',
+  /** Rooms joined lately, newest first (core/recent-rooms.js), for one-click rejoining. */
+  recentRooms: [],
   /** Last screen-share choices: 'screen' | 'window', and { resolution, fps, optimizeFor }. */
   shareMode: 'screen',
   streamQuality: DEFAULT_STREAM_QUALITY,
