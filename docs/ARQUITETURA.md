@@ -258,7 +258,7 @@ Tudo fica no painel "Share" da chamada, que é um `popover`. As escolhas são sa
 
 Bitrate automático: ~0,08 bit/pixel/quadro, e os quadros acima de 30 fps contam pela metade. Dá ≈5 Mbps em 1080p30 e ≈7,5 Mbps em 1080p60, entre 0,2 e 12 Mbps.
 
-A tela vai numa única camada, sem simulcast, com o codec padrão do router (VP8). Usar H.264 com encoder por hardware, para gastar menos CPU em 1080p60, fica como otimização futura: exige um `profile-level-id` que suporte 1080p.
+A tela vai numa única camada, sem simulcast, em **H.264 High** (`profile-level-id` 640032, adicionado ao router). Com esse perfil, o WebView2 usa o encoder da placa de vídeo (Media Foundation: `NVIDIA H.264 Encoder MFT` medido numa RTX 3050). O H.264 constrained baseline (42e01f) fica no OpenH264 em software, mesmo em 720p, e o VP8 fica no libvpx. Servidor antigo, sem o perfil High: VP8. Durante a live de **tela inteira**, a janela do Jay-C sai da captura (`setContentProtected` = `WDA_EXCLUDEFROMCAPTURE`), para não filmar a própria prévia (efeito espelho).
 
 **Para quem assiste:** o layout vira *presenting*, com as telas em destaque e as câmeras numa faixa de 160 px (pedindo a camada mais baixa). Clique duplo na tela abre em tela cheia. Quem transmite vê uma prévia pequena no canto.
 

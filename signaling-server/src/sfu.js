@@ -14,6 +14,14 @@ export const MEDIA_CODECS = [
     clockRate: 90000,
     parameters: { 'packetization-mode': 1, 'profile-level-id': '42e01f', 'level-asymmetry-allowed': 1 },
   },
+  // High profile, for screen shares: WebView2 hands it to the GPU encoder (Media Foundation), while
+  // constrained baseline (42e01f) stays on OpenH264 in software (measured on an RTX 3050).
+  {
+    kind: 'video',
+    mimeType: 'video/H264',
+    clockRate: 90000,
+    parameters: { 'packetization-mode': 1, 'profile-level-id': '640032', 'level-asymmetry-allowed': 1 },
+  },
 ];
 
 /**

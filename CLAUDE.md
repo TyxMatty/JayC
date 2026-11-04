@@ -34,6 +34,7 @@ npm run build        # instalador Windows de release (NSIS), ~7–9 min
   - **Gesto do usuário:** o `cdp-eval` manda `userGesture: true`, e isso basta para PiP e popovers. Mas o gesto é consumido: um segundo `request*` no mesmo script falha.
   - **Módulos editados com o Vite rodando** passam a ser importados como `arquivo.js?t=…`. Um `import('/src/store/settings.js')` no teste cria **outra instância**, desconectada do app. Use a URL que o app carregou: `performance.getEntriesByType('resource')`.
   - **PowerShell 5.1 estraga aspas** de JS passado como argumento para o `node`. Passe o JS num arquivo.
+  - **Live real sem clicar no seletor:** acrescente `--auto-select-desktop-capture-source="Tela inteira"` ao `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`. O nome segue o idioma do Windows (em inglês, "Entire screen"). Para ter quadros novos, algo precisa mexer na tela: a captura só entrega quadros quando a imagem muda.
   - **Arraste e clique reais:** `Input.dispatchMouseEvent` do CDP gera pointer events de verdade.
   - **Segundo participante:** um `new Call()` na mesma página, com `getUserMedia`/`getDisplayMedia` trocados por canvas, entra na sala como "bot".
   - **Bot com som próprio:** rode-o numa página separada (o painel do navegador em `http://localhost:5173`, fora do Tauri), com `getUserMedia` trocado por um oscilador. Um bot dentro do app usa o **microfone nativo**, que é um só por processo: quando o app entra, o bot fica mudo. O `__TAURI_INTERNALS__.invoke` não pode ser trocado para evitar isso.

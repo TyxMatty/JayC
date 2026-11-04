@@ -101,6 +101,8 @@ describe('signaling server', () => {
     assert.match(a.msg.id, /^[0-9a-f-]{36}$/);
     const mimeTypes = a.msg.routerRtpCapabilities.codecs.map((c) => c.mimeType);
     for (const mime of ['audio/opus', 'video/VP8', 'video/H264']) assert.ok(mimeTypes.includes(mime), mime);
+    const h264Profiles = a.msg.routerRtpCapabilities.codecs.map((c) => c.parameters?.['profile-level-id']).filter(Boolean);
+    assert.ok(h264Profiles.includes('640032'), 'H.264 High, for the GPU encoder on screen shares');
 
     const b = await joined(port, 'room-join', 'Bob');
     assert.deepEqual(b.msg.peers, [{ id: a.msg.id, name: 'Alice', producers: [] }]);

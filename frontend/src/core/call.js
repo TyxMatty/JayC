@@ -513,6 +513,12 @@ export class Call extends EventTarget {
       track: this.local.screen,
       stopTracks: false,
       encodings: [this.#screenEncoding()],
+      // H.264 High gets the GPU encoder on Windows (Media Foundation: NVIDIA/AMD/Intel); VP8 and
+      // constrained-baseline H.264 stay in software and compete with the game being streamed.
+      // An older server without High leaves the default codec (VP8).
+      // shortcut: assumes every viewer decodes H.264 High (WebView2 and Android WebView do); a
+      // client without it gets 'cannot-consume' for this stream.
+      codec: this.#device.rtpCapabilities.codecs.find((c) => /^64/.test(c.parameters?.['profile-level-id'] ?? '')),
       codecOptions: { videoGoogleStartBitrate: 1000 },
       appData: { source: 'screen', mode: this.screenShare.mode },
     });

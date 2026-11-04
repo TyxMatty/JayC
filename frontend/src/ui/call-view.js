@@ -521,6 +521,19 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   camButton.addEventListener('click', guarded(camButton, () => call.toggleCamera(), 'camera'));
   call.addEventListener('local-updated', renderControls);
 
+  // Sharing the entire screen: keep this window out of the capture, or it films its own preview
+  // (a mirror that, measured, sent ~2.5x the data while focused). Windows: WDA_EXCLUDEFROMCAPTURE.
+  let hiddenFromCapture = false;
+  const hideFromCapture = (on) => {
+    if (on === hiddenFromCapture || !('__TAURI_INTERNALS__' in window)) return;
+    hiddenFromCapture = on;
+    import('@tauri-apps/api/window')
+      .then(({ getCurrentWindow }) => getCurrentWindow().setContentProtected(on))
+      .catch(() => {});
+  };
+  call.addEventListener('local-updated', () => hideFromCapture(call.screenShare?.mode === 'screen'));
+  call.addEventListener('ended', () => hideFromCapture(false));
+
   // ----- Who's speaking: a green ring on their tile -----
   // Our own level comes from our mic track, measured without playing it (we'd hear ourselves).
   const speaking = createSpeakingDetector();
