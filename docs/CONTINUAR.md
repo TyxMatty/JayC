@@ -171,4 +171,4 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
 - Tamanho da imagem Docker (379 MB).
 - Usar H.264 por hardware na transmissão de tela, para gastar menos CPU.
 - Bundle do frontend (~58 KB gzip, a maior parte do mediasoup-client).
-- O guia manda baixar o `docker-compose.yml` da página de releases e conta com a imagem publicada no GHCR. As duas coisas só existem na etapa 14.
+- O guia (aba Hosting) oferece duas formas. A **opção A, Node.js** (`npm install -w signaling-server` + `npm run server`), funciona hoje: num clone limpo, a instalação levou 11 s e baixou o `mediasoup-worker.exe` pronto. Ela pede o ZIP do GitHub numa pasta curta, porque o caminho mais longo do repositório tem 152 caracteres e um clone numa pasta funda falhou com "Filename too long". O ZIP só baixa com o repositório **público** (hoje é privado). A **opção B, Docker**, conta com o `docker-compose.yml` na página de releases e a imagem no GHCR, que só existem na etapa 14.
