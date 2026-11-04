@@ -1793,3 +1793,124 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
   color: #fff;
   font-weight: 600;
 }
+
+/* ---------- Motion (design review E) ----------
+   Only when the system allows motion. Uses the independent `translate`/`scale` properties so
+   elements positioned with `transform` (toast, share panel) keep their place. Entry animations use
+   @starting-style; dialogs and popovers also animate out (display/overlay allow-discrete). */
+@media (prefers-reduced-motion: no-preference) {
+  /* Dialogs (Settings, setup guide): fade and rise in, fade out. */
+  .modal {
+    transition:
+      opacity 180ms ease,
+      translate 180ms ease,
+      scale 180ms ease,
+      overlay 180ms allow-discrete,
+      display 180ms allow-discrete;
+  }
+
+  .modal:not([open]) {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+
+  @starting-style {
+    .modal[open] {
+      opacity: 0;
+      translate: 0 8px;
+      scale: 0.98;
+    }
+  }
+
+  .modal::backdrop {
+    transition:
+      opacity 180ms ease,
+      overlay 180ms allow-discrete,
+      display 180ms allow-discrete;
+  }
+
+  @starting-style {
+    .modal[open]::backdrop {
+      opacity: 0;
+    }
+  }
+
+  /* Popovers (share panel, right-click audio menu). */
+  [popover] {
+    transition:
+      opacity 150ms ease,
+      translate 150ms ease,
+      overlay 150ms allow-discrete,
+      display 150ms allow-discrete;
+  }
+
+  [popover]:not(:popover-open) {
+    opacity: 0;
+    translate: 0 6px;
+  }
+
+  @starting-style {
+    [popover]:popover-open {
+      opacity: 0;
+      translate: 0 6px;
+    }
+  }
+
+  /* Chat panel slides in from the side; toasts rise in. */
+  .chat-panel {
+    transition:
+      opacity 200ms ease,
+      translate 200ms ease;
+  }
+
+  @starting-style {
+    .chat-panel {
+      opacity: 0;
+      translate: 24px 0;
+    }
+  }
+
+  .call-toast {
+    transition:
+      opacity 200ms ease,
+      translate 200ms ease;
+  }
+
+  @starting-style {
+    .call-toast {
+      opacity: 0;
+      translate: 0 10px;
+    }
+  }
+
+  /* Someone joins (or a stream opens): their tile pops in. */
+  .tile {
+    animation: tile-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  }
+
+  @keyframes tile-in {
+    from {
+      opacity: 0;
+      scale: 0.94;
+    }
+  }
+
+  /* Settings tabs: the chosen panel fades in. */
+  .settings-panel:not([hidden]) {
+    animation: panel-in 160ms ease;
+  }
+
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      translate: 0 4px;
+    }
+  }
+
+  /* Focusing a stream (view transition in ui/call-view.js): tiles glide to their new place. */
+  ::view-transition-group(*) {
+    animation-duration: 260ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}

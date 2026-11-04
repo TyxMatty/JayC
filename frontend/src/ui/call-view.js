@@ -291,8 +291,13 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   /** The stream shown big: a participant id, 'local' (our own), or null (all streams share the stage). */
   let focusedScreen = null;
   const toggleFocus = (id) => {
-    focusedScreen = focusedScreen === id ? null : id;
-    layout();
+    const apply = () => {
+      focusedScreen = focusedScreen === id ? null : id;
+      layout();
+    };
+    // Tiles glide to their new places (each screen tile has its own view-transition-name).
+    if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply);
+    else apply();
   };
 
   const layout = () => {
@@ -360,6 +365,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         }),
       );
       tile.setMuted(mixer.get(streamKey(participant)).muted);
+      tile.el.style.viewTransitionName = `screen-${participant.id}`;
       screenTiles.set(participant.id, tile);
       screens.append(tile.el);
       layout();
@@ -417,6 +423,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         ...createScreenTile({ name: displayName, stream: call.screenStream, local: true, onFocus: () => toggleFocus('local') }),
         stream: call.screenStream,
       };
+      localScreenTile.el.style.viewTransitionName = 'screen-local';
       stage.append(localScreenTile.el);
       layout();
     }
