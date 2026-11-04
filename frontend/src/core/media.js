@@ -122,3 +122,17 @@ export function describeCapture(track) {
     windowHandle: match?.[1] === 'window' ? Number(match[2]) : null,
   };
 }
+
+const isH264High = (fmtp) => /profile-level-id=64/i.test(fmtp ?? '');
+
+/**
+ * The codec for a screen share: H.264 High when both the server and this browser can send it.
+ * On Windows it goes to the GPU encoder (Media Foundation); VP8 and constrained-baseline H.264 stay
+ * in software and compete with the game being streamed. Otherwise undefined (the default, VP8).
+ * shortcut: assumes every viewer decodes H.264 High (WebView2 and Android WebView do); a client
+ * without it gets 'cannot-consume' for this stream.
+ */
+export function screenCodec(deviceCaps, senderCaps = globalThis.RTCRtpSender?.getCapabilities?.('video')) {
+  if (!senderCaps?.codecs.some((c) => c.mimeType.toLowerCase() === 'video/h264' && isH264High(c.sdpFmtpLine))) return undefined;
+  return deviceCaps.codecs.find((c) => c.mimeType.toLowerCase() === 'video/h264' && /^64/.test(c.parameters?.['profile-level-id'] ?? ''));
+}

@@ -122,6 +122,8 @@ export function startServer(config, { log = defaultLog } = {}) {
   wss.on('connection', (ws, req) => {
     // Joining a full room costs ~2 requests per remote producer; leave headroom.
     const bucket = new TokenBucket({ capacity: 300, perSecond: 100 });
+    // Chat fans out to the whole room, so it gets a much smaller budget of its own.
+    const chatBucket = new TokenBucket({ capacity: 10, perSecond: 2 });
     const peer = {
       id: randomUUID(),
       name: null,
@@ -217,6 +219,7 @@ export function startServer(config, { log = defaultLog } = {}) {
       } else if (msg.type === 'chat') {
         // Relayed to the others in the room; nothing is stored (late joiners don't see history).
         if (!peer.room) return fail('not-in-room', 'chat');
+        if (!chatBucket.take()) return fail('rate-limited', 'chat');
         const text = cleanChat(msg.text);
         if (text === null) return fail('bad-message', 'chat');
         for (const other of registry.othersInRoom(peer)) other.send({ type: 'chat', id: peer.id, name: peer.name, text });

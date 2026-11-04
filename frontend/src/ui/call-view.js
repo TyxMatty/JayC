@@ -527,6 +527,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const hideFromCapture = (on) => {
     if (on === hiddenFromCapture || !('__TAURI_INTERNALS__' in window)) return;
     hiddenFromCapture = on;
+    if (on) showToast('While you share your entire screen, the Jay-C window is hidden from screen captures, including your screenshots and recordings.');
     import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => getCurrentWindow().setContentProtected(on))
       .catch(() => {});

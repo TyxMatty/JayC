@@ -12,7 +12,7 @@ Pick one way. **Node.js is the simplest**, and it's all you need with Radmin VPN
 ### Option A: Node.js (recommended)
 
 1. Install **Node.js** (the LTS version, 22 or newer) from `nodejs.org`.
-2. On the Jay-C GitHub page (`github.com/TyxMatty/JayC`), click **Code › Download ZIP** and extract it to a **short** folder, for example `C:\jay-c`. Deep folders (like Downloads inside OneDrive) break the extraction, because some file paths get too long for Windows.
+2. Get the Jay-C source as a ZIP: on its GitHub page (`github.com/TyxMatty/JayC`), click **Code › Download ZIP**. If the page doesn't open for you, ask whoever sent you Jay-C for the ZIP. Extract it to a **short** folder, for example `C:\jay-c`. Deep folders (like Downloads inside OneDrive) break the extraction, because some file paths get too long for Windows.
 3. Open a terminal in the folder that has `package.json` and run, once:
 
 ```

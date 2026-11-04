@@ -10,6 +10,7 @@ import {
   targetHeight,
   DEFAULT_STREAM_QUALITY,
   DEFAULT_MIC_PROCESSING,
+  screenCodec,
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic } from './native-mic.js';
@@ -105,6 +106,10 @@ export class Call extends EventTarget {
   #generation = 0;
   /** Peers whose stream we chose to watch (kept across reconnects). Others' streams start unwatched. */
   #watched = new Set();
+  /** When we last sent a chat message (to tell an old server's rejection apart). */
+  #lastChatAt = -Infinity;
+  /** Native mic restarts run one after another (two at once could leave a replaced, silent track). */
+  #micRestart = Promise.resolve();
   #ended = false;
 
   get micOn() {
@@ -157,6 +162,13 @@ export class Call extends EventTarget {
     });
     signaling.addEventListener('new-producer', (e) => this.#consume(e.detail));
     signaling.addEventListener('chat', (e) => this.#emit('chat', { id: e.detail.id, name: e.detail.name, text: e.detail.text, mine: false }));
+    signaling.addEventListener('server-error', (e) => {
+      // A server older than chat answers a bare 'bad-message' (no ref) to it.
+      const { code, ref } = e.detail;
+      if (ref !== 'chat' && !(ref === undefined && code === 'bad-message' && performance.now() - this.#lastChatAt < 3000)) return;
+      const message = code === 'rate-limited' ? 'Too many messages: the last one was not sent.' : 'The server did not accept your message (it may need updating).';
+      this.#emit('notice', { message });
+    });
     signaling.addEventListener('producer-closed', (e) => this.#onProducerClosed(e.detail));
     signaling.addEventListener('producer-state', (e) => this.#onProducerState(e.detail));
     signaling.addEventListener('rejoined', (e) => this.#setup(e.detail).catch((err) => console.warn('[call] rejoin failed', err)));
@@ -221,6 +233,7 @@ export class Call extends EventTarget {
   /** Sends a chat message to the room; false when offline (reconnecting). Ours is echoed as a 'chat' event. */
   sendChat(text, name) {
     if (!this.#signaling?.sendChat(text)) return false;
+    this.#lastChatAt = performance.now();
     this.#emit('chat', { id: this.#signaling.id, name, text, mine: true });
     return true;
   }
@@ -236,7 +249,13 @@ export class Call extends EventTarget {
     Object.assign(this.micShape, patch);
   }
 
-  async #restartNativeMic() {
+  #restartNativeMic() {
+    const run = this.#micRestart.then(() => this.#doRestartNativeMic());
+    this.#micRestart = run.catch(() => {});
+    return run;
+  }
+
+  async #doRestartNativeMic() {
     const old = this.#nativeMic;
     const track = await this.#openNativeMic(); // replaces the Rust-side capture
     old.close();
@@ -509,16 +528,22 @@ export class Call extends EventTarget {
   }
 
   async #produceScreen() {
-    this.#producers.screen = await this.#send.produce({
+    const codec = screenCodec(this.#device.rtpCapabilities);
+    try {
+      this.#producers.screen = await this.#produceScreenWith(codec);
+    } catch (error) {
+      if (!codec) throw error;
+      console.warn('[call] H.264 High share failed, using the default codec', error);
+      this.#producers.screen = await this.#produceScreenWith(undefined);
+    }
+  }
+
+  #produceScreenWith(codec) {
+    return this.#send.produce({
       track: this.local.screen,
       stopTracks: false,
       encodings: [this.#screenEncoding()],
-      // H.264 High gets the GPU encoder on Windows (Media Foundation: NVIDIA/AMD/Intel); VP8 and
-      // constrained-baseline H.264 stay in software and compete with the game being streamed.
-      // An older server without High leaves the default codec (VP8).
-      // shortcut: assumes every viewer decodes H.264 High (WebView2 and Android WebView do); a
-      // client without it gets 'cannot-consume' for this stream.
-      codec: this.#device.rtpCapabilities.codecs.find((c) => /^64/.test(c.parameters?.['profile-level-id'] ?? '')),
+      codec,
       codecOptions: { videoGoogleStartBitrate: 1000 },
       appData: { source: 'screen', mode: this.screenShare.mode },
     });

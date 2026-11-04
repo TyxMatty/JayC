@@ -15,7 +15,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
   /** Output device (a deviceId from enumerateDevices; '' = the default). */
   let sinkId = '';
   const applySink = () => context?.setSinkId?.(sinkId).catch((error) => console.warn('[playback] output device', error));
-  /** key -> { track, source, gain, analyser } */
+  /** key -> { track, source, gain, analyser, samples } (samples: the analyser's reused buffer) */
   const playing = new Map();
   /** key -> Level; kept when a track goes away (e.g. a stream restarts). */
   const levels = new Map();
@@ -48,7 +48,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
       analyser.fftSize = 1024;
       source.connect(analyser);
       if (!listenOnly) source.connect(gain).connect(context.destination);
-      playing.set(key, { track, source, gain, analyser });
+      playing.set(key, { track, source, gain, analyser, samples: new Float32Array(analyser.fftSize) });
       apply(key);
     },
     stop(key) {
@@ -60,11 +60,10 @@ export function createMixer(makeContext = () => new AudioContext()) {
     },
     /** The current level of `key`'s sound in dBFS (-Infinity when silent or not playing). */
     levelDb(key) {
-      const analyser = playing.get(key)?.analyser;
-      if (!analyser) return -Infinity;
-      const samples = new Float32Array(analyser.fftSize);
-      analyser.getFloatTimeDomainData(samples);
-      return levelDb(samples);
+      const entry = playing.get(key);
+      if (!entry) return -Infinity;
+      entry.analyser.getFloatTimeDomainData(entry.samples);
+      return levelDb(entry.samples);
     },
     /** @returns {Level} */
     get(key) {

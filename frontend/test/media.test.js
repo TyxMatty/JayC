@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { streamBitrate, targetHeight, describeCapture, openLocalMedia } from '../src/core/media.js';
+import { streamBitrate, targetHeight, describeCapture, openLocalMedia, screenCodec } from '../src/core/media.js';
 
 test('stream bitrate scales with pixels and fps, within bounds', () => {
   const b1080p30 = streamBitrate(1920, 1080, 30);
@@ -45,4 +45,16 @@ test('openLocalMedia can leave the camera closed', async () => {
   } finally {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: saved });
   }
+});
+
+test('screen shares use H.264 High only when the server and this browser both have it', () => {
+  const high = { mimeType: 'video/H264', parameters: { 'profile-level-id': '640032' } };
+  const baseline = { mimeType: 'video/H264', parameters: { 'profile-level-id': '42e01f' } };
+  const vp8 = { mimeType: 'video/VP8', parameters: {} };
+  const sender = (...fmtps) => ({ codecs: fmtps.map((sdpFmtpLine) => ({ mimeType: 'video/H264', sdpFmtpLine })) });
+  const canHigh = sender('packetization-mode=1;profile-level-id=42e01f', 'packetization-mode=1;profile-level-id=640032');
+  assert.equal(screenCodec({ codecs: [vp8, baseline, high] }, canHigh), high);
+  assert.equal(screenCodec({ codecs: [vp8, baseline] }, canHigh), undefined, 'older server: default codec');
+  assert.equal(screenCodec({ codecs: [vp8, baseline, high] }, sender('packetization-mode=1;profile-level-id=42e01f')), undefined, 'no High encoder here');
+  assert.equal(screenCodec({ codecs: [vp8, high] }, undefined), undefined, 'no RTCRtpSender');
 });

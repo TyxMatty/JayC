@@ -185,7 +185,6 @@ describe('signaling server', () => {
       b.send({ type: 'chat', text: bad });
       assert.deepEqual(await b.next('error'), { type: 'error', code: 'bad-message', ref: 'chat' }, String(bad).slice(0, 20));
     }
-
     for (const bad of [
       'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', // SVG can carry scripts: raster only
       'https://example.com/me.png', // no remote URLs (tracking)
@@ -215,6 +214,11 @@ describe('signaling server', () => {
     assert.deepEqual(await c.next('error'), { type: 'error', code: 'not-in-room', ref: 'profile' });
     c.send({ type: 'chat', text: 'hello?' });
     assert.deepEqual(await c.next('error'), { type: 'error', code: 'not-in-room', ref: 'chat' });
+    // A chat flood is cut off (it fans out to the whole room) without dropping the connection.
+    c.send({ type: 'join', room: 'room-avatar-2', name: 'Carol' });
+    await c.next('joined');
+    for (let i = 0; i < 15; i++) c.send({ type: 'chat', text: `spam ${i}` });
+    assert.deepEqual(await c.next('error'), { type: 'error', code: 'rate-limited', ref: 'chat' });
 
     for (const client of [a, b, c]) client.close();
   });
