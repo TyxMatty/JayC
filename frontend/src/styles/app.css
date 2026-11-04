@@ -1345,3 +1345,34 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
     padding: 20px 16px;
   }
 }
+
+/* Settings › Audio devices: the live mic level, with the sensitivity threshold marked. */
+.mic-meter {
+  position: relative;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.mic-meter-fill {
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+.mic-meter-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text);
+}
+
+.gate-field input[type='range'],
+.field input#settings-mic-gain {
+  width: 100%;
+  accent-color: var(--accent);
+}

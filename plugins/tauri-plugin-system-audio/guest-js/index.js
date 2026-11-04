@@ -18,6 +18,12 @@ export function listAudioApps() {
   return invoke('plugin:system-audio|list_audio_apps');
 }
 
+/** Active microphones (Windows endpoints); pass an `id` as `startMic`'s `device`.
+ * @returns {Promise<Array<{ id: string, name: string, isDefault: boolean }>>} */
+export function listMics() {
+  return invoke('plugin:system-audio|list_mics');
+}
+
 /** @returns {Promise<{ pid: number, rootPid: number, exe: string, title: string }>} */
 export function windowProcess(hwnd) {
   return invoke('plugin:system-audio|window_process', { hwnd });
@@ -45,7 +51,7 @@ export function stopCapture() {
 /**
  * Starts the native call microphone (cleaned by WebRTC audio processing). Audio arrives in
  * `onAudio(Float32Array)`: mono at 48 kHz, 20 ms per call.
- * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean }} options
+ * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean, device?: string | null }} options
  * @param {{ onAudio: (samples: Float32Array) => void, onError?: (message: string) => void }} handlers
  * @returns {Promise<{ sampleRate: number, channels: number, chunkFrames: number, device: string, echoReference: boolean }>}
  */

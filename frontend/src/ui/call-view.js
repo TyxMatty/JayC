@@ -6,6 +6,7 @@ import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
 import { createControlBar } from './control-bar.js';
 import { createAudioMenu } from './audio-menu.js';
 import { createMixer } from '../core/playback.js';
+import { settings } from '../store/settings.js';
 
 const CONNECTION_LABELS = {
   new: 'Connecting…',
@@ -159,7 +160,7 @@ function controlButton({ label, onClick, variant = '' }) {
  * The in-call screen. Calls `onLeft()` once the call has ended.
  * @param {import('../core/call.js').Call} call
  */
-export function createCallView(call, { displayName, onLeft }) {
+export function createCallView(call, { displayName, onLeft, openSettings }) {
   // Shared screens (featured) and cameras (grid, or a strip while someone presents).
   const screens = h('div', { class: 'stage-screens' });
   const cameras = h('div', { class: 'stage-cameras' });
@@ -168,6 +169,10 @@ export function createCallView(call, { displayName, onLeft }) {
   const toast = h('div', { class: 'call-toast', role: 'status', 'aria-live': 'polite', hidden: true });
   // Each voice and stream sound has its own volume and mute, just for us (right-click a tile).
   const mixer = createMixer();
+  mixer.setSink(settings.get().outputDevice);
+  const unsubscribeOutput = settings.subscribe((next, prev) => {
+    if (next.outputDevice !== prev.outputDevice) mixer.setSink(next.outputDevice);
+  });
   const audioMenu = createAudioMenu();
   const voiceKey = (participant) => `${participant.id}:voice`;
   const streamKey = (participant) => `${participant.id}:stream`;
@@ -431,6 +436,11 @@ export function createCallView(call, { displayName, onLeft }) {
     }
   };
   micButton.addEventListener('click', guarded(micButton, () => call.toggleMic(), 'microphone'));
+  // Right-click the mic: its devices, volume and sensitivity (Settings › Audio devices).
+  micButton.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openSettings?.('audio');
+  });
   camButton.addEventListener('click', guarded(camButton, () => call.toggleCamera(), 'camera'));
   call.addEventListener('local-updated', renderControls);
 
@@ -442,6 +452,7 @@ export function createCallView(call, { displayName, onLeft }) {
 
   call.addEventListener('ended', () => {
     clearTimeout(toastTimer);
+    unsubscribeOutput();
     mixer.close();
     pip?.exit().catch(() => {});
     pip?.destroy?.();

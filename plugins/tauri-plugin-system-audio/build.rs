@@ -1,6 +1,7 @@
 const COMMANDS: &[&str] = &[
     "is_supported",
     "list_audio_apps",
+    "list_mics",
     "window_process",
     "start_capture",
     "stop_capture",

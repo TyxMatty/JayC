@@ -24,6 +24,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   callBar: DEFAULT_CALL_BAR,
   /** Executables left out of the entire-screen share's sound, e.g. ['Discord.exe']. */
   excludedApps: [],
+  /** Native mic (Windows) endpoint id, or null = the Windows default. */
+  micDevice: null,
+  /** Mic volume (1 = 100%, up to core/mic-shape.js MAX_MIC_GAIN) and sensitivity: the gate
+   * threshold in dBFS, or null = always send. Native mic only. */
+  micGain: 1,
+  micGate: null,
+  /** Speakers for the call's sound: a deviceId from enumerateDevices, or '' = the default. */
+  outputDevice: '',
 });
 
 function load() {

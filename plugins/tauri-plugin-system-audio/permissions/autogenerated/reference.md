@@ -6,6 +6,7 @@ Lets the app capture audio natively: other apps' sound for screen sharing, and t
 
 - `allow-is-supported`
 - `allow-list-audio-apps`
+- `allow-list-mics`
 - `allow-window-process`
 - `allow-start-capture`
 - `allow-stop-capture`
@@ -69,6 +70,32 @@ Enables the list_audio_apps command without any pre-configured scope.
 <td>
 
 Denies the list_audio_apps command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:allow-list-mics`
+
+</td>
+<td>
+
+Enables the list_mics command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:deny-list-mics`
+
+</td>
+<td>
+
+Denies the list_mics command without any pre-configured scope.
 
 </td>
 </tr>

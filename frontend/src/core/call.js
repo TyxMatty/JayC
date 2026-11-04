@@ -69,6 +69,11 @@ export class Call extends EventTarget {
   screenQuality = { ...DEFAULT_STREAM_QUALITY };
   /** { echoCancellation, noiseSuppression, autoGainControl } applied to the mic. */
   micProcessing = { ...DEFAULT_MIC_PROCESSING };
+  /** Native mic only: the endpoint to open (null = default), and volume/sensitivity applied live. */
+  micDeviceId = null;
+  micShape = { gain: 1, gateDb: null };
+  /** Latest native mic level in dBFS (for a meter), -Infinity when silent or not native. */
+  micLevel = -Infinity;
   /** Our profile picture (data URL) or null; others see it while our camera is off. */
   avatar = null;
   /** Executables left out of an entire-screen share's sound (see setExcludedApps). */
@@ -114,10 +119,12 @@ export class Call extends EventTarget {
   }
 
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
-  async join({ url, room, name, avatar = null, micProcessing = DEFAULT_MIC_PROCESSING }) {
+  async join({ url, room, name, avatar = null, micProcessing = DEFAULT_MIC_PROCESSING, micDeviceId = null, micShape = null }) {
     this.room = room;
     this.avatar = avatar;
     this.micProcessing = { ...micProcessing };
+    this.micDeviceId = micDeviceId;
+    if (micShape) Object.assign(this.micShape, micShape);
     const native = await nativeMicSupported();
     // The camera starts off: it opens on the first toggleCamera().
     const media = await openLocalMedia({ audio: !native, video: false, micProcessing: this.micProcessing });
@@ -197,18 +204,33 @@ export class Call extends EventTarget {
     if (!this.local.audio) return;
 
     if (this.#nativeMic) {
-      const old = this.#nativeMic;
-      const track = await this.#openNativeMic(); // replaces the Rust-side capture
-      old.close();
-      track.enabled = this.local.audio.enabled; // keep the mute state
-      this.local.audio = track;
-      await this.#producers.mic?.replaceTrack({ track });
-      this.#syncLocalStream();
+      await this.#restartNativeMic();
     } else {
       await this.local.audio.applyConstraints({ ...this.micProcessing }).catch((error) => {
         console.warn('[call] mic constraints not applied', error);
       });
     }
+  }
+
+  /** Native mic: switches to another microphone (null = the Windows default). */
+  async setMicDevice(id) {
+    this.micDeviceId = id;
+    if (this.#nativeMic && this.local.audio) await this.#restartNativeMic();
+  }
+
+  /** Native mic: volume (gain) and sensitivity (gateDb, null = off), applied from the next chunk. */
+  setMicShape(patch) {
+    Object.assign(this.micShape, patch);
+  }
+
+  async #restartNativeMic() {
+    const old = this.#nativeMic;
+    const track = await this.#openNativeMic(); // replaces the Rust-side capture
+    old.close();
+    track.enabled = this.local.audio.enabled; // keep the mute state
+    this.local.audio = track;
+    await this.#producers.mic?.replaceTrack({ track });
+    this.#syncLocalStream();
   }
 
   async toggleCamera() {
@@ -682,6 +704,9 @@ export class Call extends EventTarget {
   async #openNativeMic() {
     this.#nativeMic = await startNativeMic({
       ...this.micProcessing,
+      device: this.micDeviceId,
+      shape: this.micShape,
+      onLevel: (db) => (this.micLevel = db),
       onError: (message) => this.#emit('notice', { message: `Microphone stopped: ${message}` }),
     });
     return this.#nativeMic.track;

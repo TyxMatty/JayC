@@ -9,6 +9,7 @@ import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { DEFAULT_GRADIENT } from '../core/appearance.js';
 import { makeAvatar } from '../core/avatar.js';
 import { callDiagnostics } from '../core/diagnostics.js';
+import { createAudioSettings } from './audio-settings.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', pip: 'Pop-out video', leave: 'Leave call' };
@@ -338,6 +339,8 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     streamingSection.hidden = !supported;
   });
 
+  const audioSettings = createAudioSettings({ getCall });
+
   // ----- Troubleshooting: a snapshot of the running call for bug reports -----
   const diagHint = h('p', { class: 'hint', 'aria-live': 'polite' }, 'During a call: measures what you receive from each person and whether it plays, and copies it to send to whoever runs the server.');
   const diagText = h('textarea', { class: 'input', rows: 8, readonly: true, hidden: true, 'aria-label': 'Call diagnostics' });
@@ -431,6 +434,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-position-label' }, 'Position'), barPositionGroup),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-order-label' }, 'Order'), barOrderList),
         ),
+        audioSettings.element,
         h(
           'fieldset',
           {},
@@ -475,6 +479,8 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     ),
   );
 
+  dialog.addEventListener('close', () => audioSettings.close());
+
   // Close when clicking the backdrop.
   dialog.addEventListener('click', (e) => {
     if (e.target === dialog) dialog.close();
@@ -485,8 +491,13 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     open(focus) {
       renderAppearance();
       dialog.showModal();
+      audioSettings.open();
       if (!streamingSection.hidden) refreshPlayingApps();
       if (focus === 'server') serverInput.focus();
+      if (focus === 'audio') {
+        audioSettings.element.scrollIntoView({ block: 'start' });
+        audioSettings.element.querySelector('select:not([hidden])')?.focus();
+      }
     },
   };
 }

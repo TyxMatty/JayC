@@ -10,6 +10,9 @@ export const MAX_VOLUME = 2;
 /** @param {() => AudioContext} [makeContext] */
 export function createMixer(makeContext = () => new AudioContext()) {
   let context = null;
+  /** Output device (a deviceId from enumerateDevices; '' = the default). */
+  let sinkId = '';
+  const applySink = () => context?.setSinkId?.(sinkId).catch((error) => console.warn('[playback] output device', error));
   /** key -> { track, source, gain } */
   const playing = new Map();
   /** key -> Level; kept when a track goes away (e.g. a stream restarts). */
@@ -28,7 +31,10 @@ export function createMixer(makeContext = () => new AudioContext()) {
       if (playing.get(key)?.track === track) return;
       mixer.stop(key);
       if (!track) return;
-      context ??= makeContext();
+      if (!context) {
+        context = makeContext();
+        if (sinkId) applySink();
+      }
       context.resume?.().catch(() => {});
       const source = context.createMediaStreamSource(new MediaStream([track]));
       const gain = context.createGain();
@@ -54,6 +60,12 @@ export function createMixer(makeContext = () => new AudioContext()) {
       levels.set(key, next);
       apply(key);
       return next;
+    },
+    /** Plays everything on another output device ('' = the default). */
+    setSink(id) {
+      if (id === sinkId) return;
+      sinkId = id ?? '';
+      applySink();
     },
     close() {
       for (const key of [...playing.keys()]) mixer.stop(key);

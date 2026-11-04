@@ -83,7 +83,16 @@ export function mountApp(root) {
     const url = toWebSocketUrl(settings.get().serverAddress);
     const call = new Call();
     call.excludedApps = settings.get().excludedApps;
-    await call.join({ url, room, name, avatar: settings.get().avatar, micProcessing: settings.get().micProcessing });
+    const prefs = settings.get();
+    await call.join({
+      url,
+      room,
+      name,
+      avatar: prefs.avatar,
+      micProcessing: prefs.micProcessing,
+      micDeviceId: prefs.micDevice,
+      micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
+    });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
     settings.update({ lastRoom: room });
     // Microphone and streaming options changed in Settings apply to the running call.
@@ -92,12 +101,16 @@ export function mountApp(root) {
         call.setMicProcessing(next.micProcessing).catch((error) => console.warn('[app] mic options', error));
       }
       if (next.avatar !== prev.avatar) call.setAvatar(next.avatar);
+      if (next.micDevice !== prev.micDevice) {
+        call.setMicDevice(next.micDevice).catch((error) => console.warn('[app] mic device', error));
+      }
+      if (next.micGain !== prev.micGain || next.micGate !== prev.micGate) call.setMicShape({ gain: next.micGain, gateDb: next.micGate });
       if (next.excludedApps !== prev.excludedApps) {
         call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
       }
     });
     currentCall = call;
-    show(createCallView(call, { displayName: name, onLeft: showLobby }), () => {
+    show(createCallView(call, { displayName: name, onLeft: showLobby, openSettings }), () => {
       currentCall = null;
       unsubscribe();
       call.leave();

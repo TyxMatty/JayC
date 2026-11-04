@@ -3,6 +3,7 @@ description = "Lets the app capture audio natively: other apps' sound for screen
 permissions = [
   "allow-is-supported",
   "allow-list-audio-apps",
+  "allow-list-mics",
   "allow-window-process",
   "allow-start-capture",
   "allow-stop-capture",

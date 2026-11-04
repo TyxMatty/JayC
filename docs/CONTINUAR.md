@@ -121,7 +121,13 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 4. ✅ Padrões: câmera começa desligada; a live dos outros começa sem som e fora de foco, e cada um escolhe assistir (como no Discord). Feito: o card de quem transmite mostra **LIVE · Watch stream**. Até clicar, a tela e o som da live ficam pausados no servidor (0 kbps, medido), sem layout de apresentação e fora do PiP. **Stop watching** pausa de novo. Uma live nova começa sem ser assistida.
 5. Áudio, no menu do botão direito.
    - ✅ **5A:** volume por pessoa e por live (0–200%) e mudo só para si, no clique direito sobre o card (ou tecla Menu com o card em foco), além de um botão **Mute stream** na live assistida. O som remoto passa pelo WebAudio (`core/playback.js`), com um ganho por voz e por live; os `<video>` ficam mudos. Medido no alto-falante: 100% = -13,5 dB, 200% = -7,5 dB, mudo = silêncio. Os níveis valem só durante a chamada.
-   - 5B: escolher entrada e saída, sensibilidade e ganho do microfone.
+   - ✅ **5B:** Settings › Audio devices (também pelo clique direito no botão do microfone):
+     - **Microfone:** lista nativa (WASAPI, `list_mics` no plugin). Um microfone que sumiu volta ao padrão do Windows.
+     - **Volume do microfone** (0–300%) e **"Only send when I speak"** (gate com limite em dB, 300 ms de espera e rampa), com medidor durante a chamada. Ficam em `core/mic-shape.js`, aplicados ao vivo.
+     - **Alto-falantes:** `AudioContext.setSinkId` no mixer. Os nomes só aparecem depois de uma permissão de microfone do WebView2, concedida sem pergunta e lembrada. O botão "Show speakers" abre o mic do WebView por ~0,1 s uma única vez.
+     - **Medido no app:** gate em -10 dB → envio 0; troca de microfone ao vivo (ME6S → Iriun → padrão); saída na "Saída Digital" → o alto-falante padrão fica em silêncio, e volta a -13,5 dB.
+     - **Não provado no app:** o ganho. O ruído ambiente variou demais, e só o teste unitário mede o efeito (+6,02 dB a 2×).
+     - **Só no Windows:** microfone, volume e sensibilidade (o mic do Android/macOS ainda é o `getUserMedia`).
 6. Focar numa live entre várias, ou na própria.
 7. Chat da chamada.
 8. Botões em destaque na tela (mic, câmera, live).

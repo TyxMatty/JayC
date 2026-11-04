@@ -101,6 +101,18 @@ pub struct MicOptions {
     /// Level the voice automatically.
     #[serde(default = "default_true")]
     pub auto_gain_control: bool,
+    /// Capture endpoint id from `list_mics`; none (or one no longer present) = the Windows default.
+    #[serde(default)]
+    pub device: Option<String>,
+}
+
+/// A microphone the user can pick.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MicDevice {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
 }
 
 fn default_true() -> bool {
@@ -152,6 +164,18 @@ async fn list_audio_apps() -> Result<Vec<AudioApp>, String> {
     #[cfg(windows)]
     {
         tauri::async_runtime::spawn_blocking(win::list_audio_apps)
+            .await
+            .map_err(|e| e.to_string())?
+    }
+    #[cfg(not(windows))]
+    Err("unsupported".into())
+}
+
+#[tauri::command]
+async fn list_mics() -> Result<Vec<MicDevice>, String> {
+    #[cfg(windows)]
+    {
+        tauri::async_runtime::spawn_blocking(win::list_mics)
             .await
             .map_err(|e| e.to_string())?
     }
@@ -243,6 +267,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![
             is_supported,
             list_audio_apps,
+            list_mics,
             window_process,
             start_capture,
             stop_capture,
