@@ -15,6 +15,11 @@ function fakeContext() {
     created: 0,
     createMediaStreamSource(stream) { this.created++; return { ...node(), stream }; },
     createGain() { return { ...node(), gain: { value: 1 } }; },
+    level: 0.1,
+    createAnalyser() {
+      const ctx = this;
+      return { ...node(), fftSize: 0, getFloatTimeDomainData(buf) { buf.fill(ctx.level); } };
+    },
     resume: async () => {},
     close: async () => {},
   };
@@ -47,6 +52,13 @@ test('per-key volume above 100%, mute, and levels that outlive the track', () =>
   assert.equal(gainOf().gain.value, 0.5);
   mixer.play('ana:stream', { id: 's1' });
   assert.equal(made, 1);
+
+  // Level for the speaking ring: 0.1 constant = -20 dBFS; a listen-only key never reaches the output.
+  assert.ok(Math.abs(mixer.levelDb('ana:voice') + 20) < 0.01);
+  assert.equal(mixer.levelDb('nobody'), -Infinity);
+  mixer.play('me:mic', { id: 'mine' }, { listenOnly: true });
+  assert.ok(Math.abs(mixer.levelDb('me:mic') + 20) < 0.01);
+  assert.equal(gainOf().connected.length, 0);
 
   mixer.play('ana:voice', null);
   mixer.set('ana:voice', { volume: 0.8 }); // no track playing: just remembered

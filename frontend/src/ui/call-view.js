@@ -7,6 +7,7 @@ import { createControlBar } from './control-bar.js';
 import { createAudioMenu } from './audio-menu.js';
 import { createChatPanel } from './chat-panel.js';
 import { createMixer } from '../core/playback.js';
+import { createSpeakingDetector } from '../core/speaking.js';
 import { settings } from '../store/settings.js';
 
 const CONNECTION_LABELS = {
@@ -416,6 +417,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   call.addEventListener('participant-removed', (e) => {
     const { participant } = e.detail;
     sharing.delete(participant.id);
+    speaking.forget(participant.id);
     mixer.stop(voiceKey(participant));
     mixer.stop(streamKey(participant));
     screenTiles.get(participant.id)?.el.remove();
@@ -501,6 +503,20 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   camButton.addEventListener('click', guarded(camButton, () => call.toggleCamera(), 'camera'));
   call.addEventListener('local-updated', renderControls);
 
+  // ----- Who's speaking: a green ring on their tile -----
+  // Our own level comes from our mic track, measured without playing it (we'd hear ourselves).
+  const speaking = createSpeakingDetector();
+  const speakingTimer = setInterval(() => {
+    const now = performance.now();
+    for (const [id, tile] of tiles) {
+      const participant = call.participants.get(id);
+      const on = Boolean(participant?.media.audio) && speaking.update(id, mixer.levelDb(voiceKey(participant)), now);
+      tile.el.classList.toggle('speaking', on);
+    }
+    mixer.play('me:mic', call.local.audio, { listenOnly: true });
+    localTile.el.classList.toggle('speaking', call.micOn && speaking.update('me', mixer.levelDb('me:mic'), now));
+  }, 100);
+
   const section = h('section', { class: 'call', 'aria-label': `Call in room ${call.room}` });
   const controlBar = createControlBar({
     section,
@@ -509,6 +525,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
 
   call.addEventListener('ended', () => {
     clearTimeout(toastTimer);
+    clearInterval(speakingTimer);
     unsubscribeOutput();
     mixer.close();
     pip?.exit().catch(() => {});

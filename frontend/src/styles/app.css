@@ -970,6 +970,13 @@ fieldset > h3 {
   background: rgb(0 0 0 / 0.8);
 }
 
+/* Speaking: a green ring (3.3:1 on light, 4.8:1 on dark surfaces). */
+.tile.speaking {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px #16a34a;
+  transition: box-shadow 120ms, border-color 120ms;
+}
+
 .tile-watch:focus-visible,
 .tile:focus-visible {
   outline: 2px solid var(--accent);
@@ -1252,6 +1259,44 @@ fieldset > h3 {
 .control-btn svg {
   width: 22px;
   height: 22px;
+}
+
+/* Mic, camera and screen share stand out: bigger than the other controls. */
+.control-btn[data-control='mic'],
+.control-btn[data-control='camera'],
+.control-btn[data-control='share'] {
+  width: 64px;
+  height: 64px;
+}
+
+.control-btn[data-control='mic'] svg,
+.control-btn[data-control='camera'] svg,
+.control-btn[data-control='share'] svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* A little bounce on hover and when pressed (overshooting curve), unless motion is reduced. */
+.control-btn {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 120ms;
+}
+
+.control-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.control-btn:active:not(:disabled) {
+  transform: scale(0.9);
+  transition-duration: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-btn,
+  .control-btn:hover:not(:disabled),
+  .control-btn:active:not(:disabled) {
+    transition: background-color 120ms;
+    transform: none;
+  }
 }
 
 .control-btn.active {
