@@ -118,10 +118,11 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 1. **Bug: quem entra numa sala com gente dentro não ouve os outros, mas é ouvido.** Valia para qualquer um que entrasse depois. A pessoa via o vídeo dos outros (a rede chega), e sair e entrar de novo resolvia para ela. **Não reproduzido neste PC**, com o som medido no alto-falante (`output_meter`) em 5 cenários: dev, release com clique real e perfil limpo, primeira entrada depois de abrir o app, bot com câmera e bot saindo e voltando. Também não reproduziu pelo IP do Radmin. Para o próximo teste foi criado **Settings › Troubleshooting › Copy call diagnostics**: mede por 2 s, para cada pessoa, pacotes/s, kbps e `playedEnergy`, além do estado do player. Quem não ouvir copia o texto e manda. Pacotes chegando com `playedEnergy` 0 = o som chega mas não toca; sem pacotes = rede ou servidor.
 2. Live trava com o app em foco e fica lisa no Alt+Tab. Suspeita: o app mostrando a própria tela (efeito espelho). Não medido.
 3. Atalhos do Windows (tecla Windows, Win+Shift+S) param durante a live. Eles dizem que outros apps de live também causam isso, menos o Discord. Não medido.
-4. Padrões: câmera começa desligada; a live dos outros começa sem som e fora de foco, e cada um escolhe assistir (como no Discord).
+4. ✅ Padrões: câmera começa desligada; a live dos outros começa sem som e fora de foco, e cada um escolhe assistir (como no Discord). Feito: o card de quem transmite mostra **LIVE · Watch stream**. Até clicar, a tela e o som da live ficam pausados no servidor (0 kbps, medido), sem layout de apresentação e fora do PiP. **Stop watching** pausa de novo. Uma live nova começa sem ser assistida.
 5. Áudio: escolher entrada e saída, sensibilidade e ganho do mic, volume por pessoa (acima de 100%), volume e mudo da live, mutar alguém só para si. Tudo no menu do botão direito sobre a pessoa.
 6. Focar numa live entre várias, ou na própria.
 7. Chat da chamada.
+8. Botões em destaque na tela (mic, câmera, live).
 
 Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Recomendação dada: não. O Discord também é Chromium (Electron), e o que ele faz diferente é capturar e codificar em código nativo. Se os itens 2 e 3 apontarem para o WebView, a saída é uma etapa de captura de vídeo nativa (WGC/DXGI + H.264 por hardware).
 

@@ -9,14 +9,14 @@ export const pipSupported = () => globalThis.document?.pictureInPictureEnabled =
 const showing = (track) => track?.readyState === 'live' && !track.muted && track.enabled;
 
 /**
- * The video worth floating: a shared screen first, else a camera that is on.
- * @param {Iterable<{ media: { screen?: boolean, video?: boolean }, stream: MediaStream, screenStream?: MediaStream }>} participants
+ * The video worth floating: a shared screen we watch first, else a camera that is on.
+ * @param {Iterable<{ media: { screen?: boolean, video?: boolean }, watching?: boolean, stream: MediaStream, screenStream?: MediaStream }>} participants
  * @returns {MediaStreamTrack | null}
  */
 export function pickPipTrack(participants) {
   const list = [...participants];
   for (const p of list) {
-    const track = p.media.screen && p.screenStream?.getVideoTracks().find(showing);
+    const track = p.media.screen && p.watching !== false && p.screenStream?.getVideoTracks().find(showing);
     if (track) return track;
   }
   for (const p of list) {

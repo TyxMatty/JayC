@@ -35,17 +35,24 @@ function hasLiveVideo(stream) {
 }
 
 /**
- * @param {{ name: string, stream: MediaStream, local: boolean, getMedia: () => ({ audio: boolean, video: boolean } | null), getAvatar: () => string | null }} options
- *   getMedia: what this participant is sending (null = unknown yet); getAvatar: their profile picture.
+ * @param {{ name: string, stream: MediaStream, local: boolean, getMedia: () => ({ audio: boolean, video: boolean } | null), getAvatar: () => string | null, onWatch?: () => void }} options
+ *   getMedia: what this participant is sending (null = unknown yet); getAvatar: their profile picture;
+ *   onWatch: the "Watch stream" button on their tile while they share and we aren't watching.
  */
-function createTile({ name, stream, local, getMedia, getAvatar }) {
+function createTile({ name, stream, local, getMedia, getAvatar, onWatch }) {
   const video = h('video', { autoplay: true, playsinline: true, muted: local, srcObject: stream });
   const avatar = h('div', { class: 'tile-avatar', 'aria-hidden': 'true' }, initials(name));
   const nameText = h('span', {}, local ? `${name} (you)` : name);
   const mutedIcon = h('span', { class: 'tile-muted', title: 'Microphone off', html: icons.micOff, hidden: true });
   const label = h('div', { class: 'tile-label' }, mutedIcon, nameText);
   const overlay = h('div', { class: 'tile-overlay', hidden: true });
-  const el = h('div', { class: local ? 'tile tile-local' : 'tile' }, video, avatar, overlay, label);
+  const watchButton = h(
+    'button',
+    { type: 'button', class: 'tile-watch', hidden: true, onClick: () => onWatch?.() },
+    h('span', { class: 'live-badge' }, 'LIVE'),
+    'Watch stream',
+  );
+  const el = h('div', { class: local ? 'tile tile-local' : 'tile' }, video, avatar, overlay, watchButton, label);
 
   const videoOn = () => (getMedia()?.video ?? true) && hasLiveVideo(stream);
 
@@ -89,13 +96,18 @@ function createTile({ name, stream, local, getMedia, getAvatar }) {
       overlay.textContent = text ?? '';
       overlay.hidden = !text;
     },
+    /** Shows "Watch stream" while they share a stream we aren't watching. */
+    setLive(unwatched) {
+      watchButton.hidden = !unwatched;
+      watchButton.setAttribute('aria-label', `Watch ${shownName}'s stream`);
+    },
   };
   tile.refresh();
   return tile;
 }
 
 /** A shared screen/window. Double-click toggles fullscreen. Audio (later) plays from the same element. */
-function createScreenTile({ name, stream, local }) {
+function createScreenTile({ name, stream, local, onStop }) {
   const video = h('video', { autoplay: true, playsinline: true, muted: local, srcObject: stream });
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
   const nameText = h('span', {}, local ? 'Your screen' : `${name}'s screen`);
@@ -104,6 +116,7 @@ function createScreenTile({ name, stream, local }) {
     { class: local ? 'tile tile-screen tile-screen-local' : 'tile tile-screen', title: local ? '' : 'Double-click for fullscreen' },
     video,
     h('div', { class: 'tile-label' }, icon, nameText),
+    ...(local ? [] : [h('button', { type: 'button', class: 'btn btn-secondary tile-stop-watching', onClick: () => onStop?.() }, 'Stop watching')]),
   );
   if (!local) {
     el.addEventListener('dblclick', () => {
@@ -233,9 +246,17 @@ export function createCallView(call, { displayName, onLeft }) {
     waiting.hidden = remotes > 0;
   };
 
+  const sharing = new Set();
   const renderScreen = (participant) => {
+    // Announce a new share once; it starts unwatched (no sound, not featured) until "Watch stream".
+    if (participant.media.screen && !sharing.has(participant.id)) {
+      sharing.add(participant.id);
+      showToast(`${participant.name} started a stream.`);
+    } else if (!participant.media.screen) {
+      sharing.delete(participant.id);
+    }
     let tile = screenTiles.get(participant.id);
-    if (!participant.media.screen) {
+    if (!participant.media.screen || !participant.watching) {
       if (tile) {
         tile.el.remove();
         screenTiles.delete(participant.id);
@@ -244,10 +265,14 @@ export function createCallView(call, { displayName, onLeft }) {
       return;
     }
     if (!tile) {
-      tile = createScreenTile({ name: participant.name, stream: participant.screenStream, local: false });
+      tile = createScreenTile({
+        name: participant.name,
+        stream: participant.screenStream,
+        local: false,
+        onStop: () => call.watchStream(participant.id, false),
+      });
       screenTiles.set(participant.id, tile);
       screens.append(tile.el);
-      showToast(`${participant.name} started sharing.`);
       layout();
     }
     tile.refresh({ name: participant.name, mode: participant.screenMode });
@@ -262,6 +287,7 @@ export function createCallView(call, { displayName, onLeft }) {
         local: false,
         getMedia: () => participant.media,
         getAvatar: () => participant.avatar,
+        onWatch: () => call.watchStream(participant.id, true),
       });
       tiles.set(participant.id, tile);
       cameras.insertBefore(tile.el, localTile.el);
@@ -271,6 +297,7 @@ export function createCallView(call, { displayName, onLeft }) {
     tile.setName(participant.name);
     tile.setOverlay(CONNECTION_LABELS[participant.connectionState]);
     tile.refresh();
+    tile.setLive(participant.media.screen && !participant.watching);
     renderScreen(participant);
     renderPip();
   };
@@ -294,6 +321,7 @@ export function createCallView(call, { displayName, onLeft }) {
   call.addEventListener('participant-updated', (e) => renderParticipant(e.detail.participant, { announce: false }));
   call.addEventListener('participant-removed', (e) => {
     const { participant } = e.detail;
+    sharing.delete(participant.id);
     screenTiles.get(participant.id)?.el.remove();
     screenTiles.delete(participant.id);
     renderPip();

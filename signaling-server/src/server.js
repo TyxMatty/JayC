@@ -25,6 +25,7 @@ const REQUESTS = new Set([
   'resumeProducer',
   'consume',
   'resumeConsumer',
+  'pauseConsumer',
   'setPreferredLayers',
 ]);
 

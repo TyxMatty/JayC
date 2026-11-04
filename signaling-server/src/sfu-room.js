@@ -196,6 +196,11 @@ export class SfuRoom {
     await this.#consumer(peerId, consumerId).resume();
   }
 
+  /** Stop receiving (e.g. stopped watching a stream) without closing the consumer. */
+  async pauseConsumer(peerId, { consumerId }) {
+    await this.#consumer(peerId, consumerId).pause();
+  }
+
   /** Simulcast: pick which spatial layer (0 = lowest) this client receives for one consumer. */
   async setPreferredLayers(peerId, { consumerId, spatialLayer, temporalLayer }) {
     const consumer = this.#consumer(peerId, consumerId);

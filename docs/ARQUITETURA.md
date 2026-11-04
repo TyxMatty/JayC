@@ -132,7 +132,7 @@ Requisições SFU, com os nomes da API do mediasoup:
 | `produce` | `transportId`, `kind`, `rtpParameters`, `source` (`mic` \| `camera` \| `screen` \| `screen-audio`), `paused?` | `id` |
 | `closeProducer` / `pauseProducer` / `resumeProducer` | `producerId` | — |
 | `consume` | `producerId`, `rtpCapabilities` | `id`, `peerId`, `kind`, `source`, `rtpParameters`, `producerPaused` (o consumer nasce pausado) |
-| `resumeConsumer` | `consumerId` | — |
+| `resumeConsumer` / `pauseConsumer` | `consumerId` | — (pausar = parar de receber, ex.: deixou de assistir a uma live) |
 | `setPreferredLayers` | `consumerId`, `spatialLayer`, `temporalLayer?` | — (só tem efeito com simulcast) |
 
 Servidor → cliente:

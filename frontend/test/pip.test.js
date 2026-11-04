@@ -10,6 +10,12 @@ const person = ({ camera, screen, media = {} }) => ({
   screenStream: screen ? stream(screen) : undefined,
 });
 
+test('a stream we chose not to watch is skipped', () => {
+  const sharer = person({ camera: track('cam-a'), screen: track('screen-a') });
+  sharer.watching = false;
+  assert.equal(pickPipTrack([sharer])?.id, 'cam-a');
+});
+
 test('a shared screen wins over cameras', () => {
   const people = [person({ camera: track('cam-a') }), person({ camera: track('cam-b'), screen: track('screen-b') })];
   assert.equal(pickPipTrack(people)?.id, 'screen-b');

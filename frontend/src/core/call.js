@@ -56,6 +56,8 @@ function cameraLayerFor(cameraCount, presenting) {
  *   screenMode: 'screen' | 'window' | null,
  * }
  */
+const isStream = (source) => source === 'screen' || source === 'screen-audio';
+
 export class Call extends EventTarget {
   local = { audio: null, video: null, screen: null };
   /** For the local preview tile (mic + camera). */
@@ -94,6 +96,8 @@ export class Call extends EventTarget {
   #micMuted = false;
   /** Bumped on every (re)setup so late async results from an old setup are discarded. */
   #generation = 0;
+  /** Peers whose stream we chose to watch (kept across reconnects). Others' streams start unwatched. */
+  #watched = new Set();
   #ended = false;
 
   get micOn() {
@@ -530,6 +534,8 @@ export class Call extends EventTarget {
       screenStream: new MediaStream(),
       media: { audio: false, video: false, screen: false },
       screenMode: null,
+      /** Receiving their screen share (opt-in, like a muted, collapsed live until then). */
+      watching: this.#watched.has(id),
       connectionState: 'connected',
       /** producerId -> { consumer, source, mode, paused, layer } */
       consumers: new Map(),
@@ -573,7 +579,10 @@ export class Call extends EventTarget {
       const entry = { consumer, source: params.source, mode: params.mode ?? null, paused: params.producerPaused, layer: null };
       participant.consumers.set(producerId, entry);
       this.#streamFor(participant, entry.source).addTrack(consumer.track);
-      await this.#signaling.request('resumeConsumer', { consumerId: consumer.id });
+      // A stream stays paused on the server (no bandwidth) until we watch it.
+      if (!isStream(entry.source) || participant.watching) {
+        await this.#signaling.request('resumeConsumer', { consumerId: consumer.id });
+      }
       this.#updateParticipant(participant);
       if (params.source === 'camera' || params.source === 'screen') this.#applyLayerPolicy();
     } catch (error) {
@@ -591,12 +600,34 @@ export class Call extends EventTarget {
     participant.consumers.delete(producerId);
     this.#streamFor(participant, entry.source).removeTrack(entry.consumer.track);
     entry.consumer.close();
+    // A new share later starts unwatched again.
+    if (entry.source === 'screen') {
+      participant.watching = false;
+      this.#watched.delete(participant.id);
+    }
     this.#updateParticipant(participant);
     if (entry.source === 'camera' || entry.source === 'screen') this.#applyLayerPolicy();
   }
 
+  /** Starts or stops receiving `peerId`'s screen share and its sound. */
+  async watchStream(peerId, watching) {
+    const participant = this.participants.get(peerId);
+    if (watching) this.#watched.add(peerId);
+    else this.#watched.delete(peerId);
+    if (!participant || participant.watching === watching) return;
+    participant.watching = watching;
+    this.#updateParticipant(participant);
+    this.#applyLayerPolicy();
+    const type = watching ? 'resumeConsumer' : 'pauseConsumer';
+    await Promise.all(
+      [...participant.consumers.values()]
+        .filter((entry) => isStream(entry.source))
+        .map((entry) => this.#signaling.request(type, { consumerId: entry.consumer.id }).catch((error) => console.warn(`[call] ${type} failed`, error))),
+    );
+  }
+
   #streamFor(participant, source) {
-    return source === 'screen' || source === 'screen-audio' ? participant.screenStream : participant.stream;
+    return isStream(source) ? participant.screenStream : participant.stream;
   }
 
   #onProducerState({ peerId, producerId, paused }) {
@@ -623,7 +654,7 @@ export class Call extends EventTarget {
     for (const participant of this.participants.values()) {
       for (const entry of participant.consumers.values()) {
         if (entry.source === 'camera') cameras.push(entry);
-        if (entry.source === 'screen') presenting = true;
+        if (entry.source === 'screen' && participant.watching) presenting = true;
       }
     }
     const layer = cameraLayerFor(cameras.length, presenting);

@@ -918,6 +918,54 @@ fieldset > h3 {
   display: none;
 }
 
+/* Someone is streaming and we aren't watching: a button on their tile (opt-in, like Discord). */
+.tile-watch {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tile-watch:hover {
+  background: rgb(0 0 0 / 0.8);
+}
+
+.tile-watch:focus-visible,
+.tile-stop-watching:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.live-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #dc2626; /* fixed, not --danger: white text needs >= 4.5:1 in both themes (4.83) */
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.tile-stop-watching {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0.85;
+}
+
+.tile-stop-watching:hover {
+  opacity: 1;
+}
+
 .call-waiting {
   display: flex;
   flex-wrap: wrap;

@@ -266,6 +266,9 @@ describe('SFU requests', () => {
     assert.equal(consumed.data.peerId, a.msg.id);
     assert.equal(consumed.data.producerPaused, false);
     assert.equal((await b.client.request('resumeConsumer', { consumerId: consumed.data.id })).ok, true);
+    assert.equal((await b.client.request('pauseConsumer', { consumerId: consumed.data.id })).ok, true);
+    assert.equal((await b.client.request('resumeConsumer', { consumerId: consumed.data.id })).ok, true);
+    assert.equal((await a.client.request('pauseConsumer', { consumerId: consumed.data.id })).ok, false); // not Alice's
 
     // Can't consume your own producer.
     assert.equal((await a.client.request('consume', { producerId, rtpCapabilities: caps })).error, 'unknown-producer');
