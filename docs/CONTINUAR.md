@@ -112,6 +112,8 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 **Instalador Windows:** `npm run build` gera `<target>\release\bundle\nsis\Jay-C_<versão>_x64-setup.exe`. Leva ~7–9 min, por causa do LTO.
 
+**Primeiro teste externo:** em 03/11/2026, o instalador 0.1.0 foi enviado a amigos do usuário. O servidor é hospedado pelo usuário, e eles se conectam pelo IP dele (VPN ou LAN), com as portas 3000 e 40000 liberadas. Sem assinatura de código, o SmartScreen pede "Mais informações → Executar assim mesmo". O retorno ainda não chegou: se vier um erro, comece por ele.
+
 **Android em dev** (emulador ou celular com depuração USB):
 - **Modo de Desenvolvedor do Windows ligado:** o Tauri cria symlinks para a `.so` em `jniLibs`.
 - `scriptsndroid-dev.ps1` recarrega PATH, `JAVA_HOME`, `ANDROID_HOME` e `NDK_HOME` e roda `tauri android dev`. O app carrega o Vite pelo IP do PC na porta 5173.
@@ -119,6 +121,7 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Permissões:** o app pede câmera e microfone na primeira chamada. Em testes automáticos, conceda antes com `adb shell pm grant io.github.tyxmatty.jayc.debug android.permission.CAMERA` (e `RECORD_AUDIO`).
 
 **Ainda não verificado:**
+- O instalador em outro PC, o seletor de tela real no app instalado e a conexão de amigos pela internet/VPN (aguardando o retorno do teste externo).
 - Android num celular real, e o PiP no Android 8–11 (entrada pelo user-leave hint).
 - Sala com 16 pessoas com mídia real (foi testado com 6 abas, e com 16 só no protocolo).
 - IP de VPN (ZeroTier/Radmin).

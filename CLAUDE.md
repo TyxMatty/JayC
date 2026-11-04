@@ -21,6 +21,7 @@ npm install
 npm run dev          # app Tauri (abre a janela), com Vite em :5173
 npm run server       # servidor de sinalização + SFU (:3000 e mídia em :40000 UDP/TCP)
 npm test             # testes do servidor e do frontend (node:test)
+npm run build        # instalador Windows de release (NSIS), ~7–9 min
 ```
 
 - **Rust fora do OneDrive:** o repositório fica no OneDrive, então o `target/` vai para outra pasta via `.cargo/config.toml` na raiz. Esse arquivo é local e não vai para o git; recrie-o num PC novo (ver docs/CONTINUAR.md).
