@@ -41,6 +41,16 @@ function cleanName(value) {
   return name.length > 0 && name.length <= MAX_NAME_LENGTH ? name : null;
 }
 
+const MAX_CHAT_LENGTH = 500;
+
+/** A chat message: line breaks kept, other control and format characters (e.g. bidi overrides)
+ * removed; null when empty, too long or not a string. */
+function cleanChat(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.replace(/\r\n?/g, '\n').replace(/[^\P{Cc}\n]|\p{Cf}/gu, '').trim();
+  return text.length > 0 && text.length <= MAX_CHAT_LENGTH ? text : null;
+}
+
 /** The profile picture as sent: null when absent, undefined when invalid. */
 function cleanAvatar(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -183,6 +193,12 @@ export function startServer(config, { log = defaultLog } = {}) {
         if (!peer.room) return fail('not-in-room', 'profile');
         peer.avatar = avatar;
         for (const other of registry.othersInRoom(peer)) other.send({ type: 'peer-updated', id: peer.id, avatar });
+      } else if (msg.type === 'chat') {
+        // Relayed to the others in the room; nothing is stored (late joiners don't see history).
+        if (!peer.room) return fail('not-in-room', 'chat');
+        const text = cleanChat(msg.text);
+        if (text === null) return fail('bad-message', 'chat');
+        for (const other of registry.othersInRoom(peer)) other.send({ type: 'chat', id: peer.id, name: peer.name, text });
       } else if (msg.type === 'leave') {
         leaveRoom(peer).catch(() => {});
       } else if (REQUESTS.has(msg.type) && (typeof msg.id === 'number' || typeof msg.id === 'string')) {

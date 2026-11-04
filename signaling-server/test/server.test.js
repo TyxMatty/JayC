@@ -159,6 +159,14 @@ describe('signaling server', () => {
     b.send({ type: 'profile', avatar: null });
     assert.deepEqual(await a.next('peer-updated'), { type: 'peer-updated', id: bJoined.id, avatar: null });
 
+    // Chat: relayed with the sender's id and name; control/bidi characters dropped, line breaks kept.
+    b.send({ type: 'chat', text: '  hi\r\nthere\u202E\u0007  ' });
+    assert.deepEqual(await a.next('chat'), { type: 'chat', id: bJoined.id, name: 'Bob', text: 'hi\nthere' });
+    for (const bad of ['', '   ', 'x'.repeat(501), 42, null]) {
+      b.send({ type: 'chat', text: bad });
+      assert.deepEqual(await b.next('error'), { type: 'error', code: 'bad-message', ref: 'chat' }, String(bad).slice(0, 20));
+    }
+
     for (const bad of [
       'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', // SVG can carry scripts: raster only
       'https://example.com/me.png', // no remote URLs (tracking)
@@ -175,6 +183,8 @@ describe('signaling server', () => {
     assert.deepEqual(await c.next('error'), { type: 'error', code: 'bad-message', ref: 'join' });
     c.send({ type: 'profile', avatar: pixel });
     assert.deepEqual(await c.next('error'), { type: 'error', code: 'not-in-room', ref: 'profile' });
+    c.send({ type: 'chat', text: 'hello?' });
+    assert.deepEqual(await c.next('error'), { type: 'error', code: 'not-in-room', ref: 'chat' });
 
     for (const client of [a, b, c]) client.close();
   });

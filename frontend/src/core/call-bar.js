@@ -1,6 +1,6 @@
 // The call's control bar: which edge it sits on and the order of its buttons (Settings and drag).
 
-export const CONTROLS = ['mic', 'camera', 'share', 'pip', 'leave'];
+export const CONTROLS = ['mic', 'camera', 'share', 'chat', 'pip', 'leave'];
 export const POSITIONS = ['bottom', 'right', 'top', 'left'];
 export const DEFAULT_CALL_BAR = Object.freeze({ position: 'bottom', order: CONTROLS });
 

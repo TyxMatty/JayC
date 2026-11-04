@@ -5,6 +5,7 @@ import { createSharePanel } from './share-panel.js';
 import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
 import { createControlBar } from './control-bar.js';
 import { createAudioMenu } from './audio-menu.js';
+import { createChatPanel } from './chat-panel.js';
 import { createMixer } from '../core/playback.js';
 import { settings } from '../store/settings.js';
 
@@ -444,6 +445,12 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const leaveButton = controlButton({ label: 'Leave call', variant: 'danger', onClick: () => call.leave() });
   leaveButton.innerHTML = icons.phoneOff;
 
+  const chat = createChatPanel({
+    send: (text) => call.sendChat(text, displayName),
+    onIncoming: ({ name, text }) => showToast(`${name || 'Guest'}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}`),
+  });
+  call.addEventListener('chat', (e) => chat.add(e.detail));
+
   // Screen sharing (desktop only: mobile WebViews have no getDisplayMedia).
   const sharePanel = canShareScreen() ? createSharePanel(call, { onError: showToast }) : null;
   const shareButton = sharePanel
@@ -497,7 +504,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const section = h('section', { class: 'call', 'aria-label': `Call in room ${call.room}` });
   const controlBar = createControlBar({
     section,
-    buttons: { mic: micButton, camera: camButton, share: shareButton, pip: pipButton, leave: leaveButton },
+    buttons: { mic: micButton, camera: camButton, share: shareButton, chat: chat.button, pip: pipButton, leave: leaveButton },
   });
 
   call.addEventListener('ended', () => {
@@ -525,6 +532,6 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   if (problems.length) showToast(`${problems.join(' · ')}. You can still see and hear others.`);
 
   // The bar can sit on any edge (section[data-bar]), so the rest of the call is one column of its own.
-  section.append(h('div', { class: 'call-main' }, banner, stage, waiting, toast), controlBar.element, audioMenu.element, ...(sharePanel ? [sharePanel] : []));
+  section.append(h('div', { class: 'call-main' }, banner, stage, waiting, toast, chat.element), controlBar.element, audioMenu.element, ...(sharePanel ? [sharePanel] : []));
   return section;
 }

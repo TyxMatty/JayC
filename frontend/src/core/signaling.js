@@ -88,6 +88,13 @@ export class SignalingClient extends EventTarget {
     if (this.id && this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(JSON.stringify({ type: 'profile', avatar }));
   }
 
+  /** Sends a chat message to the room. False when not connected (the caller keeps the text). */
+  sendChat(text) {
+    if (!this.id || this.#ws?.readyState !== WebSocket.OPEN) return false;
+    this.#ws.send(JSON.stringify({ type: 'chat', text }));
+    return true;
+  }
+
   close() {
     if (this.#closed && !this.#ws) return;
     this.#closed = true;
@@ -185,6 +192,7 @@ export class SignalingClient extends EventTarget {
       case 'new-producer':
       case 'producer-closed':
       case 'producer-state':
+      case 'chat':
         this.#emit(msg.type, msg);
     }
   }

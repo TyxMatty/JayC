@@ -152,6 +152,7 @@ export class Call extends EventTarget {
       this.#emit('participant-updated', { participant });
     });
     signaling.addEventListener('new-producer', (e) => this.#consume(e.detail));
+    signaling.addEventListener('chat', (e) => this.#emit('chat', { id: e.detail.id, name: e.detail.name, text: e.detail.text, mine: false }));
     signaling.addEventListener('producer-closed', (e) => this.#onProducerClosed(e.detail));
     signaling.addEventListener('producer-state', (e) => this.#onProducerState(e.detail));
     signaling.addEventListener('rejoined', (e) => this.#setup(e.detail).catch((err) => console.warn('[call] rejoin failed', err)));
@@ -210,6 +211,13 @@ export class Call extends EventTarget {
         console.warn('[call] mic constraints not applied', error);
       });
     }
+  }
+
+  /** Sends a chat message to the room; false when offline (reconnecting). Ours is echoed as a 'chat' event. */
+  sendChat(text, name) {
+    if (!this.#signaling?.sendChat(text)) return false;
+    this.#emit('chat', { id: this.#signaling.id, name, text, mine: true });
+    return true;
   }
 
   /** Native mic: switches to another microphone (null = the Windows default). */

@@ -1405,3 +1405,101 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
   width: 100%;
   accent-color: var(--accent);
 }
+
+/* Unread count on a control button (the chat). */
+.control-btn {
+  position: relative;
+}
+
+.control-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #dc2626; /* white text: 4.83:1 in both themes */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* The call's chat: a panel over the right side of the call. */
+.chat-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, 100%);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.chat-panel[hidden] {
+  display: none;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.chat-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-message {
+  padding: 6px 4px;
+}
+
+.chat-message p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.chat-meta time {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.chat-message.mine .chat-meta strong {
+  color: var(--accent-text);
+}
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-form .input {
+  flex: 1;
+  min-width: 0;
+}

@@ -129,7 +129,7 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
      - **Não provado no app:** o ganho. O ruído ambiente variou demais, e só o teste unitário mede o efeito (+6,02 dB a 2×).
      - **Só no Windows:** microfone, volume e sensibilidade (o mic do Android/macOS ainda é o `getUserMedia`).
 6. ✅ Focar numa live entre várias, ou na própria: clicar numa live (ou Enter com ela em foco de teclado) a deixa grande, e as outras vão para uma coluna ao lado. Clicar de novo divide o espaço igualmente. A prévia da sua live, no canto, vai para o palco com um clique e volta com outro. Verificado no app com 2 bots transmitindo e a própria live: tamanhos e vídeos tocando depois de cada troca.
-7. Chat da chamada.
+7. ✅ Chat da chamada: botão **Chat** na barra (com contador de não lidas) abre um painel lateral. Mensagens novas com o painel fechado também aparecem num aviso. O servidor só repassa (`chat`, 1–500 caracteres, sem caracteres de controle) e não guarda nada: quem entra depois não vê o histórico. Verificado no app com um bot: contador, aviso, resposta digitada no teclado chegando ao bot, HTML exibido como texto, Esc fechando o painel.
 8. Botões em destaque na tela (mic, câmera, live).
 
 Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Recomendação dada: não. O Discord também é Chromium (Electron), e o que ele faz diferente é capturar e codificar em código nativo. Se os itens 2 e 3 apontarem para o WebView, a saída é uma etapa de captura de vídeo nativa (WGC/DXGI + H.264 por hardware).

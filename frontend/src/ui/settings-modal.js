@@ -12,7 +12,7 @@ import { callDiagnostics } from '../core/diagnostics.js';
 import { createAudioSettings } from './audio-settings.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
 
-const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', pip: 'Pop-out video', leave: 'Leave call' };
+const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
 
 /** [settings key, label, when to change it]. Changes apply right away, also during a call. */
 const MIC_OPTIONS = [
