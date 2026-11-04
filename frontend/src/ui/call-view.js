@@ -208,21 +208,26 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     toastTimer = setTimeout(() => (toast.hidden = true), 5000);
   };
 
-  // ----- Waiting card (shown while alone) -----
-  const copyButton = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Copy room name', title: 'Copy room name', html: icons.copy });
-  copyButton.addEventListener('click', async () => {
+  // ----- Room name to share (header button) -----
+  const copyRoom = async () => {
     try {
       await navigator.clipboard.writeText(call.room);
       showToast('Room name copied.');
     } catch {
       showToast(`Room name: ${call.room}`);
     }
-  });
-  const waiting = h(
-    'div',
-    { class: 'call-waiting' },
-    h('p', {}, 'Waiting for others to join'),
-    h('div', { class: 'room-chip' }, h('code', {}, call.room), copyButton),
+  };
+  const copyButton = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Copy room name', title: 'Copy room name', html: icons.copy, onClick: copyRoom });
+  const waiting = h('div', { class: 'call-waiting' }, h('p', {}, 'Waiting for others to join. Share the room name from the top.'));
+
+  // ----- Header: which room, how many people (like a channel header) -----
+  const peopleCount = h('span', { class: 'call-header-count' });
+  const header = h(
+    'header',
+    { class: 'call-header' },
+    h('h2', { class: 'call-header-room', title: call.room }, h('span', { class: 'call-header-hash', 'aria-hidden': 'true' }, '#'), call.room),
+    peopleCount,
+    copyButton,
   );
 
   // ----- Picture-in-Picture: the featured remote video floats over other windows (desktop) -----
@@ -314,6 +319,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       delete screens.dataset.focus;
     }
     stage.dataset.layout = streams > 0 ? 'presenting' : remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
+    peopleCount.textContent = remotes === 0 ? 'Just you' : `${remotes + 1} people`;
     waiting.hidden = remotes > 0;
   };
 
@@ -554,6 +560,6 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   if (problems.length) showToast(`${problems.join(' · ')}. You can still see and hear others.`);
 
   // The bar can sit on any edge (section[data-bar]), so the rest of the call is one column of its own.
-  section.append(h('div', { class: 'call-main' }, banner, stage, waiting, toast, chat.element), controlBar.element, audioMenu.element, ...(sharePanel ? [sharePanel] : []));
+  section.append(h('div', { class: 'call-main' }, header, banner, stage, waiting, toast, chat.element), controlBar.element, audioMenu.element, ...(sharePanel ? [sharePanel] : []));
   return section;
 }
