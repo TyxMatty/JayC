@@ -104,6 +104,11 @@ export class Call extends EventTarget {
     return Boolean(this.local.video);
   }
 
+  /** The microphone in use: the native device's name, else the track label. */
+  get micDevice() {
+    return this.#nativeMic?.device ?? this.local.audio?.label ?? null;
+  }
+
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
   async join({ url, room, name, avatar = null, micProcessing = DEFAULT_MIC_PROCESSING }) {
     this.room = room;

@@ -36,6 +36,9 @@ npm run build        # instalador Windows de release (NSIS), ~7–9 min
   - **PowerShell 5.1 estraga aspas** de JS passado como argumento para o `node`. Passe o JS num arquivo.
   - **Arraste e clique reais:** `Input.dispatchMouseEvent` do CDP gera pointer events de verdade.
   - **Segundo participante:** um `new Call()` na mesma página, com `getUserMedia`/`getDisplayMedia` trocados por canvas, entra na sala como "bot".
+  - **Bot com som próprio:** rode-o numa página separada (o painel do navegador em `http://localhost:5173`, fora do Tauri), com `getUserMedia` trocado por um oscilador. Um bot dentro do app usa o **microfone nativo**, que é um só por processo: quando o app entra, o bot fica mudo. O `__TAURI_INTERNALS__.invoke` não pode ser trocado para evitar isso.
+  - **"Ele ouve?" se mede no alto-falante** (`output_meter`), não na faixa recebida. O `totalAudioEnergy` do `inbound-rtp` só cresce enquanto o som toca. O diagnóstico do app (Settings › Troubleshooting) usa isso.
+  - **Não encerre o app de dev à força logo depois de mudar configurações:** o `localStorage` do WebView2 vai para o disco com atraso e se perde. Restaure, espere ~20 s, e feche com `CloseMainWindow()`.
   - **Servidor de teste sem mexer no do usuário:** `PORT=3001 RTC_PORT=40001 node src/server.js` em `signaling-server/`.
 - **Android:** `scripts/android-dev.ps1` (precisa do Modo de Desenvolvedor do Windows, por causa dos symlinks). Rode-o pela ferramenta PowerShell em segundo plano, com log: no terminal do painel, o `tauri android dev` não achou o SDK.
   - **Emulador:** chega ao PC por `10.0.2.2`. Permissões de câmera e mic: `adb shell pm grant io.github.tyxmatty.jayc.debug android.permission.CAMERA`.

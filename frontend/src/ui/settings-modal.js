@@ -8,6 +8,7 @@ import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../co
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { DEFAULT_GRADIENT } from '../core/appearance.js';
 import { makeAvatar } from '../core/avatar.js';
+import { callDiagnostics } from '../core/diagnostics.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', pip: 'Pop-out video', leave: 'Leave call' };
@@ -29,7 +30,7 @@ const THEMES = [
  * Builds the Settings dialog. Changes apply immediately (theme switches live).
  * @param {{ openGuide: () => void }} options
  */
-export function createSettingsModal({ openGuide }) {
+export function createSettingsModal({ openGuide, getCall = () => null }) {
   const current = settings.get();
 
   const nameInput = h('input', {
@@ -337,6 +338,36 @@ export function createSettingsModal({ openGuide }) {
     streamingSection.hidden = !supported;
   });
 
+  // ----- Troubleshooting: a snapshot of the running call for bug reports -----
+  const diagHint = h('p', { class: 'hint', 'aria-live': 'polite' }, 'During a call: measures what you receive from each person and whether it plays, and copies it to send to whoever runs the server.');
+  const diagText = h('textarea', { class: 'input', rows: 8, readonly: true, hidden: true, 'aria-label': 'Call diagnostics' });
+  const diagButton = h('button', { type: 'button', class: 'btn btn-secondary' }, 'Copy call diagnostics');
+  diagButton.addEventListener('click', async () => {
+    const call = getCall();
+    if (!call) {
+      diagHint.textContent = 'Join a call first, then copy this while the problem is happening.';
+      return;
+    }
+    diagButton.disabled = true;
+    diagHint.textContent = 'Measuring for 2 seconds…';
+    try {
+      const text = JSON.stringify(await callDiagnostics(call), null, 2);
+      diagText.value = text;
+      try {
+        await navigator.clipboard.writeText(text);
+        diagHint.textContent = 'Copied. Paste it in a message.';
+        diagText.hidden = true;
+      } catch {
+        diagHint.textContent = "Couldn't copy: select the text below and copy it.";
+        diagText.hidden = false;
+      }
+    } catch (error) {
+      diagHint.textContent = `Couldn't measure: ${error?.message ?? error}`;
+    } finally {
+      diagButton.disabled = false;
+    }
+  });
+
   const dialog = h(
     'dialog',
     { class: 'modal', 'aria-labelledby': 'settings-title' },
@@ -438,6 +469,7 @@ export function createSettingsModal({ openGuide }) {
             ),
           ),
         ),
+        h('fieldset', {}, h('h3', {}, 'Troubleshooting'), h('div', { class: 'field' }, diagButton, diagHint, diagText)),
       ),
       h('footer', { class: 'modal-footer' }, h('button', { type: 'submit', class: 'btn' }, 'Done')),
     ),

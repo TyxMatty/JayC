@@ -62,7 +62,8 @@ function createThemeToggle() {
 export function mountApp(root) {
   const guideModal = createSetupGuideModal();
   const openGuide = () => guideModal.open();
-  const settingsModal = createSettingsModal({ openGuide });
+  let currentCall = null;
+  const settingsModal = createSettingsModal({ openGuide, getCall: () => currentCall });
   const openSettings = (focus) => settingsModal.open(focus);
   const view = h('div', { class: 'view' });
   let destroyView = () => {};
@@ -95,7 +96,9 @@ export function mountApp(root) {
         call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
       }
     });
+    currentCall = call;
     show(createCallView(call, { displayName: name, onLeft: showLobby }), () => {
+      currentCall = null;
       unsubscribe();
       call.leave();
     });
