@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { streamBitrate, targetHeight, describeCapture } from '../src/core/media.js';
+import { streamBitrate, targetHeight, describeCapture, openLocalMedia } from '../src/core/media.js';
 
 test('stream bitrate scales with pixels and fps, within bounds', () => {
   const b1080p30 = streamBitrate(1920, 1080, 30);
@@ -22,4 +22,27 @@ test('describeCapture reads the window handle from Chromium labels', () => {
   assert.deepEqual(describeCapture(track('window:1835810:0', 'window')), { mode: 'window', windowHandle: 1835810 });
   assert.deepEqual(describeCapture(track('screen:0:0', 'monitor')), { mode: 'screen', windowHandle: null });
   assert.deepEqual(describeCapture(track('Some title', 'window')), { mode: 'window', windowHandle: null });
+});
+
+test('openLocalMedia can leave the camera closed', async () => {
+  const asked = [];
+  const audioTrack = { kind: 'audio' };
+  globalThis.navigator ??= {};
+  const saved = navigator.mediaDevices;
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia: async (c) => (asked.push(c), { getAudioTracks: () => (c.audio ? [audioTrack] : []), getVideoTracks: () => [] }) },
+  });
+  try {
+    const media = await openLocalMedia({ audio: true, video: false });
+    assert.equal(media.audio, audioTrack);
+    assert.equal(media.video, null);
+    assert.deepEqual(media.errors, {});
+    assert.equal(asked[0].video, false);
+    // Native mic and no camera: nothing to open at all.
+    assert.deepEqual(await openLocalMedia({ audio: false, video: false }), { audio: null, video: null, errors: {} });
+    assert.equal(asked.length, 1);
+  } finally {
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: saved });
+  }
 });

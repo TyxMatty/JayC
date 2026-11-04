@@ -115,7 +115,8 @@ export class Call extends EventTarget {
     this.avatar = avatar;
     this.micProcessing = { ...micProcessing };
     const native = await nativeMicSupported();
-    const media = await openLocalMedia({ audio: !native, micProcessing: this.micProcessing });
+    // The camera starts off: it opens on the first toggleCamera().
+    const media = await openLocalMedia({ audio: !native, video: false, micProcessing: this.micProcessing });
     this.local.audio = media.audio;
     this.local.video = media.video;
     this.mediaErrors = media.errors;
