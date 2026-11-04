@@ -11,6 +11,7 @@ import { makeAvatar } from '../core/avatar.js';
 import { callDiagnostics } from '../core/diagnostics.js';
 import { createAudioSettings } from './audio-settings.js';
 import { createProfileColorField } from './profile-color-field.js';
+import { createTabs } from './tabs.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
@@ -338,6 +339,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
       .catch((error) => console.warn('[settings] audio apps', error));
   screenAudioSupported().then((supported) => {
     streamingSection.hidden = !supported;
+    tabs.setHidden('streaming', !supported);
   });
 
   const audioSettings = createAudioSettings({ getCall });
@@ -372,25 +374,17 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     }
   });
 
-  const dialog = h(
-    'dialog',
-    { class: 'modal', 'aria-labelledby': 'settings-title' },
-    h(
-      'form',
-      { method: 'dialog' },
-      h(
-        'header',
-        { class: 'modal-header' },
-        h('h2', { id: 'settings-title' }, 'Settings'),
-        h('button', { type: 'submit', class: 'icon-btn', 'aria-label': 'Close settings', html: icons.close }),
-      ),
-      h(
-        'div',
-        { class: 'modal-body' },
+  // ----- Tabs: one panel per topic instead of one long scrolling column (like Discord's settings) -----
+  const panel = (...children) => h('div', { class: 'settings-panel' }, ...children);
+  const items = [
+    {
+      key: 'profile',
+      label: 'Profile',
+      panel: panel(
         h(
           'fieldset',
           {},
-          h('h3', {}, 'General'),
+          h('h3', {}, 'Profile'),
           h('div', { class: 'field' }, h('label', { for: 'settings-name' }, 'Display name'), nameInput),
           h(
             'div',
@@ -408,12 +402,18 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
             h('p', { class: 'hint' }, 'Shown to others while your camera is off.'),
           ),
           createProfileColorField(),
-          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
         ),
+      ),
+    },
+    {
+      key: 'appearance',
+      label: 'Appearance',
+      panel: panel(
         h(
           'fieldset',
           {},
           h('h3', {}, 'Appearance'),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
           h(
             'div',
             { class: 'field' },
@@ -436,11 +436,17 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-position-label' }, 'Position'), barPositionGroup),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-order-label' }, 'Order'), barOrderList),
         ),
+      ),
+    },
+    {
+      key: 'audio',
+      label: 'Audio',
+      panel: panel(
         audioSettings.element,
         h(
           'fieldset',
           {},
-          h('h3', {}, 'Microphone'),
+          h('h3', {}, 'Microphone processing'),
           MIC_OPTIONS.map(([key, title, description]) =>
             h(
               'label',
@@ -455,7 +461,13 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
             ),
           ),
         ),
-        streamingSection,
+      ),
+    },
+    { key: 'streaming', label: 'Streaming', panel: panel(streamingSection) },
+    {
+      key: 'server',
+      label: 'Server',
+      panel: panel(
         h(
           'fieldset',
           {},
@@ -475,8 +487,29 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
             ),
           ),
         ),
-        h('fieldset', {}, h('h3', {}, 'Troubleshooting'), h('div', { class: 'field' }, diagButton, diagHint, diagText)),
       ),
+    },
+    { key: 'help', label: 'Help', panel: panel(h('fieldset', {}, h('h3', {}, 'Troubleshooting'), h('div', { class: 'field' }, diagButton, diagHint, diagText))) },
+  ];
+  const panels = h('div', { class: 'settings-panels' }, items.map((item) => item.panel));
+  const tabs = createTabs({ idPrefix: 'settings', label: 'Settings sections', className: 'settings-tabs', vertical: true, items, onSelect: () => (panels.scrollTop = 0) });
+  const body = h('div', { class: 'modal-body settings-body' }, tabs.list, panels);
+  tabs.setHidden('streaming', true); // shown once screen sound capture is known to work here
+  tabs.select('profile');
+
+  const dialog = h(
+    'dialog',
+    { class: 'modal modal-settings', 'aria-labelledby': 'settings-title' },
+    h(
+      'form',
+      { method: 'dialog' },
+      h(
+        'header',
+        { class: 'modal-header' },
+        h('h2', { id: 'settings-title' }, 'Settings'),
+        h('button', { type: 'submit', class: 'icon-btn', 'aria-label': 'Close settings', html: icons.close }),
+      ),
+      body,
       h('footer', { class: 'modal-footer' }, h('button', { type: 'submit', class: 'btn' }, 'Done')),
     ),
   );
@@ -495,10 +528,14 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
       dialog.showModal();
       audioSettings.open();
       if (!streamingSection.hidden) refreshPlayingApps();
-      if (focus === 'server') serverInput.focus();
-      if (focus === 'audio') {
-        audioSettings.element.scrollIntoView({ block: 'start' });
+      if (focus === 'server') {
+        tabs.select('server');
+        serverInput.focus();
+      } else if (focus === 'audio') {
+        tabs.select('audio');
         audioSettings.element.querySelector('select:not([hidden])')?.focus();
+      } else if (focus) {
+        tabs.select(focus, { focus: true });
       }
     },
   };

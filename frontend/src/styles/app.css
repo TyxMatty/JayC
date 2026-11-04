@@ -541,6 +541,88 @@ fieldset > h3 {
   min-height: 0;
 }
 
+/* Settings: tabs on the left, the chosen panel scrolls on the right (a row of tabs on narrow screens). */
+.modal-settings {
+  width: min(820px, calc(100vw - 32px));
+  height: min(680px, calc(100dvh - 32px));
+}
+
+.modal-settings[open] > form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.settings-tabs [role='tab'] {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-tabs [role='tab']:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.settings-tabs [role='tab'][aria-selected='true'] {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--text);
+}
+
+.settings-tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.settings-panels {
+  min-height: 0;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+@media (max-width: 600px) {
+  .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-tabs [role='tab'] {
+    white-space: nowrap;
+  }
+}
+
 /* Setup guide: Connecting / Hosting. Pinned while the guide scrolls. */
 .guide-tabs {
   position: sticky;

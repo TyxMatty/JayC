@@ -134,7 +134,7 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 **Revisão de design (04/11/2026), inspirada no Discord:**
 - ✅ A. Cor de perfil: Settings › General › Profile color (Auto pelo nome, Solid ou Gradient, com prévia). Vai aos outros no `join` e no `profile`, e o servidor só aceita `#rrggbb` e ângulo inteiro. Os cards sem câmera usam a cor de fundo, com o avatar num círculo. Quem não escolheu ganha um degradê estável pelo nome (`core/profile-color.js`). Verificado no app com 2 bots, nos temas escuro e claro: cada card com a sua cor, e a troca chegou aos dois ao vivo.
-- B. Settings com abas laterais (Perfil, Áudio, Aparência, Transmissão, Servidor, Ajuda) em vez de uma coluna de ~2400 px.
+- ✅ B. Settings com abas laterais: Profile, Appearance (tema, cores, botões da chamada), Audio, Streaming (só onde há captura de som), Server e Help (diagnóstico). Numa janela estreita, as abas viram uma linha no topo. As abas vêm do helper `ui/tabs.js` (padrão ARIA: uma parada de Tab, setas, Home/End), que o guia de setup também usa. O clique direito no mic abre direto na aba Audio. Verificado no app: teclado, atalho do mic, guia, 480 px sem rolagem lateral, temas claro e escuro.
 - C. Lobby com cartão de perfil e salas recentes.
 - D. Cabeçalho da chamada com a sala, quantas pessoas e copiar o nome.
 - E. Animações: abrir e fechar o Settings e os painéis, entrada dos cards e dos avisos, troca de foco das lives. Respeitam "reduzir movimento".
