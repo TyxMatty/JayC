@@ -26,6 +26,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   appearance: DEFAULT_APPEARANCE,
   /** Call controls: { position: 'bottom' | 'right' | 'top' | 'left', order: control keys }. */
   callBar: DEFAULT_CALL_BAR,
+  /** Animations: 'system' (follow the OS's reduce-motion), 'on' or 'off' (core/motion.js). */
+  motion: 'system',
   /** Executables left out of the entire-screen share's sound, e.g. ['Discord.exe']. */
   excludedApps: [],
   /** Native mic (Windows) endpoint id, or null = the Windows default. */

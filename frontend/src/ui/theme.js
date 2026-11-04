@@ -1,7 +1,14 @@
 import { settings } from '../store/settings.js';
 import { appearanceVars } from '../core/appearance.js';
+import { resolveMotion } from '../core/motion.js';
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+const reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+
+/** <html data-motion="full|reduced"> from Settings › Appearance › Animations and the OS. */
+function applyMotion() {
+  document.documentElement.dataset.motion = resolveMotion(settings.get().motion, reducedMotionQuery.matches);
+}
 const isTauri = '__TAURI_INTERNALS__' in window;
 
 /** Same logic as public/theme-init.js. */
@@ -40,11 +47,14 @@ export function initTheme() {
   document.documentElement.dataset.theme = ''; // force the first apply() to sync the title bar
   apply();
   applyAppearance();
+  applyMotion();
   settings.subscribe((next, prev) => {
     if (next.theme !== prev.theme) apply();
     if (next.appearance !== prev.appearance) applyAppearance();
+    if (next.motion !== prev.motion) applyMotion();
   });
   darkQuery.addEventListener('change', apply);
+  reducedMotionQuery.addEventListener('change', applyMotion);
 }
 
 /** Header quick toggle: flips between explicit light and dark. */

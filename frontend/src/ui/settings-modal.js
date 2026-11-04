@@ -23,6 +23,12 @@ const MIC_OPTIONS = [
   ['autoGainControl', 'Automatic volume', 'Keeps your voice at a steady level.'],
 ];
 
+const MOTION_OPTIONS = [
+  ['system', 'System'],
+  ['on', 'On'],
+  ['off', 'Off'],
+];
+
 const THEMES = [
   ['system', 'System'],
   ['light', 'Light'],
@@ -45,6 +51,25 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     value: current.displayName,
     onInput: (e) => settings.update({ displayName: e.target.value }),
   });
+
+  const motionGroup = h(
+    'div',
+    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'motion-label', 'aria-describedby': 'motion-hint' },
+    MOTION_OPTIONS.map(([value, label]) =>
+      h(
+        'label',
+        {},
+        h('input', {
+          type: 'radio',
+          name: 'motion',
+          value,
+          checked: (current.motion ?? 'system') === value,
+          onChange: () => settings.update({ motion: value }),
+        }),
+        label,
+      ),
+    ),
+  );
 
   const themeGroup = h(
     'div',
@@ -414,6 +439,13 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           {},
           h('h3', {}, 'Appearance'),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
+          h(
+            'div',
+            { class: 'field' },
+            h('span', { class: 'field-label', id: 'motion-label' }, 'Animations'),
+            motionGroup,
+            h('p', { class: 'hint', id: 'motion-hint' }, 'System follows Windows (Accessibility › Visual effects › Animation effects).'),
+          ),
           h(
             'div',
             { class: 'field' },

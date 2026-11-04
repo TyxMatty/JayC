@@ -296,7 +296,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       layout();
     };
     // Tiles glide to their new places (each screen tile has its own view-transition-name).
-    if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply);
+    if (document.startViewTransition && document.documentElement.dataset.motion === 'full') document.startViewTransition(apply);
     else apply();
   };
 
