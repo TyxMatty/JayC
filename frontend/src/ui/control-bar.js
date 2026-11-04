@@ -2,6 +2,7 @@ import { h } from './dom.js';
 import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { POSITIONS, normalizeOrder, normalizePosition, dropIndex, nearestEdge } from '../core/call-bar.js';
+import { t } from '../core/i18n.js';
 
 /** Pointer travel (px) that turns a press into a drag; less is a normal click. */
 const DRAG_THRESHOLD = 6;
@@ -18,10 +19,10 @@ export function createControlBar({ section, buttons }) {
     type: 'button',
     class: 'bar-grip',
     html: icons.grip,
-    'aria-label': 'Move the controls to the next edge',
-    title: 'Drag to an edge of the window to move the controls',
+    'aria-label': t('Move the controls to the next edge'),
+    title: t('Drag to an edge of the window to move the controls'),
   });
-  const bar = h('div', { class: 'call-controls', role: 'toolbar', 'aria-label': 'Call controls' }, grip);
+  const bar = h('div', { class: 'call-controls', role: 'toolbar', 'aria-label': t('Call controls') }, grip);
   for (const [key, button] of Object.entries(buttons)) if (button) button.dataset.control = key;
 
   const save = (patch) => settings.update({ callBar: { ...settings.get().callBar, ...patch } });

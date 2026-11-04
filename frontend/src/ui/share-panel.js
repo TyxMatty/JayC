@@ -3,17 +3,20 @@ import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { STREAM_RESOLUTIONS, STREAM_FRAME_RATES } from '../core/media.js';
 import { screenAudioSupported } from '../core/screen-audio.js';
+import { t } from '../core/i18n.js';
 
 let audioSupported = false;
 screenAudioSupported().then((supported) => (audioSupported = supported));
 
 function soundHint(call) {
   if (call.sharing) {
-    return call.screenShare?.audio ? `Sound: ${call.screenShare.audio}. Changes apply right away.` : 'No sound is being shared. Changes apply right away.';
+    return call.screenShare?.audio
+      ? t('Sound: {sound}. Changes apply right away.', { sound: call.screenShare.audio })
+      : t('No sound is being shared. Changes apply right away.');
   }
   return audioSupported
-    ? "Sound: a window shares only that app's audio; the entire screen shares everything except Jay-C."
-    : "Sound from the shared screen isn't available on this device.";
+    ? t("Sound: a window shares only that app's audio; the entire screen shares everything except Jay-C.")
+    : t("Sound from the shared screen isn't available on this device.");
 }
 
 const MODES = [
@@ -36,7 +39,7 @@ function segmented(name, options, current, onChange) {
         {},
         h('input', { type: 'radio', name, value, checked: current === value, onChange: () => onChange(value) }),
         icon ? h('span', { class: 'segmented-icon', html: icon }) : null,
-        label,
+        t(label),
       ),
     ),
   );
@@ -58,7 +61,7 @@ export function createSharePanel(call, { onError }) {
     try {
       await call.setScreenQuality(quality());
     } catch (error) {
-      onError(`Couldn't change the quality: ${error?.message ?? error}`);
+      onError(t("Couldn't change the quality: {reason}", { reason: error?.message ?? error }));
     }
   };
 
@@ -66,13 +69,13 @@ export function createSharePanel(call, { onError }) {
     const q = quality();
     const sharing = call.sharing;
     const title = sharing
-      ? `Sharing your ${call.screenShare?.mode === 'window' ? 'window' : 'screen'}`
-      : 'Share your screen';
+      ? t(call.screenShare?.mode === 'window' ? 'Sharing your window' : 'Sharing your screen')
+      : t('Share your screen');
 
     const resolution = h(
       'select',
       { class: 'input', id: 'share-resolution', onChange: (e) => updateQuality({ resolution: e.target.value }) },
-      STREAM_RESOLUTIONS.map((r) => h('option', { value: r.id, selected: r.id === q.resolution }, r.label)),
+      STREAM_RESOLUTIONS.map((r) => h('option', { value: r.id, selected: r.id === q.resolution }, t(r.label))),
     );
     const fps = h(
       'select',
@@ -87,16 +90,16 @@ export function createSharePanel(call, { onError }) {
         const started = await call.startScreenShare({ mode, quality: quality() });
         if (started) panel.hidePopover();
       } catch (error) {
-        onError(`Couldn't share: ${error?.message ?? error}`);
+        onError(t("Couldn't share: {reason}", { reason: error?.message ?? error }));
       } finally {
         startButton.disabled = false;
       }
     };
-    const startButton = h('button', { type: 'button', class: 'btn', onClick: start }, 'Choose and share…');
+    const startButton = h('button', { type: 'button', class: 'btn', onClick: start }, t('Choose and share…'));
     const stopButton = h(
       'button',
       { type: 'button', class: 'btn btn-danger', onClick: () => call.stopScreenShare().then(() => panel.hidePopover()) },
-      'Stop sharing',
+      t('Stop sharing'),
     );
 
     // Built with h() so the conditional `null` below is skipped (replaceChildren would print "null").
@@ -106,24 +109,24 @@ export function createSharePanel(call, { onError }) {
       h('h2', { id: 'share-title' }, title),
       sharing
         ? null
-        : h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'What to share'), segmented('share-mode', MODES, mode, (v) => (mode = v))),
+        : h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('What to share')), segmented('share-mode', MODES, mode, (v) => (mode = v))),
       h(
         'div',
         { class: 'share-row' },
-        h('div', { class: 'field' }, h('label', { for: 'share-resolution' }, 'Resolution'), resolution),
-        h('div', { class: 'field' }, h('label', { for: 'share-fps' }, 'Frame rate'), fps),
+        h('div', { class: 'field' }, h('label', { for: 'share-resolution' }, t('Resolution')), resolution),
+        h('div', { class: 'field' }, h('label', { for: 'share-fps' }, t('Frame rate')), fps),
       ),
       h(
         'div',
         { class: 'field' },
-        h('span', { class: 'field-label' }, 'Optimize for'),
+        h('span', { class: 'field-label' }, t('Optimize for')),
         segmented('share-optimize', OPTIMIZE, q.optimizeFor, (v) => updateQuality({ optimizeFor: v })),
       ),
       h('p', { class: 'hint' }, soundHint(call)),
       h(
         'div',
         { class: 'share-actions' },
-        h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => panel.hidePopover() }, sharing ? 'Done' : 'Cancel'),
+        h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => panel.hidePopover() }, sharing ? t('Done') : t('Cancel')),
         sharing ? stopButton : startButton,
       ),
     );

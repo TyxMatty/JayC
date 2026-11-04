@@ -2,6 +2,7 @@ import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import { serverStatus } from '../core/server-status.js';
 import { profileBackground } from '../core/profile-color.js';
+import { t } from '../core/i18n.js';
 
 // Must match the signaling server's room-name rule.
 const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -26,7 +27,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     class: 'input',
     maxlength: 32,
     autocomplete: 'nickname',
-    placeholder: 'Your name',
+    placeholder: t('Your name'),
     value: current.displayName,
     onInput: (e) => settings.update({ displayName: e.target.value }),
   });
@@ -44,13 +45,13 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     maxlength: 64,
     autocomplete: 'off',
     spellcheck: 'false',
-    placeholder: 'e.g. friday-game-night',
+    placeholder: t('e.g. friday-game-night'),
     value: current.lastRoom,
   });
 
   // Rooms joined lately: one click joins again.
   const recentList = h('div', { class: 'recent-rooms', role: 'group', 'aria-labelledby': 'recent-rooms-label' });
-  const recentField = h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'recent-rooms-label' }, 'Recent rooms'), recentList);
+  const recentField = h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'recent-rooms-label' }, t('Recent rooms')), recentList);
   const renderRecent = () => {
     const { recentRooms, lastRoom } = settings.get();
     const rooms = recentRooms.length ? recentRooms : lastRoom ? [lastRoom] : [];
@@ -62,7 +63,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
           {
             type: 'button',
             class: 'room-chip-btn',
-            'aria-label': `Join ${room}`,
+            'aria-label': t('Join {room}', { room }),
             onClick: () => {
               roomInput.value = room;
               clearError();
@@ -88,14 +89,14 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
       { class: 'lobby-profile-row' },
       profileAvatar,
       profileName,
-      h('button', { type: 'button', class: 'btn btn-secondary btn-small', onClick: () => openSettings('profile') }, 'Edit profile'),
+      h('button', { type: 'button', class: 'btn btn-secondary btn-small', onClick: () => openSettings('profile') }, t('Edit profile')),
     ),
   );
   const renderProfile = () => {
     const { displayName, avatar, profileColor } = settings.get();
     const name = displayName.trim();
     profile.style.setProperty('--tile-bg', profileBackground(profileColor, name));
-    profileName.textContent = name || 'Pick a name below';
+    profileName.textContent = name || t('Pick a name below');
     profileAvatar.replaceChildren(avatar ? h('img', { src: avatar, alt: '' }) : (name[0] ?? '?').toUpperCase());
   };
   cleanups.push(
@@ -105,7 +106,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     }),
   );
 
-  const joinButton = h('button', { type: 'submit', class: 'btn' }, 'Join room');
+  const joinButton = h('button', { type: 'submit', class: 'btn' }, t('Join room'));
   const hint = h('p', { class: 'hint', 'aria-live': 'polite' });
   let joining = false;
   let error = null;
@@ -119,24 +120,24 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     delete hint.dataset.tone;
     if (!serverOk) {
       hint.replaceChildren(
-        'Set your signaling server first in ',
-        h('a', { href: '#', onClick: (e) => (e.preventDefault(), openSettings('server')) }, 'Settings › Server'),
-        '. No server yet? Read the ',
-        h('a', { href: '#', onClick: (e) => (e.preventDefault(), openGuide()) }, 'setup guide'),
-        '.',
+        t('Set your signaling server first in '),
+        h('a', { href: '#', onClick: (e) => (e.preventDefault(), openSettings('server')) }, t('Settings › Server')),
+        t('. No server yet? Read the '),
+        h('a', { href: '#', onClick: (e) => (e.preventDefault(), openGuide()) }, t('setup guide')),
+        t('.'),
       );
     } else if (roomInput.value && !roomOk) {
-      hint.textContent = 'Room names use letters, numbers, - and _ only.';
+      hint.textContent = t('Room names use letters, numbers, - and _ only.');
       hint.dataset.tone = 'error';
     } else if (error) {
       hint.textContent = error;
       hint.dataset.tone = 'error';
     } else {
-      hint.textContent = 'Everyone who enters the same room name joins the same call.';
+      hint.textContent = t('Everyone who enters the same room name joins the same call.');
     }
 
     joinButton.disabled = joining || !serverOk || !nameOk || !roomOk;
-    joinButton.textContent = joining ? 'Joining…' : 'Join room';
+    joinButton.textContent = joining ? t('Joining…') : t('Join room');
   };
 
   const clearError = () => {
@@ -156,7 +157,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     try {
       await onJoin({ name: nameInput.value.trim(), room: roomInput.value.trim() });
     } catch (err) {
-      error = JOIN_ERRORS[err?.code] ?? `Couldn't join: ${err?.message ?? err}`;
+      error = JOIN_ERRORS[err?.code] ? t(JOIN_ERRORS[err.code]) : t("Couldn't join: {reason}", { reason: err?.message ?? err });
     } finally {
       joining = false;
       update();
@@ -167,10 +168,10 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     'form',
     { class: 'card lobby-card', onSubmit },
     profile,
-    h('h1', {}, 'Join a room'),
-    h('p', {}, 'Share the room name with friends on the same server.'),
-    h('div', { class: 'field' }, h('label', { for: 'lobby-name' }, 'Display name'), nameInput),
-    h('div', { class: 'field' }, h('label', { for: 'lobby-room' }, 'Room'), roomInput),
+    h('h1', {}, t('Join a room')),
+    h('p', {}, t('Share the room name with friends on the same server.')),
+    h('div', { class: 'field' }, h('label', { for: 'lobby-name' }, t('Display name')), nameInput),
+    h('div', { class: 'field' }, h('label', { for: 'lobby-room' }, t('Room')), roomInput),
     recentField,
     h('div', { class: 'field' }, joinButton, hint),
   );

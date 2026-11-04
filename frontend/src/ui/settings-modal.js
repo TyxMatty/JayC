@@ -13,6 +13,7 @@ import { createAudioSettings } from './audio-settings.js';
 import { createProfileColorField } from './profile-color-field.js';
 import { createTabs } from './tabs.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
+import { t } from '../core/i18n.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
 
@@ -27,6 +28,13 @@ const MOTION_OPTIONS = [
   ['system', 'System'],
   ['on', 'On'],
   ['off', 'Off'],
+];
+
+/** Each language in its own name, so it can be found whichever one is showing. */
+const LANGUAGES = [
+  ['system', null],
+  ['en', 'English'],
+  ['pt-BR', 'Português (Brasil)'],
 ];
 
 const THEMES = [
@@ -47,7 +55,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     class: 'input',
     maxlength: 32,
     autocomplete: 'nickname',
-    placeholder: 'How others will see you',
+    placeholder: t('How others will see you'),
     value: current.displayName,
     onInput: (e) => settings.update({ displayName: e.target.value }),
   });
@@ -66,9 +74,15 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           checked: (current.motion ?? 'system') === value,
           onChange: () => settings.update({ motion: value }),
         }),
-        label,
+        t(label),
       ),
     ),
+  );
+
+  const languageSelect = h(
+    'select',
+    { class: 'input', id: 'settings-language', 'aria-describedby': 'language-hint', onChange: (e) => settings.update({ language: e.target.value }) },
+    LANGUAGES.map(([value, name]) => h('option', { value, selected: (current.language ?? 'system') === value }, name ?? t('System'))),
   );
 
   const themeGroup = h(
@@ -85,7 +99,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           checked: current.theme === value,
           onChange: () => settings.update({ theme: value }),
         }),
-        label,
+        t(label),
       ),
     ),
   );
@@ -107,11 +121,11 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
         avatarHint.textContent = '';
       } catch {
         avatarHint.dataset.tone = 'error';
-        avatarHint.textContent = "That file couldn't be read as an image.";
+        avatarHint.textContent = t("That file couldn't be read as an image.");
       }
     },
   });
-  const avatarRemove = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => settings.update({ avatar: null }) }, 'Remove');
+  const avatarRemove = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => settings.update({ avatar: null }) }, t('Remove'));
   const renderAvatar = () => {
     const { avatar, displayName } = settings.get();
     avatarPreview.replaceChildren(avatar ? h('img', { src: avatar, alt: '' }) : (displayName.trim()[0] ?? '?').toUpperCase());
@@ -129,7 +143,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     class: 'color-input',
     onInput: (e) => setAppearance({ accent: e.target.value }),
   });
-  const accentReset = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => setAppearance({ accent: '' }) }, 'Default');
+  const accentReset = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => setAppearance({ accent: '' }) }, t('Default'));
   const backgroundGroup = h(
     'div',
     { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'background-label' },
@@ -146,17 +160,17 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           value,
           onChange: () => setAppearance({ gradient: value === 'gradient' ? { ...DEFAULT_GRADIENT } : null }),
         }),
-        label,
+        t(label),
       ),
     ),
   );
-  const gradientFrom = h('input', { type: 'color', class: 'color-input', 'aria-label': 'Gradient start color', onInput: (e) => setGradient({ from: e.target.value }) });
-  const gradientTo = h('input', { type: 'color', class: 'color-input', 'aria-label': 'Gradient end color', onInput: (e) => setGradient({ to: e.target.value }) });
+  const gradientFrom = h('input', { type: 'color', class: 'color-input', 'aria-label': t('Gradient start color'), onInput: (e) => setGradient({ from: e.target.value }) });
+  const gradientTo = h('input', { type: 'color', class: 'color-input', 'aria-label': t('Gradient end color'), onInput: (e) => setGradient({ to: e.target.value }) });
   const angleValue = h('output', { for: 'settings-angle', class: 'hint' });
   const angleInput = h('input', {
     type: 'range',
     id: 'settings-angle',
-    'aria-label': 'Gradient angle',
+    'aria-label': t('Gradient angle'),
     min: 0,
     max: 360,
     step: 5,
@@ -198,7 +212,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
         'label',
         {},
         h('input', { type: 'radio', name: 'bar-position', value, onChange: () => setCallBar({ position: value }) }),
-        value[0].toUpperCase() + value.slice(1),
+        t(value[0].toUpperCase() + value.slice(1)),
       ),
     ),
   );
@@ -215,13 +229,13 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
           h('button', {
             type: 'button',
             class: 'icon-btn icon-btn-small',
-            'aria-label': `Move ${CONTROL_LABELS[key]} ${dir}`,
+            'aria-label': t(dir === 'up' ? 'Move {control} up' : 'Move {control} down', { control: t(CONTROL_LABELS[key]) }),
             dataset: { move: `${key}:${dir}` },
             disabled: (delta < 0 && i === 0) || (delta > 0 && i === keys.length - 1),
             html: delta < 0 ? icons.arrowUp : icons.arrowDown,
             onClick: () => setCallBar({ order: moveControl(settings.get().callBar.order, key, delta) }),
           });
-        return h('li', {}, h('span', {}, CONTROL_LABELS[key]), move(-1, 'up'), move(1, 'down'));
+        return h('li', {}, h('span', {}, t(CONTROL_LABELS[key])), move(-1, 'up'), move(1, 'down'));
       }),
     );
     if (focused) {
@@ -239,7 +253,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     else delete serverHint.dataset.tone;
   };
   const defaultHint = () =>
-    setHint(`Your server's IP and port, e.g. 192.168.1.50:${DEFAULT_PORT}. The port defaults to ${DEFAULT_PORT}.`);
+    setHint(t("Your server's IP and port, e.g. 192.168.1.50:{port}. The port defaults to {port}.", { port: DEFAULT_PORT }));
 
   const serverInput = h('input', {
     id: 'settings-server',
@@ -253,25 +267,25 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     onChange: (e) => {
       const value = e.target.value.trim();
       settings.update({ serverAddress: value });
-      if (value && !toWebSocketUrl(value)) setHint('That does not look like a valid address.', 'error');
+      if (value && !toWebSocketUrl(value)) setHint(t('That does not look like a valid address.'), 'error');
       else defaultHint();
     },
   });
 
-  const testButton = h('button', { type: 'button', class: 'btn btn-secondary' }, 'Test');
+  const testButton = h('button', { type: 'button', class: 'btn btn-secondary' }, t('Test'));
   testButton.addEventListener('click', async () => {
     const value = serverInput.value.trim();
     settings.update({ serverAddress: value });
     const url = toWebSocketUrl(value);
-    if (!url) return setHint('Enter a valid address first.', 'error');
+    if (!url) return setHint(t('Enter a valid address first.'), 'error');
 
     testButton.disabled = true;
-    setHint(`Connecting to ${url}…`);
+    setHint(t('Connecting to {url}…', { url }));
     const result = await checkServer(url);
     testButton.disabled = false;
-    if (result.ok) setHint('Connected — the server is reachable.', 'success');
-    else if (result.reason === 'timeout') setHint('No answer (timed out). Check the IP, port and firewall.', 'error');
-    else setHint('Could not connect. Is the server running and the port open?', 'error');
+    if (result.ok) setHint(t('Connected — the server is reachable.'), 'success');
+    else if (result.reason === 'timeout') setHint(t('No answer (timed out). Check the IP, port and firewall.'), 'error');
+    else setHint(t('Could not connect. Is the server running and the port open?'), 'error');
   });
 
   defaultHint();
@@ -279,8 +293,8 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
   // Streaming: apps left out of the entire-screen share's sound (Windows native capture only).
   const setExcluded = (excludedApps) => settings.update({ excludedApps });
   let playingApps = []; // apps with an audio session, refreshed each time Settings opens
-  const excludedList = h('ul', { class: 'chip-list', 'aria-label': 'Excluded apps' });
-  const suggestionList = h('div', { class: 'chip-list', role: 'group', 'aria-label': 'Apps to exclude' });
+  const excludedList = h('ul', { class: 'chip-list', 'aria-label': t('Excluded apps') });
+  const suggestionList = h('div', { class: 'chip-list', role: 'group', 'aria-label': t('Apps to exclude') });
   const renderStreaming = () => {
     const list = settings.get().excludedApps;
     excludedList.replaceChildren(
@@ -293,13 +307,13 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
               h('button', {
                 type: 'button',
                 class: 'chip-remove',
-                'aria-label': `Stop excluding ${exe}`,
+                'aria-label': t('Stop excluding {app}', { app: exe }),
                 html: icons.close,
                 onClick: () => setExcluded(removeExcludedApp(settings.get().excludedApps, exe)),
               }),
             ),
           )
-        : [h('li', { class: 'hint' }, 'No apps excluded.')]),
+        : [h('li', { class: 'hint' }, t('No apps excluded.'))]),
     );
     const seen = new Set(list.map(exeKey));
     const picks = [...playingApps, ...SUGGESTED_APPS].filter((app) => !seen.has(exeKey(app.exe)) && seen.add(exeKey(app.exe)));
@@ -323,7 +337,7 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     class: 'input',
     autocomplete: 'off',
     spellcheck: 'false',
-    placeholder: 'e.g. Spotify.exe',
+    placeholder: t('e.g. Spotify.exe'),
     onKeydown: (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault(); // Enter would submit (close) the dialog's form
@@ -337,19 +351,19 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
   const streamingSection = h(
     'fieldset',
     { hidden: true },
-    h('h3', {}, 'Streaming'),
+    h('h3', {}, t('Streaming')),
     h(
       'div',
       { class: 'field' },
-      h('p', { class: 'hint' }, 'Sound from these apps is left out when you share your entire screen. Jay-C itself (the call) is never shared.'),
+      h('p', { class: 'hint' }, t('Sound from these apps is left out when you share your entire screen. Jay-C itself (the call) is never shared.')),
       excludedList,
     ),
-    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Add an app'), suggestionList),
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Add an app')), suggestionList),
     h(
       'div',
       { class: 'field' },
-      h('label', { for: 'settings-exclude' }, 'Or type its program name'),
-      h('div', { class: 'input-row' }, excludeInput, h('button', { type: 'button', class: 'btn btn-secondary', onClick: addTyped }, 'Add')),
+      h('label', { for: 'settings-exclude' }, t('Or type its program name')),
+      h('div', { class: 'input-row' }, excludeInput, h('button', { type: 'button', class: 'btn btn-secondary', onClick: addTyped }, t('Add'))),
     ),
   );
   renderStreaming();
@@ -370,30 +384,30 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
   const audioSettings = createAudioSettings({ getCall });
 
   // ----- Troubleshooting: a snapshot of the running call for bug reports -----
-  const diagHint = h('p', { class: 'hint', 'aria-live': 'polite' }, 'During a call: measures what you receive from each person and whether it plays, and copies it to send to whoever runs the server.');
-  const diagText = h('textarea', { class: 'input', rows: 8, readonly: true, hidden: true, 'aria-label': 'Call diagnostics' });
-  const diagButton = h('button', { type: 'button', class: 'btn btn-secondary' }, 'Copy call diagnostics');
+  const diagHint = h('p', { class: 'hint', 'aria-live': 'polite' }, t('During a call: measures what you receive from each person and whether it plays, and copies it to send to whoever runs the server.'));
+  const diagText = h('textarea', { class: 'input', rows: 8, readonly: true, hidden: true, 'aria-label': t('Call diagnostics') });
+  const diagButton = h('button', { type: 'button', class: 'btn btn-secondary' }, t('Copy call diagnostics'));
   diagButton.addEventListener('click', async () => {
     const call = getCall();
     if (!call) {
-      diagHint.textContent = 'Join a call first, then copy this while the problem is happening.';
+      diagHint.textContent = t('Join a call first, then copy this while the problem is happening.');
       return;
     }
     diagButton.disabled = true;
-    diagHint.textContent = 'Measuring for 2 seconds…';
+    diagHint.textContent = t('Measuring for 2 seconds…');
     try {
       const text = JSON.stringify(await callDiagnostics(call), null, 2);
       diagText.value = text;
       try {
         await navigator.clipboard.writeText(text);
-        diagHint.textContent = 'Copied. Paste it in a message.';
+        diagHint.textContent = t('Copied. Paste it in a message.');
         diagText.hidden = true;
       } catch {
-        diagHint.textContent = "Couldn't copy: select the text below and copy it.";
+        diagHint.textContent = t("Couldn't copy: select the text below and copy it.");
         diagText.hidden = false;
       }
     } catch (error) {
-      diagHint.textContent = `Couldn't measure: ${error?.message ?? error}`;
+      diagHint.textContent = t("Couldn't measure: {reason}", { reason: error?.message ?? error });
     } finally {
       diagButton.disabled = false;
     }
@@ -404,27 +418,27 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
   const items = [
     {
       key: 'profile',
-      label: 'Profile',
+      label: t('Profile'),
       panel: panel(
         h(
           'fieldset',
           {},
-          h('h3', {}, 'Profile'),
-          h('div', { class: 'field' }, h('label', { for: 'settings-name' }, 'Display name'), nameInput),
+          h('h3', {}, t('Profile')),
+          h('div', { class: 'field' }, h('label', { for: 'settings-name' }, t('Display name')), nameInput),
           h(
             'div',
             { class: 'field' },
-            h('span', { class: 'field-label' }, 'Profile picture'),
+            h('span', { class: 'field-label' }, t('Profile picture')),
             h(
               'div',
               { class: 'avatar-row' },
               avatarPreview,
-              h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => avatarFile.click() }, 'Choose picture'),
+              h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => avatarFile.click() }, t('Choose picture')),
               avatarRemove,
               avatarFile,
             ),
             avatarHint,
-            h('p', { class: 'hint' }, 'Shown to others while your camera is off.'),
+            h('p', { class: 'hint' }, t('Shown to others while your camera is off.')),
           ),
           createProfileColorField(),
         ),
@@ -432,30 +446,37 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
     },
     {
       key: 'appearance',
-      label: 'Appearance',
+      label: t('Appearance'),
       panel: panel(
         h(
           'fieldset',
           {},
-          h('h3', {}, 'Appearance'),
-          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, 'Theme'), themeGroup),
+          h('h3', {}, t('Appearance')),
           h(
             'div',
             { class: 'field' },
-            h('span', { class: 'field-label', id: 'motion-label' }, 'Animations'),
+            h('label', { for: 'settings-language' }, t('Language')),
+            languageSelect,
+            h('p', { class: 'hint', id: 'language-hint' }, t('Jay-C reloads to change the language. During a call, it changes when you leave.')),
+          ),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, t('Theme')), themeGroup),
+          h(
+            'div',
+            { class: 'field' },
+            h('span', { class: 'field-label', id: 'motion-label' }, t('Animations')),
             motionGroup,
-            h('p', { class: 'hint', id: 'motion-hint' }, 'System follows Windows (Accessibility › Visual effects › Animation effects).'),
+            h('p', { class: 'hint', id: 'motion-hint' }, t('System follows Windows (Accessibility › Visual effects › Animation effects).')),
           ),
           h(
             'div',
             { class: 'field' },
-            h('label', { for: 'settings-accent' }, 'Button color'),
+            h('label', { for: 'settings-accent' }, t('Button color')),
             h('div', { class: 'input-row' }, accentInput, accentReset),
           ),
           h(
             'div',
             { class: 'field' },
-            h('span', { class: 'field-label', id: 'background-label' }, 'Background'),
+            h('span', { class: 'field-label', id: 'background-label' }, t('Background')),
             backgroundGroup,
             gradientControls,
           ),
@@ -463,22 +484,22 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
         h(
           'fieldset',
           {},
-          h('h3', {}, 'Call controls'),
-          h('p', { class: 'hint field' }, 'You can also drag the buttons, or the grip next to them, during a call.'),
-          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-position-label' }, 'Position'), barPositionGroup),
-          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-order-label' }, 'Order'), barOrderList),
+          h('h3', {}, t('Call controls')),
+          h('p', { class: 'hint field' }, t('You can also drag the buttons, or the grip next to them, during a call.')),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-position-label' }, t('Position')), barPositionGroup),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-order-label' }, t('Order')), barOrderList),
         ),
       ),
     },
     {
       key: 'audio',
-      label: 'Audio',
+      label: t('Audio'),
       panel: panel(
         audioSettings.element,
         h(
           'fieldset',
           {},
-          h('h3', {}, 'Microphone processing'),
+          h('h3', {}, t('Microphone processing')),
           MIC_OPTIONS.map(([key, title, description]) =>
             h(
               'label',
@@ -489,42 +510,42 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
                 checked: current.micProcessing[key],
                 onChange: (e) => settings.update({ micProcessing: { ...settings.get().micProcessing, [key]: e.target.checked } }),
               }),
-              h('span', { class: 'toggle-text' }, h('span', { class: 'toggle-title' }, title), h('span', { class: 'hint' }, description)),
+              h('span', { class: 'toggle-text' }, h('span', { class: 'toggle-title' }, t(title)), h('span', { class: 'hint' }, t(description))),
             ),
           ),
         ),
       ),
     },
-    { key: 'streaming', label: 'Streaming', panel: panel(streamingSection) },
+    { key: 'streaming', label: t('Streaming'), panel: panel(streamingSection) },
     {
       key: 'server',
-      label: 'Server',
+      label: t('Server'),
       panel: panel(
         h(
           'fieldset',
           {},
-          h('h3', {}, 'Server'),
+          h('h3', {}, t('Server')),
           h(
             'div',
             { class: 'field' },
-            h('label', { for: 'settings-server' }, 'Signaling server address'),
+            h('label', { for: 'settings-server' }, t('Signaling server address')),
             h('div', { class: 'input-row' }, serverInput, testButton),
             serverHint,
             h(
               'p',
               { class: 'hint' },
-              'No server yet? ',
-              h('a', { href: '#', onClick: (e) => (e.preventDefault(), openGuide()) }, 'Read the setup guide'),
-              '.',
+              t('No server yet? '),
+              h('a', { href: '#', onClick: (e) => (e.preventDefault(), openGuide()) }, t('Read the setup guide')),
+              t('.'),
             ),
           ),
         ),
       ),
     },
-    { key: 'help', label: 'Help', panel: panel(h('fieldset', {}, h('h3', {}, 'Troubleshooting'), h('div', { class: 'field' }, diagButton, diagHint, diagText))) },
+    { key: 'help', label: t('Help'), panel: panel(h('fieldset', {}, h('h3', {}, t('Troubleshooting')), h('div', { class: 'field' }, diagButton, diagHint, diagText))) },
   ];
   const panels = h('div', { class: 'settings-panels' }, items.map((item) => item.panel));
-  const tabs = createTabs({ idPrefix: 'settings', label: 'Settings sections', className: 'settings-tabs', vertical: true, items, onSelect: () => (panels.scrollTop = 0) });
+  const tabs = createTabs({ idPrefix: 'settings', label: t('Settings sections'), className: 'settings-tabs', vertical: true, items, onSelect: () => (panels.scrollTop = 0) });
   const body = h('div', { class: 'modal-body settings-body' }, tabs.list, panels);
   tabs.setHidden('streaming', true); // shown once screen sound capture is known to work here
   tabs.select('profile');
@@ -538,11 +559,11 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
       h(
         'header',
         { class: 'modal-header' },
-        h('h2', { id: 'settings-title' }, 'Settings'),
-        h('button', { type: 'submit', class: 'icon-btn', 'aria-label': 'Close settings', html: icons.close }),
+        h('h2', { id: 'settings-title' }, t('Settings')),
+        h('button', { type: 'submit', class: 'icon-btn', 'aria-label': t('Close settings'), html: icons.close }),
       ),
       body,
-      h('footer', { class: 'modal-footer' }, h('button', { type: 'submit', class: 'btn' }, 'Done')),
+      h('footer', { class: 'modal-footer' }, h('button', { type: 'submit', class: 'btn' }, t('Done'))),
     ),
   );
 

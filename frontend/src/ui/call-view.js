@@ -10,6 +10,7 @@ import { createMixer } from '../core/playback.js';
 import { createSpeakingDetector } from '../core/speaking.js';
 import { profileBackground } from '../core/profile-color.js';
 import { settings } from '../store/settings.js';
+import { t } from '../core/i18n.js';
 
 const CONNECTION_LABELS = {
   new: 'Connecting…',
@@ -50,15 +51,15 @@ function createTile({ name, stream, local, getMedia, getAvatar, getColor = () =>
   // Always muted: remote sound plays through the mixer (core/playback.js).
   const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
   const avatar = h('div', { class: 'tile-avatar', 'aria-hidden': 'true' }, initials(name));
-  const nameText = h('span', {}, local ? `${name} (you)` : name);
-  const mutedIcon = h('span', { class: 'tile-muted', title: 'Microphone off', html: icons.micOff, hidden: true });
+  const nameText = h('span', {}, local ? t('{name} (you)', { name }) : name);
+  const mutedIcon = h('span', { class: 'tile-muted', title: t('Microphone off'), html: icons.micOff, hidden: true });
   const label = h('div', { class: 'tile-label' }, mutedIcon, nameText);
   const overlay = h('div', { class: 'tile-overlay', hidden: true });
   const watchButton = h(
     'button',
     { type: 'button', class: 'tile-watch', hidden: true, onClick: () => onWatch?.() },
-    h('span', { class: 'live-badge' }, 'LIVE'),
-    'Watch stream',
+    h('span', { class: 'live-badge' }, t('LIVE')),
+    t('Watch stream'),
   );
   const el = h('div', { class: local ? 'tile tile-local' : 'tile', tabindex: local ? false : 0 }, video, avatar, overlay, watchButton, label);
 
@@ -96,7 +97,7 @@ function createTile({ name, stream, local, getMedia, getAvatar, getColor = () =>
       }
     },
     setName(next) {
-      nameText.textContent = local ? `${next} (you)` : next;
+      nameText.textContent = local ? t('{name} (you)', { name: next }) : next;
       shownName = next;
       shownAvatar = undefined; // re-render: the initials may have changed
       renderAvatar();
@@ -108,7 +109,7 @@ function createTile({ name, stream, local, getMedia, getAvatar, getColor = () =>
     /** Shows "Watch stream" while they share a stream we aren't watching. */
     setLive(unwatched) {
       watchButton.hidden = !unwatched;
-      watchButton.setAttribute('aria-label', `Watch ${shownName}'s stream`);
+      watchButton.setAttribute('aria-label', t("Watch {name}'s stream", { name: shownName }));
     },
   };
   tile.refresh();
@@ -120,18 +121,18 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus }
   const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
   const muteButton = local ? null : h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onToggleMute?.() });
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
-  const nameText = h('span', {}, local ? 'Your screen' : `${name}'s screen`);
+  const nameText = h('span', {}, local ? t('Your screen') : t("{name}'s screen", { name }));
   const el = h(
     'div',
     {
       class: local ? 'tile tile-screen tile-screen-local' : 'tile tile-screen',
-      title: local ? 'Click to show it bigger, or back in the corner' : 'Click to focus · double-click for fullscreen',
+      title: local ? t('Click to show it bigger, or back in the corner') : t('Click to focus · double-click for fullscreen'),
     },
     video,
     h('div', { class: 'tile-label' }, icon, nameText),
     ...(local
       ? []
-      : [h('div', { class: 'tile-stream-actions' }, muteButton, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onStop?.() }, 'Stop watching'))]),
+      : [h('div', { class: 'tile-stream-actions' }, muteButton, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onStop?.() }, t('Stop watching')))]),
   );
   el.tabIndex = 0;
   // Focus this stream (a double-click's two clicks cancel out, then it goes fullscreen).
@@ -157,12 +158,14 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus }
     /** The stream's sound is muted just for us. */
     setMuted(muted) {
       if (!muteButton) return;
-      muteButton.textContent = muted ? 'Unmute stream' : 'Mute stream';
+      muteButton.textContent = muted ? t('Unmute stream') : t('Mute stream');
       muteButton.setAttribute('aria-pressed', String(muted));
     },
     refresh({ name: next, mode }) {
       icon.innerHTML = mode === 'window' ? icons.appWindow : icons.monitor;
-      nameText.textContent = local ? `Your ${mode === 'window' ? 'window' : 'screen'}` : `${next}'s ${mode === 'window' ? 'window' : 'screen'}`;
+      nameText.textContent = local
+        ? t(mode === 'window' ? 'Your window' : 'Your screen')
+        : t(mode === 'window' ? "{name}'s window" : "{name}'s screen", { name: next });
       if (video.srcObject !== stream || video.dataset.tracks !== String(stream.getTracks().length)) {
         video.srcObject = stream;
         video.dataset.tracks = String(stream.getTracks().length);
@@ -212,13 +215,13 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const copyRoom = async () => {
     try {
       await navigator.clipboard.writeText(call.room);
-      showToast('Room name copied.');
+      showToast(t('Room name copied.'));
     } catch {
-      showToast(`Room name: ${call.room}`);
+      showToast(t('Room name: {room}', { room: call.room }));
     }
   };
-  const copyButton = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Copy room name', title: 'Copy room name', html: icons.copy, onClick: copyRoom });
-  const waiting = h('div', { class: 'call-waiting' }, h('p', {}, 'Waiting for others to join. Share the room name from the top.'));
+  const copyButton = h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Copy room name'), title: t('Copy room name'), html: icons.copy, onClick: copyRoom });
+  const waiting = h('div', { class: 'call-waiting' }, h('p', {}, t('Waiting for others to join. Share the room name from the top.')));
 
   // ----- Header: which room, how many people (like a channel header) -----
   const peopleCount = h('span', { class: 'call-header-count' });
@@ -240,13 +243,13 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         onLeave: () => renderPip(),
       })
     : null;
-  const pipButton = pip ? controlButton({ label: 'Pop out video' }) : null;
+  const pipButton = pip ? controlButton({ label: t('Pop out video') }) : null;
   pipButton?.addEventListener('click', async () => {
     try {
       if (pip.open) await pip.exit();
       else await pip.enter(pickPipTrack(call.participants.values()));
     } catch (error) {
-      showToast(`Couldn't pop out the video: ${error?.message ?? error}`);
+      showToast(t("Couldn't pop out the video: {reason}", { reason: error?.message ?? error }));
     }
     renderPip();
   });
@@ -272,8 +275,8 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     pipButton.innerHTML = icons.pip;
     pipButton.disabled = !open && !track;
     pipButton.setAttribute('aria-pressed', String(open));
-    pipButton.setAttribute('aria-label', open ? 'Close pop-out video' : 'Pop out video');
-    pipButton.title = track || open ? pipButton.getAttribute('aria-label') : 'Pop out video (no one has video on)';
+    pipButton.setAttribute('aria-label', open ? t('Close pop-out video') : t('Pop out video'));
+    pipButton.title = track || open ? pipButton.getAttribute('aria-label') : t('Pop out video (no one has video on)');
     pipButton.classList.toggle('active', open);
   }
 
@@ -324,7 +327,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       delete screens.dataset.focus;
     }
     stage.dataset.layout = streams > 0 ? 'presenting' : remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
-    peopleCount.textContent = remotes === 0 ? 'Just you' : `${remotes + 1} people`;
+    peopleCount.textContent = remotes === 0 ? t('Just you') : t('{count} people', { count: remotes + 1 });
     waiting.hidden = remotes > 0;
   };
 
@@ -333,7 +336,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     // Announce a new share once; it starts unwatched (no sound, not featured) until "Watch stream".
     if (participant.media.screen && !sharing.has(participant.id)) {
       sharing.add(participant.id);
-      showToast(`${participant.name} started a stream.`);
+      showToast(t('{name} started a stream.', { name: participant.name }));
     } else if (!participant.media.screen) {
       sharing.delete(participant.id);
     }
@@ -358,8 +361,8 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       });
       tile.el.addEventListener('contextmenu', (e) =>
         audioMenu.open(e, {
-          title: `${participant.name}'s stream`,
-          muteLabel: 'Mute stream',
+          title: t("{name}'s stream", { name: participant.name }),
+          muteLabel: t('Mute stream'),
           get: () => mixer.get(streamKey(participant)),
           set: (patch) => tile.setMuted(mixer.set(streamKey(participant), patch).muted),
         }),
@@ -388,18 +391,19 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       tile.el.addEventListener('contextmenu', (e) =>
         audioMenu.open(e, {
           title: participant.name,
-          muteLabel: `Mute ${participant.name} for me`,
+          muteLabel: t('Mute {name} for me', { name: participant.name }),
           get: () => mixer.get(voiceKey(participant)),
           set: (patch) => mixer.set(voiceKey(participant), patch),
         }),
       );
       tiles.set(participant.id, tile);
       cameras.insertBefore(tile.el, localTile.el);
-      if (announce) showToast(`${participant.name} joined.`);
+      if (announce) showToast(t('{name} joined.', { name: participant.name }));
       layout();
     }
     tile.setName(participant.name);
-    tile.setOverlay(CONNECTION_LABELS[participant.connectionState]);
+    const connection = CONNECTION_LABELS[participant.connectionState];
+    tile.setOverlay(connection && t(connection));
     tile.refresh();
     tile.setLive(participant.media.screen && !participant.watching);
     mixer.play(voiceKey(participant), participant.stream.getAudioTracks()[0] ?? null);
@@ -456,18 +460,18 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   call.addEventListener('signaling-state', (e) => {
     const { state } = e.detail;
     banner.hidden = !(state === 'reconnecting' || state === 'connecting');
-    banner.textContent = 'Lost connection to the server — reconnecting…';
+    banner.textContent = t('Lost connection to the server — reconnecting…');
   });
 
   // ----- Controls -----
-  const micButton = controlButton({ label: 'Mute microphone' });
-  const camButton = controlButton({ label: 'Turn camera off' });
-  const leaveButton = controlButton({ label: 'Leave call', variant: 'danger', onClick: () => call.leave() });
+  const micButton = controlButton({ label: t('Mute microphone') });
+  const camButton = controlButton({ label: t('Turn camera off') });
+  const leaveButton = controlButton({ label: t('Leave call'), variant: 'danger', onClick: () => call.leave() });
   leaveButton.innerHTML = icons.phoneOff;
 
   const chat = createChatPanel({
     send: (text) => call.sendChat(text, displayName),
-    onIncoming: ({ name, text }) => showToast(`${name || 'Guest'}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}`),
+    onIncoming: ({ name, text }) => showToast(`${name || t('Guest')}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}`),
   });
   call.addEventListener('chat', (e) => chat.add(e.detail));
 
@@ -480,18 +484,18 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const renderControls = () => {
     micButton.innerHTML = call.micOn ? icons.mic : icons.micOff;
     micButton.setAttribute('aria-pressed', String(!call.micOn));
-    micButton.setAttribute('aria-label', call.micOn ? 'Mute microphone' : 'Unmute microphone');
+    micButton.setAttribute('aria-label', call.micOn ? t('Mute microphone') : t('Unmute microphone'));
     micButton.title = micButton.getAttribute('aria-label');
     micButton.classList.toggle('off', !call.micOn);
 
     camButton.innerHTML = call.cameraOn ? icons.video : icons.videoOff;
     camButton.setAttribute('aria-pressed', String(!call.cameraOn));
-    camButton.setAttribute('aria-label', call.cameraOn ? 'Turn camera off' : 'Turn camera on');
+    camButton.setAttribute('aria-label', call.cameraOn ? t('Turn camera off') : t('Turn camera on'));
     camButton.title = camButton.getAttribute('aria-label');
     camButton.classList.toggle('off', !call.cameraOn);
 
     if (shareButton) {
-      const label = call.sharing ? 'Screen share settings' : 'Share your screen';
+      const label = call.sharing ? t('Screen share settings') : t('Share your screen');
       shareButton.setAttribute('aria-label', label);
       shareButton.title = label;
       shareButton.classList.toggle('active', call.sharing);
@@ -507,7 +511,8 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     try {
       await action();
     } catch (error) {
-      showToast(`Couldn't access the ${what}: ${MEDIA_ERROR_LABELS[error?.name] ?? error?.message ?? 'unknown error'}.`);
+      const reason = MEDIA_ERROR_LABELS[error?.name] ? t(MEDIA_ERROR_LABELS[error.name]) : (error?.message ?? t('unknown error'));
+      showToast(t(what === 'camera' ? "Couldn't access the camera: {reason}." : "Couldn't access the microphone: {reason}.", { reason }));
     } finally {
       button.disabled = false;
     }
@@ -527,7 +532,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const hideFromCapture = (on) => {
     if (on === hiddenFromCapture || !('__TAURI_INTERNALS__' in window)) return;
     hiddenFromCapture = on;
-    if (on) showToast('While you share your entire screen, the Jay-C window is hidden from screen captures, including your screenshots and recordings.');
+    if (on) showToast(t('While you share your entire screen, the Jay-C window is hidden from screen captures, including your screenshots and recordings.'));
     import('@tauri-apps/api/window')
       .then(({ getCurrentWindow }) => getCurrentWindow().setContentProtected(on))
       .catch(() => {});
@@ -549,7 +554,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     localTile.el.classList.toggle('speaking', call.micOn && speaking.update('me', mixer.levelDb('me:mic'), now));
   }, 100);
 
-  const section = h('section', { class: 'call', 'aria-label': `Call in room ${call.room}` });
+  const section = h('section', { class: 'call', 'aria-label': t('Call in room {room}', { room: call.room }) });
   const controlBar = createControlBar({
     section,
     buttons: { mic: micButton, camera: camButton, share: shareButton, chat: chat.button, pip: pipButton, leave: leaveButton },
@@ -576,9 +581,9 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   layout();
 
   const problems = Object.entries(call.mediaErrors).map(
-    ([kind, name]) => `${kind === 'audio' ? 'Microphone' : 'Camera'}: ${MEDIA_ERROR_LABELS[name] ?? name}`,
+    ([kind, name]) => `${kind === 'audio' ? t('Microphone') : t('Camera')}: ${MEDIA_ERROR_LABELS[name] ? t(MEDIA_ERROR_LABELS[name]) : name}`,
   );
-  if (problems.length) showToast(`${problems.join(' · ')}. You can still see and hear others.`);
+  if (problems.length) showToast(t('{problems}. You can still see and hear others.', { problems: problems.join(' · ') }));
 
   // The bar can sit on any edge (section[data-bar]), so the rest of the call is one column of its own.
   section.append(h('div', { class: 'call-main' }, header, banner, stage, waiting, toast, chat.element), controlBar.element, audioMenu.element, ...(sharePanel ? [sharePanel] : []));

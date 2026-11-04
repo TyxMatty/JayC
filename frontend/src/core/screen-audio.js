@@ -1,5 +1,6 @@
 // Screen-share sound: native per-process capture (Rust plugin) -> AudioWorklet -> MediaStreamTrack.
 import * as systemAudio from 'tauri-plugin-system-audio-api';
+import { t } from './i18n.js';
 
 const SAMPLE_RATE = 48_000;
 
@@ -63,7 +64,9 @@ export async function startScreenAudio({ mode, windowHandle, excludedApps = [], 
     description = app.exe;
   } else {
     target = { excludeSelf: true, excludeExes: excludedApps };
-    description = excludedApps.length ? `all apps except Jay-C, ${excludedApps.join(', ')}` : 'all apps except Jay-C';
+    description = excludedApps.length
+      ? t('all apps except Jay-C, {apps}', { apps: excludedApps.join(', ') })
+      : t('all apps except Jay-C');
   }
 
   const source = await PcmTrackSource.create();

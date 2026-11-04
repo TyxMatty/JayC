@@ -3,6 +3,7 @@
 // server keeps no history). Text is always inserted as text, never as HTML.
 import { h } from './dom.js';
 import { icons } from './icons.js';
+import { t } from '../core/i18n.js';
 
 const MAX_LENGTH = 500;
 /** Older messages are dropped past this, so a long call doesn't grow the page forever. */
@@ -16,16 +17,16 @@ const MAX_SHOWN = 200;
 export function createChatPanel({ send, onIncoming }) {
   const badge = h('span', { class: 'control-badge', hidden: true });
   const button = h('button', { type: 'button', class: 'control-btn', 'aria-expanded': 'false', html: icons.chat }, badge);
-  const log = h('ol', { class: 'chat-log', role: 'log', 'aria-live': 'polite', 'aria-label': 'Messages' });
-  const empty = h('p', { class: 'chat-empty hint' }, 'Messages sent here go to everyone in the call. They disappear when the call ends.');
-  const input = h('input', { class: 'input', type: 'text', maxlength: MAX_LENGTH, placeholder: 'Message everyone', 'aria-label': 'Message' });
+  const log = h('ol', { class: 'chat-log', role: 'log', 'aria-live': 'polite', 'aria-label': t('Messages') });
+  const empty = h('p', { class: 'chat-empty hint' }, t('Messages sent here go to everyone in the call. They disappear when the call ends.'));
+  const input = h('input', { class: 'input', type: 'text', maxlength: MAX_LENGTH, placeholder: t('Message everyone'), 'aria-label': t('Message') });
   const status = h('p', { class: 'hint', 'aria-live': 'polite' });
-  const form = h('form', { class: 'chat-form' }, input, h('button', { type: 'submit', class: 'btn' }, 'Send'));
-  const close = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close chat', html: icons.close });
+  const form = h('form', { class: 'chat-form' }, input, h('button', { type: 'submit', class: 'btn' }, t('Send')));
+  const close = h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Close chat'), html: icons.close });
   const panel = h(
     'aside',
-    { class: 'chat-panel', hidden: true, 'aria-label': 'Chat' },
-    h('header', { class: 'chat-header' }, h('h2', {}, 'Chat'), close),
+    { class: 'chat-panel', hidden: true, 'aria-label': t('Chat') },
+    h('header', { class: 'chat-header' }, h('h2', {}, t('Chat')), close),
     empty,
     log,
     status,
@@ -35,7 +36,7 @@ export function createChatPanel({ send, onIncoming }) {
   let unread = 0;
   const renderButton = () => {
     const open = !panel.hidden;
-    const label = open ? 'Close chat' : unread ? `Chat, ${unread} unread` : 'Open chat';
+    const label = open ? t('Close chat') : unread ? t('Chat, {count} unread', { count: unread }) : t('Open chat');
     button.setAttribute('aria-label', label);
     button.title = label;
     button.setAttribute('aria-expanded', String(open));
@@ -69,7 +70,7 @@ export function createChatPanel({ send, onIncoming }) {
       input.value = '';
       status.textContent = '';
     } else {
-      status.textContent = 'Not connected right now. Your message is still in the box.';
+      status.textContent = t('Not connected right now. Your message is still in the box.');
     }
   });
 
@@ -84,7 +85,7 @@ export function createChatPanel({ send, onIncoming }) {
         h(
           'li',
           { class: mine ? 'chat-message mine' : 'chat-message' },
-          h('div', { class: 'chat-meta' }, h('strong', {}, mine ? 'You' : name || 'Guest'), h('time', {}, time)),
+          h('div', { class: 'chat-meta' }, h('strong', {}, mine ? t('You') : name || t('Guest')), h('time', {}, time)),
           h('p', {}, text),
         ),
       );

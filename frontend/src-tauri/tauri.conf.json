@@ -53,7 +53,10 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "template": "windows/installer.nsi"
+        "template": "windows/installer.nsi",
+        "languages": ["English", "PortugueseBR"],
+        "displayLanguageSelector": true,
+        "customLanguageFiles": { "PortugueseBR": "windows/PortugueseBR.nsh" }
       }
     },
     "android": {

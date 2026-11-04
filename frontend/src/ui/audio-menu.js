@@ -2,6 +2,7 @@
 // Keyboard: focus the tile and press the Menu key (or Shift+F10), which fires the same event.
 import { h } from './dom.js';
 import { MAX_VOLUME } from '../core/playback.js';
+import { t } from '../core/i18n.js';
 
 export function createAudioMenu() {
   const title = h('h2', { class: 'audio-menu-title', id: 'audio-menu-title' });
@@ -13,7 +14,7 @@ export function createAudioMenu() {
     'div',
     { class: 'audio-menu', popover: 'auto', 'aria-labelledby': 'audio-menu-title' },
     title,
-    h('div', { class: 'audio-menu-row' }, h('label', { for: 'audio-menu-volume' }, 'Volume'), value),
+    h('div', { class: 'audio-menu-row' }, h('label', { for: 'audio-menu-volume' }, t('Volume')), value),
     slider,
     h('label', { class: 'audio-menu-check' }, mute, muteText),
   );

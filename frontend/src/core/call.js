@@ -14,6 +14,7 @@ import {
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic } from './native-mic.js';
+import { t } from './i18n.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
 const SCREEN_AUDIO_CODEC_OPTIONS = { opusStereo: true, opusFec: true, opusDtx: false, opusMaxAverageBitrate: 128_000 };
@@ -166,7 +167,7 @@ export class Call extends EventTarget {
       // A server older than chat answers a bare 'bad-message' (no ref) to it.
       const { code, ref } = e.detail;
       if (ref !== 'chat' && !(ref === undefined && code === 'bad-message' && performance.now() - this.#lastChatAt < 3000)) return;
-      const message = code === 'rate-limited' ? 'Too many messages: the last one was not sent.' : 'The server did not accept your message (it may need updating).';
+      const message = t(code === 'rate-limited' ? 'Too many messages: the last one was not sent.' : 'The server did not accept your message (it may need updating).');
       this.#emit('notice', { message });
     });
     signaling.addEventListener('producer-closed', (e) => this.#onProducerClosed(e.detail));
@@ -340,7 +341,7 @@ export class Call extends EventTarget {
     try {
       this.#screenAudio = await startScreenAudio(this.#screenAudioOptions());
     } catch (error) {
-      this.#emit('notice', { message: `Sharing without sound: ${error?.message ?? error}` });
+      this.#emit('notice', { message: t('Sharing without sound: {reason}', { reason: error?.message ?? error }) });
       return;
     }
     if (!this.#screenAudio) return; // not supported on this platform
@@ -353,7 +354,7 @@ export class Call extends EventTarget {
       mode: this.screenShare.mode,
       windowHandle: this.screenShare.windowHandle,
       excludedApps: this.excludedApps,
-      onError: (message) => this.#emit('notice', { message: `Screen sound stopped: ${message}` }),
+      onError: (message) => this.#emit('notice', { message: t('Screen sound stopped: {reason}', { reason: message }) }),
     };
   }
 
@@ -593,7 +594,7 @@ export class Call extends EventTarget {
     if (this.participants.has(id)) return this.participants.get(id);
     const participant = {
       id,
-      name: name ?? 'Guest',
+      name: name ?? t('Guest'),
       /** Profile picture (data URL, validated by the server) or null. */
       avatar: avatar ?? null,
       /** Profile color { from, to?, angle? } (validated by the server) or null. */
@@ -753,7 +754,7 @@ export class Call extends EventTarget {
       device: this.micDeviceId,
       shape: this.micShape,
       onLevel: (db) => (this.micLevel = db),
-      onError: (message) => this.#emit('notice', { message: `Microphone stopped: ${message}` }),
+      onError: (message) => this.#emit('notice', { message: t('Microphone stopped: {reason}', { reason: message }) }),
     });
     return this.#nativeMic.track;
   }

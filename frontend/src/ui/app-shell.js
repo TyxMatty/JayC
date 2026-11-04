@@ -10,13 +10,14 @@ import { createSetupGuideModal } from './setup-guide-modal.js';
 import { createLobby } from './lobby.js';
 import { createCallView } from './call-view.js';
 import { addRecentRoom } from '../core/recent-rooms.js';
+import { t } from '../core/i18n.js';
 
 const STATUS_LABELS = {
-  unset: 'No server',
-  invalid: 'Invalid address',
-  checking: 'Checking…',
-  online: 'Online',
-  offline: 'Offline',
+  unset: () => t('No server'),
+  invalid: () => t('Invalid address'),
+  checking: () => t('Checking…'),
+  online: () => t('Online'),
+  offline: () => t('Offline'),
 };
 
 function createStatusPill(onSetup) {
@@ -24,14 +25,14 @@ function createStatusPill(onSetup) {
   const pill = h(
     'button',
     { type: 'button', class: 'status-pill', 'aria-live': 'polite' },
-    h('span', { class: 'label-long' }, 'Server: '),
+    h('span', { class: 'label-long' }, t('Server: ')),
     label,
   );
 
   serverStatus.subscribe(({ state, url }) => {
     pill.dataset.state = state;
-    label.textContent = STATUS_LABELS[state];
-    pill.title = url ? `${url} — click to check again` : 'Click to set up a server';
+    label.textContent = STATUS_LABELS[state]();
+    pill.title = url ? t('{url} — click to check again', { url }) : t('Click to set up a server');
   });
 
   pill.addEventListener('click', () => {
@@ -47,7 +48,7 @@ function createThemeToggle() {
   const render = () => {
     const dark = currentTheme() === 'dark';
     button.innerHTML = dark ? icons.sun : icons.moon;
-    button.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+    button.setAttribute('aria-label', dark ? t('Switch to light mode') : t('Switch to dark mode'));
     button.title = button.getAttribute('aria-label');
   };
   button.addEventListener('click', () => {
@@ -75,7 +76,16 @@ export function mountApp(root) {
     view.replaceChildren(element);
   };
 
+  // A new language applies on a fresh page: now, or when the call ends (reloading would drop it).
+  let reloadForLanguage = false;
+  settings.subscribe((next, prev) => {
+    if (next.language === prev.language) return;
+    if (currentCall) reloadForLanguage = true;
+    else location.reload();
+  });
+
   const showLobby = () => {
+    if (reloadForLanguage) return location.reload();
     const lobby = createLobby({ openSettings, openGuide, onJoin: join });
     show(lobby.element, lobby.destroy);
   };
@@ -130,8 +140,8 @@ export function mountApp(root) {
     h('button', {
       type: 'button',
       class: 'icon-btn',
-      'aria-label': 'Settings',
-      title: 'Settings',
+      'aria-label': t('Settings'),
+      title: t('Settings'),
       html: icons.settings,
       onClick: () => openSettings(),
     }),

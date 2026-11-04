@@ -6,6 +6,7 @@ import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { MAX_MIC_GAIN } from '../core/mic-shape.js';
+import { t } from '../core/i18n.js';
 
 const GATE_MIN = -70;
 const GATE_MAX = -10;
@@ -54,8 +55,8 @@ export function createAudioSettings({ getCall }) {
   const micPart = h(
     'div',
     { hidden: true },
-    h('div', { class: 'field' }, h('label', { for: 'settings-mic-device' }, 'Microphone'), micSelect),
-    h('div', { class: 'field' }, h('div', { class: 'audio-menu-row' }, h('label', { for: 'settings-mic-gain' }, 'Microphone volume'), gainValue), gainInput),
+    h('div', { class: 'field' }, h('label', { for: 'settings-mic-device' }, t('Microphone')), micSelect),
+    h('div', { class: 'field' }, h('div', { class: 'audio-menu-row' }, h('label', { for: 'settings-mic-gain' }, t('Microphone volume')), gainValue), gainInput),
     h(
       'label',
       { class: 'toggle-row' },
@@ -63,11 +64,11 @@ export function createAudioSettings({ getCall }) {
       h(
         'span',
         { class: 'toggle-text' },
-        h('span', { class: 'toggle-title' }, 'Only send when I speak'),
-        h('span', { class: 'hint' }, 'Sounds quieter than the sensitivity level (breathing, typing, the room) are not sent.'),
+        h('span', { class: 'toggle-title' }, t('Only send when I speak')),
+        h('span', { class: 'hint' }, t('Sounds quieter than the sensitivity level (breathing, typing, the room) are not sent.')),
       ),
     ),
-    h('div', { class: 'field gate-field' }, h('div', { class: 'audio-menu-row' }, h('label', { for: 'settings-mic-gate' }, 'Sensitivity level'), gateValue), gateInput, meter, meterHint),
+    h('div', { class: 'field gate-field' }, h('div', { class: 'audio-menu-row' }, h('label', { for: 'settings-mic-gate' }, t('Sensitivity level')), gateValue), gateInput, meter, meterHint),
   );
 
   // ----- Speakers -----
@@ -78,7 +79,7 @@ export function createAudioSettings({ getCall }) {
   });
   // Speaker names stay hidden until the WebView has mic permission once (granted silently in the
   // app and remembered). This opens the WebView mic for a moment, so only on request.
-  const revealButton = h('button', { type: 'button', class: 'btn btn-secondary' }, 'Show speakers');
+  const revealButton = h('button', { type: 'button', class: 'btn btn-secondary' }, t('Show speakers'));
   revealButton.addEventListener('click', async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -91,7 +92,7 @@ export function createAudioSettings({ getCall }) {
   const outputPart = h(
     'div',
     { class: 'field', hidden: true },
-    h('label', { for: 'settings-output-device' }, 'Speakers'),
+    h('label', { for: 'settings-output-device' }, t('Speakers')),
     h('div', { class: 'input-row' }, outputSelect, revealButton),
   );
 
@@ -101,7 +102,7 @@ export function createAudioSettings({ getCall }) {
     gateSwitch.checked = s.micGate != null;
     gateInput.disabled = s.micGate == null;
     gateInput.value = String(s.micGate ?? DEFAULT_GATE);
-    gateValue.textContent = s.micGate == null ? 'Off' : `${s.micGate} dB`;
+    gateValue.textContent = s.micGate == null ? t('Off') : `${s.micGate} dB`;
     meterMark.hidden = s.micGate == null;
     meterMark.style.left = meterPercent(s.micGate ?? DEFAULT_GATE);
   };
@@ -115,10 +116,10 @@ export function createAudioSettings({ getCall }) {
     const chosen = settings.get().micDevice;
     const fallback = mics.find((m) => m.isDefault);
     micSelect.replaceChildren(
-      option('', `Windows default${fallback ? ` (${fallback.name})` : ''}`, !chosen),
+      option('', fallback ? t('Windows default ({name})', { name: fallback.name }) : t('Windows default'), !chosen),
       ...mics.map((m) => option(m.id, m.name, m.id === chosen)),
       // The saved one is unplugged: keep it visible so it isn't silently replaced.
-      ...(chosen && !mics.some((m) => m.id === chosen) ? [option(chosen, 'Saved microphone (not connected)', true)] : []),
+      ...(chosen && !mics.some((m) => m.id === chosen) ? [option(chosen, t('Saved microphone (not connected)'), true)] : []),
     );
   }
 
@@ -128,9 +129,9 @@ export function createAudioSettings({ getCall }) {
     const chosen = settings.get().outputDevice;
     revealButton.hidden = outputs.length > 0;
     outputSelect.replaceChildren(
-      option('', 'System default', !chosen),
+      option('', t('System default'), !chosen),
       ...outputs.map((d) => option(d.deviceId, d.label, d.deviceId === chosen)),
-      ...(chosen && !outputs.some((d) => d.deviceId === chosen) ? [option(chosen, 'Saved speakers (not connected)', true)] : []),
+      ...(chosen && !outputs.some((d) => d.deviceId === chosen) ? [option(chosen, t('Saved speakers (not connected)'), true)] : []),
     );
   }
 
@@ -140,7 +141,9 @@ export function createAudioSettings({ getCall }) {
     const call = getCall();
     const level = call?.micOn ? call.micLevel : -Infinity;
     meterFill.style.width = meterPercent(level);
-    meterHint.textContent = call ? 'The bar is your microphone now. Set the level just above the noise when you are quiet.' : 'Join a call to see your microphone level here.';
+    meterHint.textContent = call
+      ? t('The bar is your microphone now. Set the level just above the noise when you are quiet.')
+      : t('Join a call to see your microphone level here.');
     frame = requestAnimationFrame(tick);
   };
 
@@ -151,7 +154,7 @@ export function createAudioSettings({ getCall }) {
 
   render();
   return {
-    element: h('fieldset', {}, h('h3', {}, 'Audio devices'), micPart, outputPart),
+    element: h('fieldset', {}, h('h3', {}, t('Audio devices')), micPart, outputPart),
     /** Settings opened: reload the device lists and start the meter. */
     open() {
       ready.then(() => !micPart.hidden && refreshMics());

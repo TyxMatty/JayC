@@ -2,6 +2,8 @@
 // - and 1. lists, ``` code blocks, ![alt](/assets/...) images on their own line, and **bold** /
 // `code` inline. Text always becomes text nodes, never HTML.
 import { h } from './dom.js';
+import { icons } from './icons.js';
+import { t } from '../core/i18n.js';
 
 /** Splits a line into text / strong / code runs. */
 export function parseInline(text) {
@@ -64,13 +66,31 @@ export function parseMarkdown(source) {
 const inlineNodes = (runs) =>
   runs.map((run) => (run.type === 'strong' ? h('strong', {}, run.text) : run.type === 'code' ? h('code', {}, run.text) : run.text));
 
+/** A code block with a pill that copies it (the guide's commands are meant to be pasted). */
+function codeBlock(text) {
+  const label = h('span', {}, t('Copy'));
+  const button = h('button', { type: 'button', class: 'code-copy', 'aria-label': t('Copy command'), html: icons.copy }, label);
+  let timer;
+  button.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      label.textContent = t('Copied!');
+    } catch {
+      label.textContent = t('Select and copy');
+    }
+    clearTimeout(timer);
+    timer = setTimeout(() => (label.textContent = t('Copy')), 1500);
+  });
+  return h('div', { class: 'code-block' }, h('pre', {}, h('code', {}, text)), button);
+}
+
 /** @returns {DocumentFragment} */
 export function renderMarkdown(source) {
   const fragment = document.createDocumentFragment();
   for (const block of parseMarkdown(source)) {
     if (block.type === 'heading') fragment.append(h(`h${block.level + 1}`, {}, inlineNodes(block.inline)));
     else if (block.type === 'p') fragment.append(h('p', {}, inlineNodes(block.inline)));
-    else if (block.type === 'code') fragment.append(h('pre', {}, h('code', {}, block.text)));
+    else if (block.type === 'code') fragment.append(codeBlock(block.text));
     else if (block.type === 'img') fragment.append(h('img', { src: block.src, alt: block.alt, loading: 'lazy' }));
     else fragment.append(h(block.type, {}, block.items.map((item) => h('li', {}, inlineNodes(item)))));
   }

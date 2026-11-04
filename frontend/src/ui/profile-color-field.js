@@ -3,6 +3,7 @@
 import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import { autoColor, cleanProfileColor, profileBackground } from '../core/profile-color.js';
+import { t } from '../core/i18n.js';
 
 const MODES = [
   ['auto', 'Auto'],
@@ -36,17 +37,17 @@ export function createProfileColorField() {
             if (value === 'gradient') save({ from: base.from, to: base.to ?? fallback.to, angle: base.angle ?? 135 });
           },
         }),
-        label,
+        t(label),
       ),
     ),
   );
-  const from = h('input', { type: 'color', class: 'color-input', 'aria-label': 'Profile color', onInput: (e) => save({ ...seed(), from: e.target.value }) });
-  const to = h('input', { type: 'color', class: 'color-input', 'aria-label': 'Profile gradient end color', onInput: (e) => save({ ...seed(), to: e.target.value }) });
+  const from = h('input', { type: 'color', class: 'color-input', 'aria-label': t('Profile color'), onInput: (e) => save({ ...seed(), from: e.target.value }) });
+  const to = h('input', { type: 'color', class: 'color-input', 'aria-label': t('Profile gradient end color'), onInput: (e) => save({ ...seed(), to: e.target.value }) });
   const angleValue = h('output', { for: 'profile-color-angle', class: 'hint' });
   const angle = h('input', {
     type: 'range',
     id: 'profile-color-angle',
-    'aria-label': 'Profile gradient angle',
+    'aria-label': t('Profile gradient angle'),
     min: 0,
     max: 360,
     step: 5,
@@ -72,7 +73,7 @@ export function createProfileColorField() {
     angle.value = String(shown.angle ?? 135);
     angleValue.textContent = `${shown.angle ?? 135}°`;
     preview.style.background = profileBackground(color, s.displayName);
-    const name = s.displayName.trim() || 'You';
+    const name = s.displayName.trim() || t('You');
     previewName.textContent = name;
     previewAvatar.replaceChildren(s.avatar ? h('img', { src: s.avatar, alt: '' }) : name[0].toUpperCase());
   };
@@ -84,10 +85,10 @@ export function createProfileColorField() {
   return h(
     'div',
     { class: 'field' },
-    h('span', { class: 'field-label', id: 'profile-color-label' }, 'Profile color'),
+    h('span', { class: 'field-label', id: 'profile-color-label' }, t('Profile color')),
     preview,
     group,
     pickers,
-    h('p', { class: 'hint' }, 'Others see it behind your picture while your camera is off. Auto picks one from your name.'),
+    h('p', { class: 'hint' }, t('Others see it behind your picture while your camera is off. Auto picks one from your name.')),
   );
 }
