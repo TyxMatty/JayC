@@ -1,0 +1,30 @@
+[package]
+name = "native-video-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Spike (docs/spikes/10-live-nativa.md): native screen capture (Windows Graphics Capture) +
+# hardware H.264 (Media Foundation), measured against the WebView2 live. Not part of the app.
+
+[dependencies]
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Graphics_Capture",
+    "Graphics_DirectX_Direct3D11",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Capture",
+] }
+windows-core = "0.62"

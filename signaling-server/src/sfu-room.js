@@ -29,9 +29,10 @@ export class SfuRoom {
   /** @type {Map<string, { peer: object, transports: Map, producers: Map, consumers: Map }>} */
   #members = new Map();
 
-  constructor({ router, webRtcServer }) {
+  constructor({ router, webRtcServer, listenIp = '0.0.0.0' }) {
     this.router = router;
     this.webRtcServer = webRtcServer;
+    this.listenIp = listenIp;
   }
 
   get rtpCapabilities() {
@@ -71,9 +72,24 @@ export class SfuRoom {
 
   // ---------- Requests ----------
 
-  async createTransport(peerId, { direction }, { announcedAddress }) {
+  async createTransport(peerId, { direction, plain = false }, { announcedAddress }) {
     if (direction !== 'send' && direction !== 'recv') throw new SfuError('bad-request');
+    if (plain && direction !== 'send') throw new SfuError('bad-request');
     const member = this.#member(peerId);
+    if (plain) {
+      // A native sender (docs/spikes/10-live-nativa.md): plain RTP + RTCP on one UDP port, bound to
+      // whoever sends the first packet. shortcut: no SRTP and a random port (not the WebRtcServer's
+      // single port); both are needed before this leaves the spike.
+      const transport = await this.router.createPlainTransport({
+        listenInfo: { protocol: 'udp', ip: this.listenIp },
+        rtcpMux: true,
+        comedia: true,
+        appData: { direction },
+      });
+      member.transports.set(transport.id, transport);
+      transport.on('routerclose', () => member.transports.delete(transport.id));
+      return { id: transport.id, ip: announcedAddress, port: transport.tuple.localPort };
+    }
     const transport = await this.router.createWebRtcTransport({
       webRtcServer: this.webRtcServer,
       enableUdp: true,
