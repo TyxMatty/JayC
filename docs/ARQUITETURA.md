@@ -424,7 +424,7 @@ Cards que explicam o app passo a passo, para quem usa pela primeira vez.
 Durante uma chamada, o perfil do Discord da pessoa mostra o Jay-C. Só no Windows: no Android, o Discord não tem o canal local.
 
 **O que aparece** (escolhas do usuário):
-- "Jay-C", com o lobo;
+- "Jay-C", com o lobo na cor do estilo do app (Calmo `jayc_purple`, Neon `jayc_neon`, Suave `jayc_orange_thick`);
 - "Numa chamada", quantas pessoas (ex.: 3 de 16) e o tempo desde que entrou;
 - em live: "Transmitindo a tela" ou "Assistindo uma live", sem nomes, com um ícone pequeno de live;
 - o nome da sala só com uma opção, desligada por padrão;
@@ -440,9 +440,11 @@ O status vem ligado por padrão, com uma opção para desligar.
 | D3 | **Configurações:** Settings › Perfil: "Mostrar no Discord" (ligado) e "Mostrar o nome da sala" (desligado) | |
 | D4 | Docs e release | |
 
-**Falta do usuário:** criar a aplicação "Jay-C" no Discord Developer Portal, com os assets `wolf` (`src-tauri/app-icon.png`) e `live` (`src-tauri/discord-live.png`), e passar o Application ID (público) para o `CLIENT_ID`. Enquanto ele estiver vazio, o comando não faz nada.
+**Aplicação no Discord:** "Jay-C" (Application ID 1568029459146346599, no `CLIENT_ID`), criada pelo usuário com os lobos `jayc_purple`, `jayc_neon`, `jayc_orange_thick` e `jayc_orange` (não usado). **Falta enviar** o ícone `live` (`src-tauri/discord-live.png`): sem ele, o Discord aceita o status mas descarta a imagem pequena.
 
-**Medido (D1):** com o Discord aberto, um handshake com um id inventado volta recusado (`Invalid Client ID`), o que prova o pipe e o formato das mensagens. Com o id real: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` mostra um status por 10 s e depois o limpa.
+**Medido (D1):** com o Discord aberto, um handshake com um id inventado volta recusado (`Invalid Client ID`), o que prova o pipe e o formato das mensagens. Com o id real: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` mostra um status por 10 s e depois o limpa. Medido: o Discord devolveu `name: "Jay-C"`, `type: 0` ("Jogando") e o início em milissegundos como enviado.
+
+**Medido numa chamada de verdade** (app de dev, servidor de teste e um bot; o log do app mostra o que o Discord aceitou a cada mudança): ao entrar, "Numa chamada" / "Conversando" (1 de 16) com o lobo roxo, já resolvido pelo Discord para o id do asset; o bot entrou, 2 de 16; o bot começou uma live, sem mudança, porque ninguém assistia; o app passou a assistir, "Assistindo uma live"; ao sair, o status foi limpo. Cada mudança chegou ao Discord no mesmo segundo do evento.
 
 ### Customização (entre a 12 e a 13, a pedido do usuário)
 

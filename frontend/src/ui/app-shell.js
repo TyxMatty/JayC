@@ -111,7 +111,7 @@ export function mountApp(root) {
       micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
     });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
-    startDiscordPresence(call, { room }); // until the call ends
+    startDiscordPresence(call, { room, getStyle: () => settings.get().style }); // until the call ends
     settings.update({ lastRoom: room, recentRooms: addRecentRoom(settings.get().recentRooms, room) });
     // Microphone and streaming options changed in Settings apply to the running call.
     let unsubscribe = () => {};

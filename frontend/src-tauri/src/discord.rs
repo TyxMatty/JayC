@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 /// The "Jay-C" application on the Discord Developer Portal: names the status and holds its images.
 /// Public (every client sends it). Empty: Rich Presence stays off.
-const CLIENT_ID: &str = "";
+const CLIENT_ID: &str = "1568029459146346599";
 /// Discord is documented to take about 5 status changes per 20 s (not measured): changes in between
 /// wait, and only the latest goes.
 const MIN_GAP: Duration = Duration::from_secs(4);
@@ -47,6 +47,8 @@ pub fn discord_presence(activity: Value) {
 
 fn worker(client_id: &str, wanted_rx: Receiver<Value>) {
     let mut wanted = Value::Null;
+    // The last status Discord accepted, to log each change once (not every refresh).
+    let mut shown: Option<Value> = None;
     let mut connection: Option<Connection> = None;
     let mut last_send: Option<Instant> = None;
     // When to send `wanted` (again); None = nothing to do until the page changes it.
@@ -86,8 +88,18 @@ fn worker(client_id: &str, wanted_rx: Receiver<Value>) {
         };
         last_send = Some(Instant::now());
         match conn.set_activity(&wanted) {
-            Ok(_) if wanted.is_null() => {}
-            Ok(_) => due = Some(Instant::now() + REFRESH),
+            Ok(accepted) => {
+                if shown.as_ref() != Some(&wanted) {
+                    match wanted.is_null() {
+                        true => log::info!("discord: status cleared"),
+                        false => log::info!("discord: status {} / {} {} {}", accepted["details"], accepted["state"], accepted["party"], accepted["assets"]),
+                    }
+                    shown = Some(wanted.clone());
+                }
+                if !wanted.is_null() {
+                    due = Some(Instant::now() + REFRESH);
+                }
+            }
             Err(error) => {
                 // Discord closed or restarted: reconnect right away (or retry later if it's gone).
                 log::info!("discord: {error}");

@@ -426,7 +426,7 @@ Cards that explain the app step by step, for first-time users.
 During a call, the person's Discord profile shows Jay-C. Windows only: on Android, Discord has no local channel.
 
 **What shows** (the user's choices):
-- "Jay-C", with the wolf;
+- "Jay-C", with the wolf in the app style's color (Calm `jayc_purple`, Neon `jayc_neon`, Soft `jayc_orange_thick`);
 - "In a call", how many people (e.g. 3 of 16) and the time since joining;
 - while streaming: "Streaming their screen" or "Watching a stream", with no names and a small live icon;
 - the room name only with an option, off by default;
@@ -442,9 +442,11 @@ The status is on by default, with an option to turn it off.
 | D3 | **Settings:** Settings › Profile: "Show on Discord" (on) and "Show the room name" (off) | |
 | D4 | Docs and release | |
 
-**Left to the user:** create the "Jay-C" application on the Discord Developer Portal, with the `wolf` (`src-tauri/app-icon.png`) and `live` (`src-tauri/discord-live.png`) assets, and put its Application ID (public) in `CLIENT_ID`. While it's empty, the command does nothing.
+**Discord application:** "Jay-C" (Application ID 1568029459146346599, in `CLIENT_ID`), created by the user with the wolves `jayc_purple`, `jayc_neon`, `jayc_orange_thick` and `jayc_orange` (unused). **Still to upload:** the `live` icon (`src-tauri/discord-live.png`): without it, Discord accepts the status but drops the small image.
 
-**Measured (D1):** with Discord open, a handshake with a made-up id comes back refused (`Invalid Client ID`), which proves the pipe and the message format. With the real id: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` shows a status for 10 s, then clears it.
+**Measured (D1):** with Discord open, a handshake with a made-up id comes back refused (`Invalid Client ID`), which proves the pipe and the message format. With the real id: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` shows a status for 10 s, then clears it. Measured: Discord answered `name: "Jay-C"`, `type: 0` ("Playing") and the start in milliseconds as sent.
+
+**Measured in a real call** (dev app, test server and a bot; the app's log shows what Discord accepted at each change): on joining, "In a call" / "Talking" (1 of 16) with the purple wolf, already resolved by Discord to the asset's id; the bot joined, 2 of 16; the bot started a stream, no change, since nobody was watching; the app started watching, "Watching a stream"; on leaving, the status was cleared. Each change reached Discord in the same second as the event.
 
 ### Customization (between 12 and 13, at the user's request)
 
