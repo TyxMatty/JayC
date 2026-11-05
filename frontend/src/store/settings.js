@@ -28,6 +28,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   callBar: DEFAULT_CALL_BAR,
   /** Interface language: 'system' (the OS language), 'en' or 'pt-BR' (core/i18n.js). */
   language: 'system',
+  /** The look: 'calm', 'neon' or 'soft' (core/style.js, styles/theme.css). */
+  style: 'calm',
   /** Animations: 'system' (follow the OS's reduce-motion), 'on' or 'off' (core/motion.js). */
   motion: 'system',
   /** Executables left out of the entire-screen share's sound, e.g. ['Discord.exe']. */

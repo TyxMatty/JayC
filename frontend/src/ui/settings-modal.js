@@ -1,4 +1,5 @@
 import { h } from './dom.js';
+import { resolveStyle } from '../core/style.js';
 import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { toWebSocketUrl, DEFAULT_PORT } from '../core/server-address.js';
@@ -35,6 +36,13 @@ const LANGUAGES = [
   ['system', null],
   ['en', 'English'],
   ['pt-BR', 'Português (Brasil)'],
+];
+
+/** Style choices: a small preview drawn with that style's own tokens (styles/theme.css). */
+const STYLE_OPTIONS = [
+  ['calm', 'Calm'],
+  ['neon', 'Neon'],
+  ['soft', 'Soft'],
 ];
 
 const THEMES = [
@@ -79,6 +87,31 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
     ),
   );
 
+  const styleGroup = h(
+    'div',
+    { class: 'style-picker', role: 'radiogroup', 'aria-labelledby': 'style-label' },
+    STYLE_OPTIONS.map(([value, label]) =>
+      h(
+        'label',
+        { class: 'style-option' },
+        h('input', {
+          type: 'radio',
+          name: 'style',
+          value,
+          checked: resolveStyle(current.style) === value,
+          onChange: () => settings.update({ style: value }),
+        }),
+        h(
+          'span',
+          { class: 'style-preview', 'data-style-preview': value, 'aria-hidden': 'true' },
+          h('span', { class: 'style-preview-tile' }, h('span', { class: 'style-preview-avatar' })),
+          h('span', { class: 'style-preview-bar' }, h('span', {}), h('span', {}), h('span', { class: 'is-danger' })),
+        ),
+        h('span', { class: 'style-option-name' }, t(label)),
+      ),
+    ),
+  );
+
   const languageSelect = h(
     'select',
     { class: 'input', id: 'settings-language', 'aria-describedby': 'language-hint', onChange: (e) => settings.update({ language: e.target.value }) },
@@ -103,6 +136,14 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
       ),
     ),
   );
+
+  // The radios follow changes made elsewhere too (the header's theme button, another tab).
+  settings.subscribe((next) => {
+    const values = { style: resolveStyle(next.style), theme: next.theme, motion: next.motion ?? 'system' };
+    for (const group of [styleGroup, themeGroup, motionGroup]) {
+      for (const radio of group.querySelectorAll('input[type=radio]')) radio.checked = radio.value === values[radio.name];
+    }
+  });
 
   // Profile picture: zoomed and moved in the editor, then cropped to a small square (core/avatar.js);
   // others see it while our camera is off.
@@ -463,6 +504,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
             languageSelect,
             h('p', { class: 'hint', id: 'language-hint' }, t('Jay-C reloads to change the language. During a call, it changes when you leave.')),
           ),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'style-label' }, t('Style')), styleGroup),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, t('Theme')), themeGroup),
           h(
             'div',

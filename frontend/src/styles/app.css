@@ -20,7 +20,20 @@ body {
   background: var(--app-background, var(--bg));
   color: var(--text);
   font: 15px/1.5 var(--font);
+  font-feature-settings: 'cv11', 'ss03'; /* Inter: single-storey a, rounder quotes */
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 /* Fixed to the window: the call fills it exactly; the lobby scrolls inside .view if needed. */
@@ -43,15 +56,22 @@ select {
   outline-offset: 2px;
 }
 
+/* Thin scrollbars that follow the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
 /* ---------- Header ---------- */
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(var(--overlay-blur));
 }
 
 /* With a background gradient, the bar lets it through; 75% surface keeps its text readable. */
@@ -62,13 +82,32 @@ select {
 }
 
 .brand {
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 750;
   font-size: 18px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
   margin-right: auto;
 }
 
-.brand span {
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: var(--glow);
+}
+
+.brand-mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.brand-name > span {
   color: var(--accent-text, var(--accent));
 }
 
@@ -80,17 +119,34 @@ select {
   justify-content: center;
   gap: 8px;
   min-height: 40px;
-  padding: 0 16px;
+  padding: 0 18px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast),
+    border-color var(--dur-fast),
+    box-shadow var(--dur),
+    transform var(--dur-fast);
+}
+
+.btn:not(.btn-secondary, .btn-danger) {
+  box-shadow: var(--shadow-sm);
 }
 
 .btn:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+.btn:not(.btn-secondary, .btn-danger):hover:not(:disabled) {
+  box-shadow: var(--glow), var(--shadow-sm);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -106,15 +162,16 @@ select {
 
 .btn-secondary:hover:not(:disabled) {
   background: var(--border);
+  border-color: var(--border-strong);
 }
 
 .btn-danger {
-  background: var(--danger);
+  background: var(--danger-fill);
   color: #fff;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 85%, #000);
+  background: var(--danger-fill-hover);
 }
 
 .icon-btn {
@@ -124,13 +181,15 @@ select {
   height: 40px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--surface-2);
   cursor: pointer;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast);
 }
 
 .icon-btn:hover {
   background: var(--border);
+  border-color: var(--border-strong);
 }
 
 .icon-btn svg {
@@ -308,14 +367,21 @@ select {
 .input {
   width: 100%;
   min-height: 40px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--bg);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.input:hover {
+  border-color: var(--border-strong);
 }
 
 .input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: none;
 }
 
 .input-row {
@@ -348,7 +414,7 @@ select {
   grid-auto-columns: 1fr;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-control);
   background: var(--bg);
 }
 
@@ -357,7 +423,8 @@ select {
   display: grid;
   place-items: center;
   min-height: 34px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius-control) - 3px);
+  transition: background-color var(--dur-fast), color var(--dur-fast);
   font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
@@ -370,10 +437,106 @@ select {
   pointer-events: none;
 }
 
-.segmented label:has(input:checked) {
-  background: var(--surface);
+.segmented label:hover {
   color: var(--text);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+}
+
+.segmented label:has(input:checked) {
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border);
+}
+
+/* Settings › Appearance › Style: three small previews, each drawn with its own style's tokens. */
+.style-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.style-option {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.style-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.style-preview {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 6px;
+  height: 92px;
+  padding: 8px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.style-option:hover .style-preview {
+  border-color: var(--border-strong);
+}
+
+.style-option:has(input:checked) .style-preview {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.style-option:has(input:focus-visible) .style-preview {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.style-preview-tile {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tile);
+  background: var(--surface-2);
+}
+
+.style-preview-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--glow);
+}
+
+.style-preview-bar {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.style-preview-bar > span {
+  width: 14px;
+  height: 14px;
+  border-radius: min(var(--radius-call), 50%);
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.style-preview-bar > .is-danger {
+  background: var(--danger-fill);
+  box-shadow: none;
+}
+
+.style-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.style-option:has(input:checked) .style-option-name {
+  color: var(--text);
 }
 
 .segmented label:has(input:focus-visible) {
@@ -1215,7 +1378,7 @@ fieldset > h3 {
   aspect-ratio: 16 / 9;
   max-height: 100%;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-tile);
   background: var(--surface-2);
 }
 
@@ -1377,8 +1540,10 @@ fieldset > h3 {
 
 /* Speaking: a green ring (3.3:1 on light, 4.8:1 on dark surfaces). */
 .tile.speaking {
-  border-color: #16a34a;
-  box-shadow: 0 0 0 3px #16a34a;
+  border-color: var(--speaking);
+  box-shadow:
+    0 0 0 3px var(--speaking),
+    0 0 18px color-mix(in srgb, var(--speaking) 35%, transparent);
   transition: box-shadow 120ms, border-color 120ms;
 }
 
@@ -1391,7 +1556,7 @@ fieldset > h3 {
 .live-badge {
   padding: 1px 6px;
   border-radius: 999px;
-  background: #dc2626; /* fixed, not --danger: white text needs >= 4.5:1 in both themes (4.83) */
+  background: var(--danger-fill); /* white text >= 4.5:1 in every style (test/theme-contrast.test.js) */
   font-size: 11px;
   letter-spacing: 0.04em;
 }
@@ -1696,7 +1861,7 @@ fieldset > h3 {
   height: 52px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: var(--radius-call);
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
@@ -1718,12 +1883,12 @@ fieldset > h3 {
 
 .control-btn.danger {
   border-color: transparent;
-  background: var(--danger);
+  background: var(--danger-fill);
   color: #fff;
 }
 
 .control-btn.danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 85%, #000);
+  background: var(--danger-fill-hover);
 }
 
 .control-btn svg {
@@ -1772,6 +1937,7 @@ fieldset > h3 {
   border-color: transparent;
   background: var(--accent);
   color: var(--accent-contrast);
+  box-shadow: var(--glow);
 }
 
 .control-btn.active:hover:not(:disabled) {
@@ -1942,7 +2108,7 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
   height: 20px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #dc2626; /* white text: 4.83:1 in both themes */
+  background: var(--danger-fill); /* white text >= 4.5:1 in every style */
   color: #fff;
   font-size: 12px;
   font-weight: 700;
