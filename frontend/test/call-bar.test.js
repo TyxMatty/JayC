@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeOrder, normalizePosition, moveControl, dropIndex, nearestEdge } from '../src/core/call-bar.js';
+import { normalizeOrder, normalizePosition, normalizeShape, moveControl, dropIndex, nearestEdge } from '../src/core/call-bar.js';
 
 test('saved order is cleaned and completed', () => {
   assert.deepEqual(normalizeOrder(['leave', 'mic', 'mic', 'nope']), ['leave', 'mic', 'camera', 'share', 'chat', 'pip']);
@@ -24,4 +24,10 @@ test('drop index and nearest edge', () => {
   assert.equal(nearestEdge(rect, 20, 300), 'left');
   assert.equal(nearestEdge(rect, 990, 300), 'right');
   assert.equal(nearestEdge(rect, 500, 10), 'top');
+});
+
+test('the button shape is auto, round or square, else auto', () => {
+  for (const shape of ['auto', 'round', 'square']) assert.equal(normalizeShape(shape), shape);
+  assert.equal(normalizeShape(undefined), 'auto');
+  assert.equal(normalizeShape('hexagon'), 'auto');
 });

@@ -2,7 +2,9 @@
 
 export const CONTROLS = ['mic', 'camera', 'share', 'chat', 'pip', 'leave'];
 export const POSITIONS = ['bottom', 'right', 'top', 'left'];
-export const DEFAULT_CALL_BAR = Object.freeze({ position: 'bottom', order: CONTROLS });
+/** Button shape: 'auto' (the style's), 'round' or 'square' (<html data-call-shape>, styles/theme.css). */
+export const BUTTON_SHAPES = ['auto', 'round', 'square'];
+export const DEFAULT_CALL_BAR = Object.freeze({ position: 'bottom', order: CONTROLS, shape: 'auto' });
 
 /** Known keys once each, in the saved order; any missing ones go at the end in default order. */
 export function normalizeOrder(order) {
@@ -12,6 +14,7 @@ export function normalizeOrder(order) {
 }
 
 export const normalizePosition = (position) => (POSITIONS.includes(position) ? position : 'bottom');
+export const normalizeShape = (shape) => (BUTTON_SHAPES.includes(shape) ? shape : 'auto');
 
 /** `order` with `key` moved by `delta` places (clamped). */
 export function moveControl(order, key, delta) {

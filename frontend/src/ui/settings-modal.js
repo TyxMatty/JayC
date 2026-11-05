@@ -13,7 +13,7 @@ import { createAudioSettings } from './audio-settings.js';
 import { createAvatarEditor } from './avatar-editor.js';
 import { createProfileColorField } from './profile-color-field.js';
 import { createTabs } from './tabs.js';
-import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
+import { POSITIONS, normalizeOrder, normalizePosition, moveControl, normalizeShape } from '../core/call-bar.js';
 import { t } from '../core/i18n.js';
 
 const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
@@ -261,10 +261,27 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
       ),
     ),
   );
+  const barShapeGroup = h(
+    'div',
+    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'bar-shape-label' },
+    [
+      ['auto', 'From the style'],
+      ['round', 'Circles'],
+      ['square', 'Squares'],
+    ].map(([value, label]) =>
+      h(
+        'label',
+        {},
+        h('input', { type: 'radio', name: 'bar-shape', value, onChange: () => setCallBar({ shape: value }) }),
+        t(label),
+      ),
+    ),
+  );
   const barOrderList = h('ol', { class: 'order-list', 'aria-labelledby': 'bar-order-label' });
   const renderCallBar = () => {
-    const { position, order } = settings.get().callBar;
+    const { position, order, shape } = settings.get().callBar;
     for (const radio of barPositionGroup.querySelectorAll('input')) radio.checked = radio.value === normalizePosition(position);
+    for (const radio of barShapeGroup.querySelectorAll('input')) radio.checked = radio.value === normalizeShape(shape);
     const keys = normalizeOrder(order);
     // Rebuilt on each change; keep focus on the button that moved so arrows can be pressed again.
     const focused = document.activeElement?.dataset?.move;
@@ -533,6 +550,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
           h('h3', {}, t('Call controls')),
           h('p', { class: 'hint field' }, t('You can also drag the buttons, or the grip next to them, during a call.')),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-position-label' }, t('Position')), barPositionGroup),
+          h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-shape-label' }, t('Button shape')), barShapeGroup),
           h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'bar-order-label' }, t('Order')), barOrderList),
         ),
       ),

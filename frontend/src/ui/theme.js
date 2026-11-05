@@ -2,6 +2,7 @@ import { settings } from '../store/settings.js';
 import { appearanceVars } from '../core/appearance.js';
 import { resolveMotion } from '../core/motion.js';
 import { resolveStyle } from '../core/style.js';
+import { normalizeShape } from '../core/call-bar.js';
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 const reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
@@ -13,7 +14,9 @@ function applyMotion() {
 
 /** <html data-style> from Settings › Appearance › Style (styles/theme.css). */
 function applyStyle() {
-  document.documentElement.dataset.style = resolveStyle(settings.get().style);
+  const { style, callBar } = settings.get();
+  document.documentElement.dataset.style = resolveStyle(style);
+  document.documentElement.dataset.callShape = normalizeShape(callBar?.shape);
 }
 const isTauri = '__TAURI_INTERNALS__' in window;
 
@@ -59,7 +62,7 @@ export function initTheme() {
     if (next.theme !== prev.theme) apply();
     if (next.appearance !== prev.appearance) applyAppearance();
     if (next.motion !== prev.motion) applyMotion();
-    if (next.style !== prev.style) applyStyle();
+    if (next.style !== prev.style || next.callBar !== prev.callBar) applyStyle();
   });
   darkQuery.addEventListener('change', apply);
   reducedMotionQuery.addEventListener('change', applyMotion);

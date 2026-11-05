@@ -203,6 +203,15 @@
   --backdrop: rgb(0 0 0 / 0.5);
 }
 
+/* Call buttons: circles or squares, whatever the style (Settings › Call controls › Shape). */
+:root[data-call-shape='round'] {
+  --radius-call: 50%;
+}
+
+:root[data-style='soft'][data-call-shape='square'] {
+  --radius-call: 16px;
+}
+
 /* Shared derived tokens (they follow the user's button color too). */
 :root {
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
