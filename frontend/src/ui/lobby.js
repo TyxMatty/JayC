@@ -1,4 +1,5 @@
 import { h } from './dom.js';
+import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { serverStatus } from '../core/server-status.js';
 import { profileBackground } from '../core/profile-color.js';
@@ -41,7 +42,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
 
   const roomInput = h('input', {
     id: 'lobby-room',
-    class: 'input',
+    class: 'input input-with-prefix',
     maxlength: 64,
     autocomplete: 'off',
     spellcheck: 'false',
@@ -71,6 +72,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
               else roomInput.focus();
             },
           },
+          h('span', { class: 'room-chip-hash', 'aria-hidden': 'true' }, '#'),
           room,
         ),
       ),
@@ -106,7 +108,8 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     }),
   );
 
-  const joinButton = h('button', { type: 'submit', class: 'btn' }, t('Join room'));
+  const joinLabel = h('span', {}, t('Join room'));
+  const joinButton = h('button', { type: 'submit', class: 'btn btn-large' }, joinLabel, h('span', { class: 'btn-icon-end', html: icons.arrowRight, 'aria-hidden': 'true' }));
   const hint = h('p', { class: 'hint', 'aria-live': 'polite' });
   let joining = false;
   let error = null;
@@ -133,11 +136,11 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
       hint.textContent = error;
       hint.dataset.tone = 'error';
     } else {
-      hint.textContent = t('Everyone who enters the same room name joins the same call.');
+      hint.textContent = ''; // the card's intro already says it; this line is for errors and setup
     }
 
     joinButton.disabled = joining || !serverOk || !nameOk || !roomOk;
-    joinButton.textContent = joining ? t('Joining…') : t('Join room');
+    joinLabel.textContent = joining ? t('Joining…') : t('Join room');
   };
 
   const clearError = () => {
@@ -171,11 +174,27 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     h('h1', {}, t('Join a room')),
     h('p', {}, t('Share the room name with friends on the same server.')),
     h('div', { class: 'field' }, h('label', { for: 'lobby-name' }, t('Display name')), nameInput),
-    h('div', { class: 'field' }, h('label', { for: 'lobby-room' }, t('Room')), roomInput),
+    h('div', { class: 'field' }, h('label', { for: 'lobby-room' }, t('Room')), h('div', { class: 'input-prefix' }, h('span', { 'aria-hidden': 'true' }, '#'), roomInput)),
     recentField,
     h('div', { class: 'field' }, joinButton, hint),
   );
-  const element = h('main', { class: 'lobby' }, form);
+  // Wide windows: what Jay-C is, next to the card (hidden on narrow ones).
+  const feature = (icon, text) => h('li', {}, h('span', { class: 'lobby-feature-icon', html: icon, 'aria-hidden': 'true' }), text);
+  const hero = h(
+    'section',
+    { class: 'lobby-hero', 'aria-labelledby': 'lobby-hero-title' },
+    h('span', { class: 'lobby-hero-mark', html: icons.logo, 'aria-hidden': 'true' }),
+    h('h2', { id: 'lobby-hero-title' }, t('Calls and streams that stay light')),
+    h('p', {}, t('On a server you or a friend runs. No accounts and no ads.')),
+    h(
+      'ul',
+      { class: 'lobby-features' },
+      feature(icons.mic, t("Clear voice that doesn't muffle your other apps")),
+      feature(icons.screenShare, t('Stream a game or a window, with its sound')),
+      feature(icons.users, t('Up to 16 people per room')),
+    ),
+  );
+  const element = h('main', { class: 'lobby' }, hero, form);
   renderProfile();
   renderRecent();
 
