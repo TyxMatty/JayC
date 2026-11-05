@@ -1,11 +1,17 @@
 #[cfg(windows)]
 mod media_permissions;
+#[cfg(windows)]
+mod taskbar_icon;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_system_audio::init())
         .plugin(tauri_plugin_pip::init())
+        .invoke_handler(tauri::generate_handler![
+            #[cfg(windows)]
+            taskbar_icon::set_taskbar_icon
+        ])
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

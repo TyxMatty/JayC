@@ -2,6 +2,7 @@ import { settings } from '../store/settings.js';
 import { appearanceVars } from '../core/appearance.js';
 import { resolveMotion } from '../core/motion.js';
 import { resolveStyle } from '../core/style.js';
+import { updateWindowIcon } from './window-icon.js';
 import { normalizeShape } from '../core/call-bar.js';
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -58,13 +59,16 @@ export function initTheme() {
   applyAppearance();
   applyMotion();
   applyStyle();
+  updateWindowIcon();
   settings.subscribe((next, prev) => {
     if (next.theme !== prev.theme) apply();
     if (next.appearance !== prev.appearance) applyAppearance();
     if (next.motion !== prev.motion) applyMotion();
     if (next.style !== prev.style || next.callBar !== prev.callBar) applyStyle();
+    // The window icon follows the style, the theme and the button color.
+    if (next.style !== prev.style || next.theme !== prev.theme || next.appearance !== prev.appearance) updateWindowIcon();
   });
-  darkQuery.addEventListener('change', apply);
+  darkQuery.addEventListener('change', () => (apply(), updateWindowIcon()));
   reducedMotionQuery.addEventListener('change', applyMotion);
 }
 
