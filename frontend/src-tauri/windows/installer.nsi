@@ -168,6 +168,11 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; over a version whose installer was English-only never shows the selector.
 !define MUI_LANGDLL_ALWAYSSHOW
 
+; Jay-C: the "Soft" look of the app (styles/theme.css): warm background and text on the header and
+; the welcome/finish pages. The pictures come from tauri.conf.json (scripts/installer-art.mjs).
+!define MUI_BGCOLOR "FBF7F3"
+!define MUI_TEXTCOLOR "2A2230"
+
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive

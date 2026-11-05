@@ -1,7 +1,7 @@
 {
   "$schema": "../../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Jay-C",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "identifier": "io.github.tyxmatty.jayc",
   "build": {
     "frontendDist": "../dist",
@@ -56,7 +56,9 @@
         "template": "windows/installer.nsi",
         "languages": ["English", "PortugueseBR"],
         "displayLanguageSelector": true,
-        "customLanguageFiles": { "PortugueseBR": "windows/PortugueseBR.nsh" }
+        "customLanguageFiles": { "PortugueseBR": "windows/PortugueseBR.nsh" },
+        "sidebarImage": "windows/installer-sidebar.bmp",
+        "headerImage": "windows/installer-header.bmp"
       }
     },
     "android": {
