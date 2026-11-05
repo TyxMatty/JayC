@@ -610,6 +610,54 @@ fieldset > h3 {
   border-top: 1px solid var(--border);
 }
 
+/* Settings › profile picture: zoom and crop before saving. */
+.avatar-editor {
+  width: min(340px, calc(100vw - 32px));
+}
+
+.avatar-editor-stage {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  margin: 0 auto 16px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: #000;
+  cursor: grab;
+  touch-action: none;
+}
+
+.avatar-editor-stage:active {
+  cursor: grabbing;
+}
+
+.avatar-editor-stage:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.avatar-editor-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Darken what falls outside the circle others see. */
+.avatar-editor-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgb(255 255 255 / 0.85);
+  border-radius: 50%;
+  box-shadow: 0 0 0 200px rgb(0 0 0 / 0.55);
+  pointer-events: none;
+}
+
+.avatar-editor-zoom input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .modal-wide {
   width: min(720px, calc(100vw - 32px));
 }

@@ -7,9 +7,9 @@ import { screenAudioSupported } from '../core/screen-audio.js';
 import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../core/excluded-apps.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { DEFAULT_GRADIENT } from '../core/appearance.js';
-import { makeAvatar } from '../core/avatar.js';
 import { callDiagnostics } from '../core/diagnostics.js';
 import { createAudioSettings } from './audio-settings.js';
+import { createAvatarEditor } from './avatar-editor.js';
 import { createProfileColorField } from './profile-color-field.js';
 import { createTabs } from './tabs.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl } from '../core/call-bar.js';
@@ -104,7 +104,9 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
     ),
   );
 
-  // Profile picture: cropped to a small square (core/avatar.js); others see it while our camera is off.
+  // Profile picture: zoomed and moved in the editor, then cropped to a small square (core/avatar.js);
+  // others see it while our camera is off.
+  const avatarEditor = createAvatarEditor();
   const avatarPreview = h('span', { class: 'avatar-preview', 'aria-hidden': 'true' });
   const avatarHint = h('p', { class: 'hint', 'aria-live': 'polite' });
   const avatarFile = h('input', {
@@ -116,7 +118,9 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
       e.target.value = ''; // picking the same file again still fires change
       if (!file) return;
       try {
-        settings.update({ avatar: await makeAvatar(file) });
+        const avatar = await avatarEditor.open(file);
+        if (!avatar) return; // cancelled: keep the current picture
+        settings.update({ avatar });
         delete avatarHint.dataset.tone;
         avatarHint.textContent = '';
       } catch {
@@ -570,6 +574,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
   const dialog = h(
     'dialog',
     { class: 'modal modal-settings', 'aria-labelledby': 'settings-title' },
+    avatarEditor.element, // its own modal dialog, outside the form (Enter there must not close Settings)
     h(
       'form',
       { method: 'dialog' },
