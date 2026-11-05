@@ -203,7 +203,7 @@ mod tests {
             return;
         };
         let mut conn = Connection::open(&id).expect("handshake");
-        let started = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let started = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64; // like the page sends
         let shown = conn
             .set_activity(&json!({ "details": "Test from cargo", "state": "1 of 16", "timestamps": { "start": started } }))
             .expect("set");

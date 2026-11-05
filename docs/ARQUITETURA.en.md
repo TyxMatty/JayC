@@ -438,11 +438,11 @@ The status is on by default, with an option to turn it off.
 | Part | Delivery | Status |
 |---|---|---|
 | D1 | **Connection (Rust, `src-tauri/src/discord.rs`):** Discord's local IPC protocol over the `\\.\pipe\discord-ipc-N` pipe (opcode and length as u32 LE + JSON; handshake and `SET_ACTIVITY`), with no new dependency. A thread takes only the latest status asked for, spaces sends 4 s apart (documented as ~5 per 20 s; not measured), resends every 15 s (a restarted Discord gets the status back) and retries every 10 s while Discord is closed. Command `discord_presence(activity | null)`. | ✅ |
-| D2 | **What shows (JS):** `core/discord-presence.js` turns the call's state into the status and updates it when someone joins or leaves and when a stream starts or stops; the `live` icon | |
+| D2 | **What shows (JS):** `core/discord-presence.js` turns the call's state into the status (`presenceActivity`, a pure function) and keeps it up to date until the call ends: bursts of events become one update after 250 ms, it only sends when the status changes and, on leaving, it clears without a "1 of 16" first. The `live` icon is `src-tauri/discord-live.png` (the app's monitor icon, white on the danger red, 1024 px). | ✅ |
 | D3 | **Settings:** Settings › Profile: "Show on Discord" (on) and "Show the room name" (off) | |
 | D4 | Docs and release | |
 
-**Left to the user:** create the "Jay-C" application on the Discord Developer Portal, with the wolf as the `wolf` asset, and put its Application ID (public) in `CLIENT_ID`. While it's empty, the command does nothing.
+**Left to the user:** create the "Jay-C" application on the Discord Developer Portal, with the `wolf` (`src-tauri/app-icon.png`) and `live` (`src-tauri/discord-live.png`) assets, and put its Application ID (public) in `CLIENT_ID`. While it's empty, the command does nothing.
 
 **Measured (D1):** with Discord open, a handshake with a made-up id comes back refused (`Invalid Client ID`), which proves the pipe and the message format. With the real id: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` shows a status for 10 s, then clears it.
 

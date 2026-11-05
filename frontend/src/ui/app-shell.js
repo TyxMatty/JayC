@@ -12,6 +12,7 @@ import { shouldShowWelcome } from '../core/welcome.js';
 import { createLobby } from './lobby.js';
 import { createCallView } from './call-view.js';
 import { addRecentRoom } from '../core/recent-rooms.js';
+import { startDiscordPresence } from '../core/discord-presence.js';
 import { t } from '../core/i18n.js';
 
 const STATUS_LABELS = {
@@ -110,6 +111,7 @@ export function mountApp(root) {
       micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
     });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
+    startDiscordPresence(call, { room }); // until the call ends
     settings.update({ lastRoom: room, recentRooms: addRecentRoom(settings.get().recentRooms, room) });
     // Microphone and streaming options changed in Settings apply to the running call.
     let unsubscribe = () => {};
