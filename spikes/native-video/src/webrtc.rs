@@ -60,6 +60,8 @@ pub struct Local {
 pub struct Signals {
     pub keyframe: bool,
     pub estimate: Option<u64>,
+    /// Fraction lost, from the SFU's receiver reports (str0m averages them per stats event).
+    pub loss: Option<f32>,
 }
 
 impl Sender {
@@ -70,7 +72,10 @@ impl Sender {
         socket.set_nonblocking(true)?;
         let local = socket.local_addr()?;
 
-        let mut config = RtcConfig::new().clear_codecs().enable_bwe(Some(Bitrate::kbps(start_kbps)));
+        let mut config = RtcConfig::new()
+            .clear_codecs()
+            .enable_bwe(Some(Bitrate::kbps(start_kbps)))
+            .set_stats_interval(Some(Duration::from_millis(500)));
         // Must match the producer's rtpParameters (send.mjs).
         config.codec_config().add_h264(PT.into(), Some(RTX_PT.into()), true, 0x640032);
         let mut rtc = config.build(Instant::now());
@@ -150,6 +155,11 @@ impl Sender {
                         }
                         Event::EgressBitrateEstimate(BweKind::Twcc { estimate, .. }) => {
                             signals.estimate = Some(estimate.as_u64());
+                        }
+                        Event::MediaEgressStats(stats) => {
+                            if let Some(loss) = stats.loss {
+                                signals.loss = Some(loss);
+                            }
                         }
                         _ => {}
                     },

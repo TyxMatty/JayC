@@ -169,8 +169,9 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
 - **Medido:**
   - CPU: a live atual gasta ~1,3 núcleo só no vídeo, e a nativa gasta ~0,05.
   - Quem assiste recebe 1080p sem perdas.
-  - A estimativa de banda baixa e sobe o bitrate numa rede estreita simulada, mas a queda causa um congelamento de ~5 s.
-- **Próximo passo:** baixar a resolução e os quadros/s quando a banda cai. Depois, integrar ao app (comando do plugin, sinalização no JS) com o seletor próprio.
+  - Numa rede estreita simulada, a resolução e os quadros/s descem em degraus (1080p60 → 720p30 → 540p30 → 360p15) em segundos, com 0–53 pacotes perdidos (antes eram ~500), e voltam sozinhos.
+  - O que quem assiste vê na queda não foi medido de forma confiável: o espectador no mesmo PC atrapalha a captura. Falta um teste em dois PCs.
+- **Próximo passo:** integrar ao app (comando do plugin, sinalização no JS), com o seletor próprio.
 
 **Sem cara de navegador (05/11/2026):** no release, o clique direito fora dos campos de texto não abre mais o menu do WebView2 (Voltar, Atualizar, Imprimir, Inspecionar), e os atalhos de navegador ficam desligados (`SetAreBrowserAcceleratorKeysEnabled(false)`, em `src-tauri/src/app_chrome.rs`): F5/Ctrl+R não recarregam a página (o que derrubava a chamada), nem Ctrl+P/Ctrl+F abrem impressão e busca. Campos de texto mantêm o menu de copiar/colar. O dev mantém tudo, para depurar.
 

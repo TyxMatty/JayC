@@ -2,7 +2,9 @@
 
 **Data:** 2026-11-05 · **Máquina:** Ryzen 5 5600G (6 núcleos, 12 threads), GeForce RTX 3050, monitor 1920×1080 a 180 Hz, Windows 11 (build 26300)
 **Código:** [`spikes/native-video`](../../spikes/native-video).
-- `main.rs`: captura e codifica.
+- `main.rs`: captura e liga as peças.
+- `encoder.rs`: conversão e codificação na GPU, uma instância por tamanho.
+- `ladder.rs`: degraus de qualidade e limite por perda, com testes.
 - `webrtc.rs`: envia por WebRTC com a biblioteca [str0m](https://github.com/algesten/str0m) 0.25, com a feature `wincrypto` (a criptografia do próprio Windows, sem OpenSSL).
 - `send.mjs`: entra na sala pelo protocolo de sinalização e roda o binário.
 - **O servidor não mudou.**
@@ -76,12 +78,43 @@ Não há ferramenta de limitação de rede nesta máquina, então o próprio emi
   - durante: 1080p a 0,5–1,1 Mbps, com congelamentos curtos (0,4–1,1 s a cada 3 s).
 - **Na última rodada**, você passou a usar o PC (o Discord ficou em primeiro plano) e a captura caiu para 2 quadros/s. Parei as medições aí, e essa rodada não conta.
 
+### Degraus de qualidade (adaptação a redes fracas)
+
+As medições acima eram só de bitrate. Agora a resolução e os quadros/s também acompanham a banda (`ladder.rs`):
+
+| Degrau | Resolução | Quadros/s | Usado a partir de |
+|---|---|---|---|
+| 0 | 1080p (nunca acima da captura) | 60 (ou o máximo escolhido) | 2500 kbps |
+| 1 | 720p | 30 | 1000 kbps |
+| 2 | 540p | 30 | 500 kbps |
+| 3 | 360p | 15 | abaixo disso |
+
+**Regras:**
+- **Orçamento:** o codificador usa 85% da estimativa, sem passar do teto do degrau nem do máximo escolhido.
+- **Descer:** na hora, quantos degraus forem precisos.
+- **Subir:** um degrau por vez, só depois de 3 s com o orçamento 30% acima do mínimo do degrau de cima.
+- **Troca de degrau:** cria um codificador novo no tamanho novo. O primeiro quadro dele é um quadro-chave pequeno, já no tamanho novo. O antigo é encerrado com `ShutdownObject`, porque as GeForce limitam quantas sessões do NVENC ficam abertas.
+- **Quadros-chave pedidos (PLI/FIR):** no máximo um por segundo. Na congestão, cada quadro-chave piora a fila.
+- **Limite por perda** (a regra do GCC do Google): com mais de 10% de perda nos relatórios do receptor, o orçamento vira `envio × (1 − perda/2)`. Abaixo de 2%, o limite cresce 8% por relatório e some quando passa a estimativa.
+  - Motivo: a estimativa pelo atraso chegou a ficar em ~2,7 Mbps num upload de 1,5 Mbps, e 286 pacotes se perderam.
+
+**Medido no emissor** (upload de 1,5 Mbps simulado de 12 a 24 s, sem ninguém assistindo, para a captura não sofrer):
+- **Começo:** 720p30, subindo para 1080p60 em 3–6 s.
+- **Ao começar a limitação:**
+  - O primeiro degrau baixa entre 0,4 e 3 s depois.
+  - Ele chega a 360p15 em 0,2–4 s.
+  - **Pacotes perdidos: 0, 0 e 53**, contra 499 e 286 só com o bitrate.
+  - Em uma rodada, o limite por perda entrou (12% → 1003 kbps).
+- **Ao acabar:** volta a 540p 0–6 s depois e a 1080p em 7–12 s, de degrau em degrau.
+- **Durante a limitação:** a estimativa desce abaixo do link (0,4–0,5 Mbps num link de 1,5), então fica em 360p15, quando 540p30 caberia. É conservador.
+
+**Não medido de forma confiável: o que quem assiste vê na queda.** Com o espectador no mesmo PC, a captura caiu para 15/s, e o próprio emissor codificou só 11 quadros/s a ~200 kbps, antes mesmo da limitação. Na última rodada você estava usando o PC (o Chrome ficou em primeiro plano). Os números do espectador dessas rodadas (2–29 quadros/s, congelamentos de 0,4 a 3 s) não separam a rede do teste. É preciso um teste em dois PCs.
+
 ## O que ainda falta para virar a live do app
 
 - **Banda estreita:**
-  - Ao cair a estimativa, baixar também a resolução e os quadros/s (720p, 30 qps), não só o bitrate. 1080p a 0,5 Mbps fica ruim.
-  - Evitar o congelamento de 5 s na queda: pedir um quadro-chave só depois de baixar o alvo, ou limitar o tamanho dele.
-  - Testar com perda e atraso reais, numa VPN ou com um limitador de verdade.
+  - Medir quem assiste num segundo PC, com perda e atraso reais (VPN, ou um limitador de verdade).
+  - Ajustar os mínimos dos degraus: hoje desce até 360p15 num link de 1,5 Mbps.
 - **Codificador:**
   - Só foi testado na NVIDIA. Intel e AMD têm MFTs próprios.
   - Sem nenhum MFT de hardware, seria preciso o codificador de software (o MFT da Microsoft), com custo de CPU ainda não medido.
@@ -102,6 +135,6 @@ Vale seguir com WebRTC nativo na porta 40000:
 - **CPU:** a live nativa custa ~0,05 núcleo, contra ~1,3 da atual.
 - **Servidor e protocolo:** não mudam.
 - **Quem hospeda e quem assiste:** nada muda.
-- **Banda:** ela se adapta a uma rede estreita.
+- **Banda:** numa rede estreita, ela baixa resolução e quadros/s em segundos, quase sem perder pacotes, e volta sozinha.
 
-Os próximos passos são a adaptação de resolução e quadros/s na queda de banda e a integração ao app (comando do plugin e sinalização no JS), com o seletor próprio.
+O próximo passo é a integração ao app (comando do plugin e sinalização no JS), com o seletor próprio. O teste de quem assiste fica para um segundo PC.
