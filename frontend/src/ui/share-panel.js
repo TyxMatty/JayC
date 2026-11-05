@@ -3,10 +3,16 @@ import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
 import { STREAM_RESOLUTIONS, STREAM_FRAME_RATES } from '../core/media.js';
 import { screenAudioSupported } from '../core/screen-audio.js';
+import { nativeLiveSupported } from '../core/native-live.js';
+import { createSourcePicker } from './source-picker.js';
 import { t } from '../core/i18n.js';
 
 let audioSupported = false;
 screenAudioSupported().then((supported) => (audioSupported = supported));
+/** Windows: our own picker (screens and windows with thumbnails) and the native share. */
+let nativeSupported = false;
+nativeLiveSupported().then((supported) => (nativeSupported = supported));
+let picker = null;
 
 function soundHint(call) {
   if (call.sharing) {
@@ -86,8 +92,15 @@ export function createSharePanel(call, { onError }) {
     const start = async () => {
       startButton.disabled = true;
       try {
+        let source;
+        if (nativeSupported) {
+          picker ??= createSourcePicker();
+          if (!picker.element.isConnected) document.body.append(picker.element); // not in the popover: it hides
+          source = await picker.open();
+          if (!source) return;
+        }
         settings.update({ shareMode: mode });
-        const started = await call.startScreenShare({ mode, quality: quality() });
+        const started = await call.startScreenShare({ mode: source?.kind === 'window' ? 'window' : mode, quality: quality(), source });
         if (started) panel.hidePopover();
       } catch (error) {
         onError(t("Couldn't share: {reason}", { reason: error?.message ?? error }));
@@ -95,8 +108,7 @@ export function createSharePanel(call, { onError }) {
         startButton.disabled = false;
       }
     };
-    // "Go live", not "choose": the entire screen on one monitor goes native, with no picker.
-    const startButton = h('button', { type: 'button', class: 'btn', onClick: start }, t('Go live'));
+    const startButton = h('button', { type: 'button', class: 'btn', onClick: start }, t('Choose and share…'));
     const stopButton = h(
       'button',
       { type: 'button', class: 'btn btn-danger', onClick: () => call.stopScreenShare().then(() => panel.hidePopover()) },
@@ -108,7 +120,8 @@ export function createSharePanel(call, { onError }) {
       'div',
       {},
       h('h2', { id: 'share-title' }, title),
-      sharing
+      // Our own picker asks that itself (with thumbnails); the system picker gets a hint first.
+      sharing || nativeSupported
         ? null
         : h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('What to share')), segmented('share-mode', MODES, mode, (v) => (mode = v))),
       h(

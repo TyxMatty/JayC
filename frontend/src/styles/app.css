@@ -1576,6 +1576,106 @@ fieldset > h3 {
   outline: 2px solid var(--accent);
 }
 
+/* The app's own share picker (ui/source-picker.js): screens and windows with thumbnails. */
+.source-picker {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.source-picker[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.source-picker-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.source-section {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.source-section:not(:first-child) {
+  margin-top: 20px;
+}
+
+.source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.source-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast),
+    background-color var(--dur-fast);
+}
+
+.source-option:hover {
+  border-color: var(--accent);
+}
+
+.source-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.source-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+.source-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.source-thumb.is-loading {
+  background: var(--surface-3);
+}
+
+.source-thumb-icon svg {
+  width: 28px;
+  height: 28px;
+  color: #fff;
+}
+
+.source-title {
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.source-subtitle {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* Native share: nothing to preview, so say it's live (white on the tile's black). */
 .tile-screen-note {
   position: absolute;

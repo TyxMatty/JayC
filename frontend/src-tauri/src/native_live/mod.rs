@@ -1,4 +1,4 @@
-//! Native screen share (Windows): the primary monitor captured with Windows Graphics Capture,
+//! Native screen share (Windows): a monitor or window captured with Windows Graphics Capture,
 //! encoded to H.264 on the GPU (encoder.rs) and sent over WebRTC (str0m, webrtc.rs) to the call's
 //! SFU, on the same media port as the app. Resolution and frame rate follow the bandwidth
 //! (ladder.rs). The page does the signaling (core/native-live.js). Measurements and limits:
@@ -9,6 +9,7 @@
 
 mod encoder;
 mod ladder;
+mod sources;
 mod webrtc;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,22 +19,21 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
-use windows::core::{factory, Interface};
-use windows::Graphics::Capture::{Direct3D11CaptureFramePool, GraphicsCaptureItem};
+use windows::core::Interface;
+use windows::Graphics::Capture::Direct3D11CaptureFramePool;
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Graphics::DirectX::DirectXPixelFormat;
-use windows::Win32::Foundation::{HMODULE, POINT};
+use windows::Win32::Foundation::HMODULE;
 use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::IDXGIDevice;
-use windows::Win32::Graphics::Gdi::{MonitorFromPoint, MONITOR_DEFAULTTOPRIMARY};
 use windows::Win32::Media::MediaFoundation::{MFShutdown, MFStartup, MFSTARTUP_FULL, MF_VERSION};
 use windows::Win32::System::WinRT::Direct3D11::{CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess};
-use windows::Win32::System::WinRT::Graphics::Capture::IGraphicsCaptureItemInterop;
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 
 use encoder::Encoder;
 use ladder::{loss_limit, Ladder, TIERS};
+use sources::{Kind, SourceId};
 
 /// The encoder spends this share of the bandwidth estimate (the rest: RTX, RTCP, headroom).
 const BUDGET_SHARE: f64 = 0.85;
@@ -102,7 +102,7 @@ fn stop_running() {
 /// Starts capturing and connecting; resolves once capture and encoder work (so the page can fall
 /// back to getDisplayMedia otherwise), with what goes into `connectTransport` and `produce`.
 #[tauri::command]
-pub async fn native_live_start(remote: RemoteArgs, quality: Quality, on_event: Channel<LiveEvent>) -> Result<LocalParams, String> {
+pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Quality, on_event: Channel<LiveEvent>) -> Result<LocalParams, String> {
     stop_running();
     let stop = Arc::new(AtomicBool::new(false));
     let shared = Arc::new(Mutex::new(quality));
@@ -112,7 +112,7 @@ pub async fn native_live_start(remote: RemoteArgs, quality: Quality, on_event: C
         .spawn({
             let (stop, shared) = (stop.clone(), shared.clone());
             move || {
-                let result = unsafe { run(remote, shared, stop, &ready_tx, &on_event) };
+                let result = unsafe { run(source, remote, shared, stop, &ready_tx, &on_event) };
                 if let Err(error) = &result {
                     log::warn!("native live: {error}");
                     let _ = ready_tx.send(Err(error.clone())); // ignored if already started
@@ -129,6 +129,24 @@ pub async fn native_live_start(remote: RemoteArgs, quality: Quality, on_event: C
 #[tauri::command]
 pub async fn native_live_stop() {
     stop_running();
+}
+
+/// Monitors and windows for the picker (no thumbnails: those come one by one, see below).
+#[tauri::command]
+pub async fn native_live_sources() -> Result<Vec<sources::Source>, String> {
+    tauri::async_runtime::spawn_blocking(sources::list).await.map_err(|e| e.to_string())
+}
+
+/// One source's thumbnail, as JPEG bytes (an ArrayBuffer on the page).
+#[tauri::command]
+pub async fn native_live_thumbnail(source: SourceId) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || unsafe {
+        RoInitialize(RO_INIT_MULTITHREADED).map_err(err("WinRT"))?;
+        sources::thumbnail(source, 384)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(tauri::ipc::Response::new)
 }
 
 /// Settings changed during the share: the new top of the ladder applies right away.
@@ -160,7 +178,31 @@ fn err(what: &'static str) -> impl Fn(windows::core::Error) -> String {
     move |e| format!("{what}: {e}")
 }
 
+/// A hardware D3D11 device usable from several threads, and its WinRT twin for the capture.
+unsafe fn create_device() -> Result<(ID3D11Device, IDirect3DDevice), String> {
+    let mut device = None;
+    D3D11CreateDevice(
+        None,
+        D3D_DRIVER_TYPE_HARDWARE,
+        HMODULE::default(),
+        D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
+        None,
+        D3D11_SDK_VERSION,
+        Some(&mut device),
+        None,
+        None,
+    )
+    .map_err(err("Direct3D"))?;
+    let device: ID3D11Device = device.unwrap();
+    let _ = device.cast::<ID3D11Multithread>().map_err(err("Direct3D"))?.SetMultithreadProtected(true);
+    let winrt: IDirect3DDevice = CreateDirect3D11DeviceFromDXGIDevice(&device.cast::<IDXGIDevice>().map_err(err("Direct3D"))?)
+        .and_then(|d| d.cast())
+        .map_err(err("Direct3D"))?;
+    Ok((device, winrt))
+}
+
 unsafe fn run(
+    source: SourceId,
     remote: RemoteArgs,
     shared: Arc<Mutex<Quality>>,
     stop: Arc<AtomicBool>,
@@ -170,31 +212,10 @@ unsafe fn run(
     RoInitialize(RO_INIT_MULTITHREADED).map_err(err("WinRT"))?;
     MFStartup(MF_VERSION, MFSTARTUP_FULL).map_err(err("Media Foundation"))?;
     let result = (|| {
-        let mut device = None;
-        D3D11CreateDevice(
-            None,
-            D3D_DRIVER_TYPE_HARDWARE,
-            HMODULE::default(),
-            D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
-            None,
-            D3D11_SDK_VERSION,
-            Some(&mut device),
-            None,
-            None,
-        )
-        .map_err(err("Direct3D"))?;
-        let device: ID3D11Device = device.unwrap();
-        let _ = device.cast::<ID3D11Multithread>().map_err(err("Direct3D"))?.SetMultithreadProtected(true);
-
-        // Capture: the primary monitor (the page only uses this path with a single monitor).
-        let monitor = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
-        let interop = factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>().map_err(err("capture"))?;
-        let item: GraphicsCaptureItem = interop.CreateForMonitor(monitor).map_err(err("capture"))?;
-        let size = item.Size().map_err(err("capture"))?;
-        let capture = (size.Width as u32, size.Height as u32);
-        let winrt_device: IDirect3DDevice = CreateDirect3D11DeviceFromDXGIDevice(&device.cast::<IDXGIDevice>().map_err(err("capture"))?)
-            .and_then(|d| d.cast())
-            .map_err(err("capture"))?;
+        let (device, winrt_device) = create_device()?;
+        let item = sources::capture_item(source)?;
+        let mut size = item.Size().map_err(err("capture"))?;
+        let mut capture = (size.Width as u32, size.Height as u32);
         let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size)
             .map_err(err("capture"))?;
         let session = pool.CreateCaptureSession(&item).map_err(err("capture"))?;
@@ -203,13 +224,13 @@ unsafe fn run(
         let mut quality = *shared.lock().unwrap();
         let mut budget = (START_KBPS as f64 * BUDGET_SHARE) as u32;
         let mut ladder = Ladder::new(budget);
-        let make = |tier: usize, q: &Quality, budget: u32| {
+        let make = |tier: usize, q: &Quality, budget: u32, capture: (u32, u32)| {
             let (w, h, fps, cap) = step(tier, q, capture);
             let enc = Encoder::new(&device, capture, w, h, fps, budget.min(cap)).map_err(err("H.264 encoder"))?;
             let _ = events.send(LiveEvent::Step { width: w, height: h, fps });
             Ok::<_, String>(enc)
         };
-        let mut enc = make(ladder.tier, &quality, budget)?;
+        let mut enc = make(ladder.tier, &quality, budget, capture)?;
         log::info!("native live: {} {}x{} -> {}x{}@{}", enc.name, capture.0, capture.1, enc.width, enc.height, enc.fps);
 
         let addr = format!("{}:{}", remote.ip, remote.port).parse().map_err(|e| format!("server address: {e}"))?;
@@ -225,13 +246,29 @@ unsafe fn run(
         let mut ever_connected = false;
         let mut estimate_budget = budget;
         let mut limit: Option<u32> = None;
-        let target = |budget: u32, tier: usize, q: &Quality| budget.min(step(tier, q, capture).3);
+        let target = |budget: u32, tier: usize, q: &Quality, capture: (u32, u32)| budget.min(step(tier, q, capture).3);
+        let mut window_checked = start;
         let (mut captured, mut encoded, mut bytes, mut stats_at) = (0u32, 0u32, 0u64, start);
 
         while !stop.load(Ordering::Relaxed) {
+            let mut resized = false;
             while let Ok(frame) = pool.TryGetNextFrame() {
+                let content = frame.ContentSize().map_err(err("capture"))?;
+                if (content.Width, content.Height) != (size.Width, size.Height) && content.Width > 0 && content.Height > 0 {
+                    // The window changed size: new buffers and a new encoder at the new size.
+                    size = content;
+                    capture = (size.Width as u32, size.Height as u32);
+                    pool.Recreate(&winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size).map_err(err("capture"))?;
+                    latest = None;
+                    resized = true;
+                    break;
+                }
                 captured += 1;
                 latest = Some(frame); // older ones are dropped, like a live does
+            }
+            if resized {
+                enc = make(ladder.tier, &quality, budget, capture)?;
+                last_forced = Some(Instant::now());
             }
             for frame in enc.poll().map_err(err("H.264 encoder"))? {
                 encoded += 1;
@@ -275,6 +312,12 @@ unsafe fn run(
             if signals.disconnected {
                 return Err("lost the connection to the server".into());
             }
+            if source.kind == Kind::Window && now - window_checked > Duration::from_millis(500) {
+                window_checked = now;
+                if !windows::Win32::UI::WindowsAndMessaging::IsWindow(Some(windows::Win32::Foundation::HWND(source.id as _))).as_bool() {
+                    return Err("the window was closed".into());
+                }
+            }
             if !ever_connected && now - start > CONNECT_TIMEOUT {
                 return Err("could not reach the server's media port".into());
             }
@@ -288,15 +331,15 @@ unsafe fn run(
                 estimate_budget = ((bps / 1000) as f64 * BUDGET_SHARE) as u32;
             }
             if let Some(loss) = signals.loss {
-                limit = loss_limit(limit, target(budget, ladder.tier, &quality), estimate_budget, loss);
+                limit = loss_limit(limit, target(budget, ladder.tier, &quality, capture), estimate_budget, loss);
             }
             budget = limit.map_or(estimate_budget, |l| l.min(estimate_budget));
             if let Some(tier) = ladder.update(budget, now).or(quality_changed.then_some(ladder.tier)) {
                 // New size or fps: a new encoder, whose first frame is a keyframe at the new size.
-                enc = make(tier, &quality, budget)?;
+                enc = make(tier, &quality, budget, capture)?;
                 last_forced = Some(now);
             } else if signals.estimate.is_some() || signals.loss.is_some() {
-                enc.set_bitrate(target(budget, ladder.tier, &quality));
+                enc.set_bitrate(target(budget, ladder.tier, &quality, capture));
             }
             if signals.keyframe && last_forced.is_none_or(|t| now - t >= KEYFRAME_GAP) {
                 enc.force_keyframe();

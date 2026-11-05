@@ -35,6 +35,11 @@ Quem assiste não muda: o app recebe H.264 normal pelo WebRTC e decodifica no We
 
 ## Medições
 
+> **Correção (05/11/2026, depois do seletor):** a janela de animação usada como conteúdo **nunca apareceu na tela**. Ela era aberta com `Start-Process -WindowStyle Hidden`, e o formulário do WinForms herdava o "escondido", ficando visível em nome e com área 0×0.
+> - **O que deixa de valer:** os números de quadros/s abaixo (capturados, codificados, decodificados) mediram outra coisa que mudava na tela: o app do Claude escrevendo, ou o PC em uso. Isso explica a variação de 0 a 55.
+> - **O que vale, mas com cautela:** as comparações de CPU entre a live atual e a nativa. As duas foram medidas com esse mesmo conteúdo desconhecido.
+> - **Medição válida de quadros/s:** a do seletor, em "Seletor próprio".
+
 **Método:**
 - **Conteúdo:** uma janela de 900×600 redesenha barras e cores ~64 vezes por segundo, em outro processo, porque a captura só entrega quadros quando a imagem muda.
 - **CPU:** soma dos processos ao longo de 20–30 s. No nativo, só o próprio processo (`GetProcessTimes`). No WebView, a árvore inteira: `jay-c.exe` (dev) e os processos do `msedgewebview2` do perfil de teste.
@@ -140,8 +145,33 @@ As medições acima eram só de bitrate. Agora a resolução e os quadros/s tamb
   - Um segundo participante na mesma página, ou o app de dev assistindo o release, recebeu 1080p com som, sem perdas.
   - Mas só 9,5–11,7 quadros/s. Os números do Rust mostraram que **a própria captura entregava 0–49 quadros/s, variando muito**, com a animação rodando a 64/s. O codificador acompanhava a captura e a estimativa de banda ficou em 9–12 Mbps.
 - **A proteção de captura não explica:** desligar o `setContentProtected` (`WDA_EXCLUDEFROMCAPTURE`) não mudou o padrão. Deu 30–49 numa rodada e 0–5 na seguinte.
-- **O mais provável é você estar usando o PC:** nas rodadas ruins, o Discord estava em primeiro plano. No spike, com o PC parado, a mesma captura deu 33–55.
-- **Falta medir** a taxa de quadros da live no app com o PC parado, ou num segundo PC.
+- **Explicação:** a janela de animação estava escondida (ver a correção em "Medições"), então a tela quase não mudava. Com uma janela que muda de verdade, a captura acompanha (ver "Seletor próprio").
+
+## Seletor próprio (05/11/2026)
+
+**O que mudou:** em vez do seletor do Chromium, o app tem o dele (`ui/source-picker.js`).
+- **Comandos:** `native_live_sources` lista telas e janelas, e `native_live_thumbnail` devolve uma miniatura JPEG de cada uma (`src-tauri/src/native_live/sources.rs`).
+- **Miniaturas:** são um quadro do próprio WGC, então janelas desenhadas pela GPU também aparecem. O JPEG é feito pelo WIC, e cada miniatura chega como bytes, sem base64.
+- **Lista de janelas:** visíveis, com título, sem minimizar e sem "cloaked" (outras áreas de trabalho, apps UWP suspensos). Ficam de fora janelas de ferramenta, janelas com dono, as menores que 64 px e o próprio Jay-C.
+- **Limites que saíram:** a live nativa aceita qualquer monitor ou janela. A restrição de "um monitor só" acabou.
+- **Seletor do sistema:** continua só fora do Windows, ou quando o nativo falha.
+
+**Live de uma janela:**
+- **Redimensionar:** o pool de quadros e o codificador são recriados no tamanho novo.
+- **Fechar a janela:** a live termina com "A live parou: a janela foi fechada".
+- **Minimizar:** a janela não gera quadros enquanto estiver minimizada.
+- **Som:** vem do processo da janela, pelo HWND, como antes.
+
+**Medido no app (dev):**
+- **Lista e miniaturas:** a lista aparece em ~105 ms. As miniaturas de 10–11 fontes ficam prontas em 0,6–0,8 s, em paralelo (~210 ms cada; 390 ms a do monitor; 7–20 KB).
+- **Layout:** o diálogo tem 760 px, 3 colunas, sem rolagem lateral, e o foco começa na primeira opção.
+- **Uma janela de animação visível**, 886×592, redesenhando ~64 vezes por segundo, compartilhada pelo seletor:
+  - **No envio:** **56–59 quadros/s capturados e codificados por 12 s seguidos**, a 886×592@60, com 5,1–5,4 Mbps e estimativa de 11–12 Mbps.
+  - O som veio de `powershell.exe`, o dono da janela.
+  - Fechar a janela encerrou a live com o aviso certo.
+- **Tela inteira pelo seletor:** começa em 720p30 e sobe para 1920×1080@60, com estimativa de ~10 Mbps. "Opções da live" → "Parar a live" encerra a live sem avisos nem erros, e o card some.
+- **Quem assiste a janela** (um segundo participante na mesma página): recebeu 886×592 a 18,8 quadros/s, sem perdas. Mas no meio da medição a janela de animação foi minimizada (o PC estava em uso), e o envio caiu para 0. Então esse número também não vale.
+- **Falta:** medir quem assiste com o PC parado, ou em outro PC.
 
 ## O que ainda falta para virar a live do app
 
@@ -151,7 +181,7 @@ As medições acima eram só de bitrate. Agora a resolução e os quadros/s tamb
 - **Codificador:**
   - Só foi testado na NVIDIA. Intel e AMD têm MFTs próprios.
   - Sem nenhum MFT de hardware, seria preciso o codificador de software (o MFT da Microsoft), com custo de CPU ainda não medido.
-- **Taxa de quadros no app:** medir com o PC parado ou num segundo PC (ver "No app").
+- **Quem assiste:** medir os quadros/s recebidos com o PC parado, ou num segundo PC.
 - **Prévia da própria live:** hoje não há.
 - **Ainda não feito:**
   - Captura de janela (`CreateForWindow`) e o seletor próprio, com miniaturas.
@@ -169,4 +199,4 @@ Vale seguir com WebRTC nativo na porta 40000:
 - **Quem hospeda e quem assiste:** nada muda.
 - **Banda:** numa rede estreita, ela baixa resolução e quadros/s em segundos, quase sem perder pacotes, e volta sozinha.
 
-Integrada ao app em 05/11/2026 (ver "No app"). O próximo passo é o seletor próprio, com miniaturas e vários monitores. O teste de quem assiste fica para um segundo PC.
+Integrada ao app em 05/11/2026 (ver "No app"), com o seletor próprio (ver "Seletor próprio"). O teste de quem assiste fica para um segundo PC.

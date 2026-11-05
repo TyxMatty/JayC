@@ -20,7 +20,11 @@ pub fn run() {
             #[cfg(windows)]
             native_live::native_live_stop,
             #[cfg(windows)]
-            native_live::native_live_set_quality
+            native_live::native_live_set_quality,
+            #[cfg(windows)]
+            native_live::native_live_sources,
+            #[cfg(windows)]
+            native_live::native_live_thumbnail
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

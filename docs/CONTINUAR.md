@@ -175,7 +175,11 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
   - Em "Tela inteira", com um monitor só, a live é nativa: sem seletor e sem prévia ("Ao vivo · sem prévia"). Se falhar, cai no caminho antigo.
   - Medido: a árvore do app em live gasta 0,68–0,72 núcleo, contra 1,88 da live antiga.
   - Quem assiste recebe 1080p com som, sem perdas. A taxa de quadros no app não foi medida de forma confiável (você estava usando o PC).
-- **Próximo passo:** o seletor próprio (miniaturas, vários monitores, janela).
+- ✅ **Seletor próprio** (Windows):
+  - "Escolher e transmitir…" abre a lista de telas e janelas com miniaturas, e a live sai nativa do que for escolhido, em qualquer monitor ou janela.
+  - Com uma janela, a live acompanha o redimensionamento e termina se a janela fechar.
+  - Medido: com uma janela que muda de verdade, 56–59 quadros/s no envio.
+  - **Correção:** as taxas de quadros anteriores foram medidas com a janela de animação escondida (ver o spike 10).
 
 **Sem cara de navegador (05/11/2026):** no release, o clique direito fora dos campos de texto não abre mais o menu do WebView2 (Voltar, Atualizar, Imprimir, Inspecionar), e os atalhos de navegador ficam desligados (`SetAreBrowserAcceleratorKeysEnabled(false)`, em `src-tauri/src/app_chrome.rs`): F5/Ctrl+R não recarregam a página (o que derrubava a chamada), nem Ctrl+P/Ctrl+F abrem impressão e busca. Campos de texto mantêm o menu de copiar/colar. O dev mantém tudo, para depurar.
 

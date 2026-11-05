@@ -1,4 +1,4 @@
-// Native screen share (Windows): Rust captures the primary monitor, encodes H.264 on the GPU and
+// Native screen share (Windows): Rust captures a monitor or window, encodes H.264 on the GPU and
 // sends it over its own WebRTC transport (src-tauri/src/native_live; docs/spikes/10-live-nativa.md).
 // ~20x less CPU than getDisplayMedia + WebView2's encoder. This side does the signaling.
 import * as systemAudio from 'tauri-plugin-system-audio-api';
@@ -8,12 +8,20 @@ import { streamBitrate, targetHeight } from './media.js';
 const PT = 102;
 const RTX_PT = 103;
 
-/**
- * Only for "entire screen" on a single monitor: Rust captures the primary one, and there is no
- * picker of our own yet. Several monitors keep the system picker.
- */
-export async function nativeLiveSupported() {
-  return !window.screen.isExtended && (await systemAudio.isSupported());
+/** Windows app: the native share and its own picker (ui/source-picker.js) replace getDisplayMedia's. */
+export const nativeLiveSupported = () => systemAudio.isSupported();
+
+async function invoke(command, args) {
+  return (await import('@tauri-apps/api/core')).invoke(command, args);
+}
+
+/** Monitors (primary first), then app windows, most recently used first. */
+export const listSources = () => invoke('native_live_sources');
+
+/** An object URL with a JPEG of the source right now (revoke it when done). */
+export async function sourceThumbnail({ kind, id }) {
+  const bytes = await invoke('native_live_thumbnail', { source: { kind, id } });
+  return URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
 }
 
 /** The quality picked in Settings › Streaming, as the top of Rust's quality ladder. */
@@ -49,12 +57,12 @@ export function nativeRtpParameters({ ssrc, rtxSsrc }) {
 }
 
 /**
- * Starts the native share and publishes it as this peer's `screen` producer.
- * @param {{ request: (type: string, data: object) => Promise<any>, quality: object,
+ * Starts the native share of `source` (from listSources) and publishes it as this peer's `screen` producer.
+ * @param {{ source: { kind: 'monitor' | 'window', id: number }, request: (type: string, data: object) => Promise<any>, quality: object,
  *   onEnded: (reason: string) => void }} options `onEnded`: the share stopped on its own (not after close()).
  * @returns {Promise<{ id: string, stats: () => object | null, setQuality: (quality: object) => Promise<void>, close: () => Promise<void> }>}
  */
-export async function startNativeLive({ request, quality, onEnded }) {
+export async function startNativeLive({ source, request, quality, onEnded }) {
   const { invoke, Channel } = await import('@tauri-apps/api/core');
   const transport = await request('createTransport', { direction: 'send' });
   const candidate = transport.iceCandidates.find((c) => c.protocol === 'udp');
@@ -76,6 +84,7 @@ export async function startNativeLive({ request, quality, onEnded }) {
     await invoke('native_live_stop');
   };
   const local = await invoke('native_live_start', {
+    source: { kind: source.kind, id: source.id },
     remote: {
       ufrag: transport.iceParameters.usernameFragment,
       pwd: transport.iceParameters.password,
@@ -93,7 +102,7 @@ export async function startNativeLive({ request, quality, onEnded }) {
       transportId: transport.id,
       kind: 'video',
       source: 'screen',
-      mode: 'screen',
+      mode: source.kind === 'window' ? 'window' : 'screen',
       rtpParameters: nativeRtpParameters(local),
     });
     return { id, close, stats: () => stats, setQuality: (next) => invoke('native_live_set_quality', { quality: nativeQuality(next) }) };
