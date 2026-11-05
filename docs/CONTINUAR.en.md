@@ -134,7 +134,9 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
-**After 0.3.3 (05/11/2026), no installer yet:**
+**Installer 0.3.4 (05/11/2026):** 0.3.3 with what's below and Discord Rich Presence: during a call, the Discord profile shows Jay-C (people, time, streams without names, the style's wolf), with the options in Settings › Profile › Discord. Plan and measurements in ARQUITETURA.en.md, section 10, "Discord Rich Presence". The server changed (the `screen-preview` message); an old server still works, without the previews.
+
+**Between 0.3.3 and 0.3.4 (05/11/2026):**
 - **No text selection:** dragging with the left button no longer selects labels, buttons and images (`user-select: none` on `body`). Text fields, chat messages and the setup guide stay selectable. Measured with a real drag (CDP): nothing selected; with selection forced back on, the same drag picks up the lobby's text.
 - **Jay-C in the stream:**
   - The native stream no longer hides the Jay-C window (affinity 0 during an entire-screen stream).
