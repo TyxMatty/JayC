@@ -1576,6 +1576,19 @@ fieldset > h3 {
   outline: 2px solid var(--accent);
 }
 
+/* Native share: nothing to preview, so say it's live (white on the tile's black). */
+.tile-screen-note {
+  position: absolute;
+  inset: 0 0 28px;
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .tile-screen-icon {
   display: inline-grid;
 }

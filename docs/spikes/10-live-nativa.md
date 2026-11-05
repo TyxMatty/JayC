@@ -110,6 +110,39 @@ As medições acima eram só de bitrate. Agora a resolução e os quadros/s tamb
 
 **Não medido de forma confiável: o que quem assiste vê na queda.** Com o espectador no mesmo PC, a captura caiu para 15/s, e o próprio emissor codificou só 11 quadros/s a ~200 kbps, antes mesmo da limitação. Na última rodada você estava usando o PC (o Chrome ficou em primeiro plano). Os números do espectador dessas rodadas (2–29 quadros/s, congelamentos de 0,4 a 3 s) não separam a rede do teste. É preciso um teste em dois PCs.
 
+## No app (05/11/2026)
+
+**Onde está o código:**
+- **Rust:** `frontend/src-tauri/src/native_live` (`mod.rs`, `encoder.rs`, `ladder.rs`, `webrtc.rs`).
+  - Comandos: `native_live_start`, `native_live_set_quality` e `native_live_stop`.
+  - Eventos por um `Channel`: `connected`, `step`, `stats` a cada 2 s, e `ended`.
+- **JS:** `core/native-live.js` faz a sinalização (`createTransport`, `connectTransport` e `produce`, num transporte só da live).
+
+**Quando entra:**
+- Só em "Tela inteira", com um monitor só (`!screen.isExtended`), e captura o principal.
+- Com vários monitores, ou em "Janela", fica o seletor do sistema, até existir o seletor próprio.
+- Se o nativo falhar ao começar, a live cai no caminho antigo sem avisar.
+
+**Como funciona:**
+- O som da tela continua vindo do plugin `system-audio`, como antes.
+- O Settings › Streaming muda o topo dos degraus durante a live.
+- O card local mostra "Ao vivo · sem prévia", porque não há faixa local para mostrar.
+- `call.screenStats()` devolve os números do Rust.
+- O botão do painel passou a se chamar "Entrar ao vivo", já que não há o que escolher.
+
+**Medido no app** (perfil de teste, servidor de teste, mic desligado):
+- **CPU da árvore inteira:**
+  - Release com a live nativa: 0,68–0,72 núcleo.
+  - Dev: 0,75 núcleo. Na chamada sem live, 0,42.
+  - Live antiga: 1,88 núcleo.
+  - Ou seja, a live (com o som da tela) custa ~0,3 núcleo, contra ~1,46.
+- **Quem assiste:**
+  - Um segundo participante na mesma página, ou o app de dev assistindo o release, recebeu 1080p com som, sem perdas.
+  - Mas só 9,5–11,7 quadros/s. Os números do Rust mostraram que **a própria captura entregava 0–49 quadros/s, variando muito**, com a animação rodando a 64/s. O codificador acompanhava a captura e a estimativa de banda ficou em 9–12 Mbps.
+- **A proteção de captura não explica:** desligar o `setContentProtected` (`WDA_EXCLUDEFROMCAPTURE`) não mudou o padrão. Deu 30–49 numa rodada e 0–5 na seguinte.
+- **O mais provável é você estar usando o PC:** nas rodadas ruins, o Discord estava em primeiro plano. No spike, com o PC parado, a mesma captura deu 33–55.
+- **Falta medir** a taxa de quadros da live no app com o PC parado, ou num segundo PC.
+
 ## O que ainda falta para virar a live do app
 
 - **Banda estreita:**
@@ -118,9 +151,8 @@ As medições acima eram só de bitrate. Agora a resolução e os quadros/s tamb
 - **Codificador:**
   - Só foi testado na NVIDIA. Intel e AMD têm MFTs próprios.
   - Sem nenhum MFT de hardware, seria preciso o codificador de software (o MFT da Microsoft), com custo de CPU ainda não medido.
-- **Integração:**
-  - O app hoje fala com o servidor pelo `mediasoup-client` no WebView. O emissor nativo precisa do mesmo `transportId`, e a sinalização continua no JS.
-  - Fica um `createTransport` separado para a live nativa, e o Rust recebe os parâmetros por um comando do plugin, não pela linha de comando.
+- **Taxa de quadros no app:** medir com o PC parado ou num segundo PC (ver "No app").
+- **Prévia da própria live:** hoje não há.
 - **Ainda não feito:**
   - Captura de janela (`CreateForWindow`) e o seletor próprio, com miniaturas.
   - Monitor diferente do principal, e janela redimensionada ou minimizada.
@@ -137,4 +169,4 @@ Vale seguir com WebRTC nativo na porta 40000:
 - **Quem hospeda e quem assiste:** nada muda.
 - **Banda:** numa rede estreita, ela baixa resolução e quadros/s em segundos, quase sem perder pacotes, e volta sozinha.
 
-O próximo passo é a integração ao app (comando do plugin e sinalização no JS), com o seletor próprio. O teste de quem assiste fica para um segundo PC.
+Integrada ao app em 05/11/2026 (ver "No app"). O próximo passo é o seletor próprio, com miniaturas e vários monitores. O teste de quem assiste fica para um segundo PC.

@@ -95,7 +95,8 @@ export function createSharePanel(call, { onError }) {
         startButton.disabled = false;
       }
     };
-    const startButton = h('button', { type: 'button', class: 'btn', onClick: start }, t('Choose and share…'));
+    // "Go live", not "choose": the entire screen on one monitor goes native, with no picker.
+    const startButton = h('button', { type: 'button', class: 'btn', onClick: start }, t('Go live'));
     const stopButton = h(
       'button',
       { type: 'button', class: 'btn btn-danger', onClick: () => call.stopScreenShare().then(() => panel.hidePopover()) },

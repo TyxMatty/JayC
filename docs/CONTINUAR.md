@@ -171,7 +171,11 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
   - Quem assiste recebe 1080p sem perdas.
   - Numa rede estreita simulada, a resolução e os quadros/s descem em degraus (1080p60 → 720p30 → 540p30 → 360p15) em segundos, com 0–53 pacotes perdidos (antes eram ~500), e voltam sozinhos.
   - O que quem assiste vê na queda não foi medido de forma confiável: o espectador no mesmo PC atrapalha a captura. Falta um teste em dois PCs.
-- **Próximo passo:** integrar ao app (comando do plugin, sinalização no JS), com o seletor próprio.
+- ✅ **No app:**
+  - Em "Tela inteira", com um monitor só, a live é nativa: sem seletor e sem prévia ("Ao vivo · sem prévia"). Se falhar, cai no caminho antigo.
+  - Medido: a árvore do app em live gasta 0,68–0,72 núcleo, contra 1,88 da live antiga.
+  - Quem assiste recebe 1080p com som, sem perdas. A taxa de quadros no app não foi medida de forma confiável (você estava usando o PC).
+- **Próximo passo:** o seletor próprio (miniaturas, vários monitores, janela).
 
 **Sem cara de navegador (05/11/2026):** no release, o clique direito fora dos campos de texto não abre mais o menu do WebView2 (Voltar, Atualizar, Imprimir, Inspecionar), e os atalhos de navegador ficam desligados (`SetAreBrowserAcceleratorKeysEnabled(false)`, em `src-tauri/src/app_chrome.rs`): F5/Ctrl+R não recarregam a página (o que derrubava a chamada), nem Ctrl+P/Ctrl+F abrem impressão e busca. Campos de texto mantêm o menu de copiar/colar. O dev mantém tudo, para depurar.
 

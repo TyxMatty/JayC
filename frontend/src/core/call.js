@@ -14,6 +14,7 @@ import {
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic } from './native-mic.js';
+import { nativeLiveSupported, startNativeLive } from './native-live.js';
 import { t } from './i18n.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
@@ -66,7 +67,11 @@ export class Call extends EventTarget {
   localStream = new MediaStream();
   /** Our own screen share preview, while sharing. */
   screenStream = null;
-  /** { mode: 'screen' | 'window', windowHandle: number | null, audio: string | null } while sharing. */
+  /**
+   * { mode: 'screen' | 'window', windowHandle: number | null, audio: string | null, native: boolean }
+   * while sharing. `native`: captured and encoded in Rust (core/native-live.js), so there is no
+   * local track and `screenStream` is empty (no preview).
+   */
   screenShare = null;
   screenQuality = { ...DEFAULT_STREAM_QUALITY };
   /** { echoCancellation, noiseSuppression, autoGainControl } applied to the mic. */
@@ -98,6 +103,8 @@ export class Call extends EventTarget {
   #recvReady = null;
   /** @type {Record<'mic' | 'camera' | 'screen' | 'screen-audio', import('mediasoup-client').types.Producer | null>} */
   #producers = { mic: null, camera: null, screen: null, 'screen-audio': null };
+  /** Native screen share (video) while sharing: { id, setQuality(), close() }; also #producers.screen. */
+  #nativeLive = null;
   /** Native screen-share sound while sharing: { track, stop(), close(), description }. */
   #screenAudio = null;
   /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
@@ -288,14 +295,26 @@ export class Call extends EventTarget {
   }
 
   get sharing() {
-    return Boolean(this.local.screen);
+    return Boolean(this.local.screen || this.#nativeLive);
   }
 
   /**
    * Opens the system picker and starts sharing. Resolves false if the user cancelled the picker.
+   * The entire screen on a single-monitor Windows PC goes native instead: no picker, ~20x less CPU.
    * @param {{ mode: 'screen' | 'window', quality: typeof DEFAULT_STREAM_QUALITY }} options
    */
   async startScreenShare({ mode, quality }) {
+    if (mode === 'screen' && this.#signaling && (await nativeLiveSupported())) {
+      if (this.sharing) await this.stopScreenShare();
+      if (await this.#startNativeLive(quality)) {
+        this.screenQuality = { ...quality };
+        this.screenShare = { mode: 'screen', windowHandle: null, audio: null, native: true };
+        this.screenStream = new MediaStream();
+        await this.#startScreenAudio();
+        this.#emit('local-updated', {});
+        return true;
+      }
+    }
     let track;
     try {
       track = await getScreenTrack(mode, quality);
@@ -320,6 +339,7 @@ export class Call extends EventTarget {
   }
 
   async stopScreenShare() {
+    this.#nativeLive = null; // its close() runs below, as the screen producer's
     this.#screenAudio?.stop();
     this.#screenAudio = null;
     for (const source of ['screen', 'screen-audio']) {
@@ -396,6 +416,7 @@ export class Call extends EventTarget {
   /** Changes resolution / fps / content hint of the running share, without renegotiating. */
   async setScreenQuality(quality) {
     this.screenQuality = { ...this.screenQuality, ...quality };
+    if (this.#nativeLive) return this.#nativeLive.setQuality(this.screenQuality);
     if (!this.local.screen) return;
     await this.#applyCaptureQuality();
     await this.#producers.screen?.setRtpEncodingParameters(this.#screenEncoding());
@@ -403,6 +424,8 @@ export class Call extends EventTarget {
 
   /** Outbound stats of the screen producer (resolution, fps, bitrate actually sent). */
   async screenStats() {
+    // Sent from Rust: its own counters (captured/encoded fps, kbps, bandwidth estimate, current step).
+    if (this.#nativeLive) return this.#nativeLive.stats();
     const stats = await this.#producers.screen?.getStats();
     return stats ? [...stats.values()].find((s) => s.type === 'outbound-rtp') ?? null : null;
   }
@@ -455,7 +478,35 @@ export class Call extends EventTarget {
     if (this.local.audio) await this.#produce('mic', this.local.audio);
     if (this.local.video) await this.#produce('camera', this.local.video);
     if (this.local.screen) await this.#produceScreen();
+    if (this.screenShare?.native) await this.#restartNativeLive();
     if (this.#screenAudio) await this.#produceScreenAudio();
+  }
+
+  /** Publishes the native share; false if it can't run here (the caller falls back to the picker). */
+  async #startNativeLive(quality) {
+    try {
+      this.#nativeLive = await startNativeLive({
+        request: (type, data) => this.#signaling.request(type, data),
+        quality,
+        onEnded: (reason) => {
+          if (!this.#nativeLive) return;
+          this.#emit('notice', { message: t('Screen share stopped: {reason}', { reason: t(reason) }) });
+          this.stopScreenShare();
+        },
+      });
+    } catch (error) {
+      console.warn('[call] native screen share unavailable, using the system picker', error);
+      this.#nativeLive = null;
+      return false;
+    }
+    this.#producers.screen = this.#nativeLive;
+    return true;
+  }
+
+  /** After a reconnect the server forgot our transports: publish the native share again. */
+  async #restartNativeLive() {
+    await this.#nativeLive?.close();
+    if (!(await this.#startNativeLive(this.screenQuality))) await this.stopScreenShare();
   }
 
   async #createTransport(direction, generation) {
@@ -765,6 +816,8 @@ export class Call extends EventTarget {
   }
 
   #stopLocal() {
+    this.#nativeLive?.close();
+    this.#nativeLive = null;
     this.#nativeMic?.stop();
     this.#nativeMic = null;
     this.#screenAudio?.stop();

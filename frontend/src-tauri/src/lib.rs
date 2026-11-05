@@ -3,6 +3,8 @@ mod app_chrome;
 #[cfg(windows)]
 mod media_permissions;
 #[cfg(windows)]
+mod native_live;
+#[cfg(windows)]
 mod taskbar_icon;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -12,7 +14,13 @@ pub fn run() {
         .plugin(tauri_plugin_pip::init())
         .invoke_handler(tauri::generate_handler![
             #[cfg(windows)]
-            taskbar_icon::set_taskbar_icon
+            taskbar_icon::set_taskbar_icon,
+            #[cfg(windows)]
+            native_live::native_live_start,
+            #[cfg(windows)]
+            native_live::native_live_stop,
+            #[cfg(windows)]
+            native_live::native_live_set_quality
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

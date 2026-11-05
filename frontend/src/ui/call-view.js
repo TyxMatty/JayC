@@ -129,6 +129,10 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
   const pipButton = local || !onPip ? null : iconButton(t('Pop out video'), icons.pip, () => onPip());
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
   const nameText = h('span', {}, local ? t('Your screen') : t("{name}'s screen", { name }));
+  // A native share (core/native-live.js) has no local track to preview.
+  const note = local
+    ? h('div', { class: 'tile-screen-note', title: t('Sent straight from the GPU: no preview, to save CPU.') }, t('Live · no preview'))
+    : null;
   const el = h(
     'div',
     {
@@ -136,6 +140,7 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
       title: local ? t('Click to show it bigger, or back in the corner') : t('Click to focus · double-click for fullscreen'),
     },
     video,
+    note,
     h('div', { class: 'tile-label' }, icon, nameText),
     ...(local
       ? []
@@ -187,6 +192,7 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
       nameText.textContent = local
         ? t(mode === 'window' ? 'Your window' : 'Your screen')
         : t(mode === 'window' ? "{name}'s window" : "{name}'s screen", { name: next });
+      if (note) note.hidden = stream.getVideoTracks().length > 0;
       if (video.srcObject !== stream || video.dataset.tracks !== String(stream.getTracks().length)) {
         video.srcObject = stream;
         video.dataset.tracks = String(stream.getTracks().length);

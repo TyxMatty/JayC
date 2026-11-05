@@ -28,7 +28,27 @@ tauri-plugin-pip = { path = "../../plugins/tauri-plugin-pip" }
 [target.'cfg(windows)'.dependencies]
 # Same versions as wry's, to reach the WebView2 controller it creates.
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Graphics_Capture",
+    "Graphics_DirectX_Direct3D11",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Capture",
+    "Win32_UI_WindowsAndMessaging",
+] }
+# Native screen share over WebRTC (src/native_live); Windows' own crypto, no OpenSSL.
+str0m = { version = "0.25", default-features = false, features = ["wincrypto"] }
 
 [profile.release]
 # Smaller, leaner binaries.
