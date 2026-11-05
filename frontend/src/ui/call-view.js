@@ -3,6 +3,7 @@ import { icons } from './icons.js';
 import { canShareScreen } from '../core/media.js';
 import { createSharePanel } from './share-panel.js';
 import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
+import { fitGrid } from '../core/grid-fit.js';
 import { fullscreenElement, toggleFullscreen as toggleElementFullscreen, exitFullscreen } from '../core/fullscreen.js';
 import { createControlBar } from './control-bar.js';
 import { createAudioMenu } from './audio-menu.js';
@@ -341,6 +342,15 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     else apply();
   };
 
+  /** Alone or 3+ people: the column count (and width) that makes the biggest tiles in the stage's actual size. */
+  const fitCameras = () => {
+    if (!['solo', 'grid'].includes(stage.dataset.layout)) return void cameras.style.removeProperty('grid-template-columns');
+    const gap = parseFloat(getComputedStyle(cameras).rowGap) || 0;
+    const { columns, tileWidth } = fitGrid(cameras.children.length, cameras.clientWidth, cameras.clientHeight, gap);
+    cameras.style.gridTemplateColumns = `repeat(${columns}, ${Math.max(0, tileWidth)}px)`;
+  };
+  new ResizeObserver(() => fitCameras()).observe(cameras);
+
   const layout = () => {
     const remotes = tiles.size;
     if (focusedScreen === 'local' ? !localScreenTile : focusedScreen && !screenTiles.has(focusedScreen)) focusedScreen = null;
@@ -365,6 +375,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       delete screens.dataset.focus;
     }
     stage.dataset.layout = streams > 0 ? 'presenting' : remotes === 0 ? 'solo' : remotes === 1 ? 'duo' : 'grid';
+    fitCameras();
     peopleCount.textContent = remotes === 0 ? t('Just you') : t('{count} people', { count: remotes + 1 });
     waiting.hidden = remotes > 0;
   };
