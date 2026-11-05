@@ -164,6 +164,9 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 !define MUI_LANGDLL_REGISTRY_ROOT "HKCU"
 !define MUI_LANGDLL_REGISTRY_KEY "${MANUPRODUCTKEY}"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
+; Jay-C: ask for the language every time (the last one comes preselected). Without this, an update
+; over a version whose installer was English-only never shows the selector.
+!define MUI_LANGDLL_ALWAYSSHOW
 
 ; Installer pages, must be ordered as they appear
 ; 1. Welcome Page
