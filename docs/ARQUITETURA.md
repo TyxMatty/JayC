@@ -371,7 +371,7 @@ Cada etapa termina com algo testável.
 | 14.A | **Instalador Windows** (NSIS, `.exe`) gerado localmente | ✅ |
 | 14.B | **APK de release** assinado (ARM 64 e 32 bits) | |
 | 14.C | **GitHub Actions:** com uma tag `v*`, gera `.exe`, `.apk` e a imagem no GHCR, e monta um rascunho de Release com o `docker-compose.yml` | |
-| 14.D | **Ícone** do usuário em todos os tamanhos (`tauri icon`) | |
+| 14.D | **Ícone** do usuário em todos os tamanhos (`tauri icon`): o lobo do Jay-C, com o traço engrossado e a cabeça preenchida (`scripts/wolf-icon.ps1`), na cor de cada estilo | ✅ |
 | 14.E | **Publicação** e teste do guia do zero numa máquina limpa | |
 
 **Instalador Windows** (`npm run build`, ~7–9 min com LTO):

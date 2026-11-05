@@ -26,7 +26,6 @@ export const icons = {
   send: svg('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>'),
   arrowRight: svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
   /** The brand mark: a sound wave (three bars). */
-  logo: svg('<path d="M8 9v6M12 6v12M16 9v6" stroke-width="2.6"/>'),
   maximize: svg('<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>'),
   minimize: svg('<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>'),
   pip: svg('<path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><rect x="12" y="13" width="10" height="7" rx="2"/>'),

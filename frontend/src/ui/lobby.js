@@ -183,7 +183,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
   const hero = h(
     'section',
     { class: 'lobby-hero', 'aria-labelledby': 'lobby-hero-title' },
-    h('span', { class: 'lobby-hero-mark', html: icons.logo, 'aria-hidden': 'true' }),
+    h('span', { class: 'lobby-hero-mark wolf-mark', 'aria-hidden': 'true' }),
     h('h2', { id: 'lobby-hero-title' }, t('Calls and streams that stay light')),
     h('p', {}, t('On a server you or a friend runs. No accounts and no ads.')),
     h(

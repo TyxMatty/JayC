@@ -1,48 +1,49 @@
-// The window's icon (title bar and taskbar) drawn like the header's brand mark: the style's corners,
-// the button color and its text color. It follows Settings › Appearance; the .exe's own icon (on
-// disk, in the Start menu, when pinned) is the file one, src-tauri/app-icon.svg.
+// The window's icon (title bar and taskbar): the Jay-C wolf in the style's colors, drawn from two
+// masks (assets/brand, made by scripts/wolf-icon.ps1): the lines, and the inside of the head.
+// Always the style's dark-theme colors (the colors of the wolf drawings), so it reads on light and
+// dark taskbars; a custom button color (Settings › Appearance) recolors the lines. The .exe's own
+// icon (on disk, in the Start menu, when pinned) is the file one, src-tauri/app-icon.png.
 import { isAndroidApp } from '../core/activity-pip.js';
+import { ICON_COLORS, resolveStyle } from '../core/style.js';
+import { settings } from '../store/settings.js';
+import linesUrl from '../assets/brand/wolf-lines.png';
+import fillUrl from '../assets/brand/wolf-fill.png';
 
 const SIZE = 64;
-/** The header mark is 30 px with --radius-sm corners: keep the same proportion. */
-const MARK_PX = 30;
 
-/** The brand mark (ui/icons.js `logo`): three rounded bars on a rounded square. */
-export function drawMark(g, size, { fill, bars, radius }) {
-  g.clearRect(0, 0, size, size);
-  g.fillStyle = fill;
-  g.beginPath();
-  g.roundRect(0, 0, size, size, radius);
-  g.fill();
-  g.strokeStyle = bars;
-  g.lineCap = 'round';
-  g.lineWidth = size * 0.11;
-  const s = size / 24; // the icon's 24-unit viewBox
-  for (const [x, y1, y2] of [[8, 9, 15], [12, 6, 18], [16, 9, 15]]) {
-    g.beginPath();
-    g.moveTo(x * s, y1 * s);
-    g.lineTo(x * s, y2 * s);
-    g.stroke();
-  }
+const loadImage = (src) =>
+  new Promise((resolve, reject) => Object.assign(new Image(), { onload: (e) => resolve(e.target), onerror: reject, src }));
+let masks = null;
+
+/** One mask painted in `color`, at `size` px. */
+function tinted(img, color, size) {
+  const c = Object.assign(document.createElement('canvas'), { width: size, height: size });
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, size, size);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = color;
+  g.fillRect(0, 0, size, size);
+  return c;
 }
 
 let pending = null;
 
-/** Redraws the window icon from the current tokens (desktop app only; a no-op elsewhere). */
+/** Redraws the window icon for the current style (desktop app only; a no-op elsewhere). */
 export function updateWindowIcon() {
   if (!('__TAURI_INTERNALS__' in window) || isAndroidApp() || pending) return;
   // After the style/theme attributes and inline colors have been applied, once per frame.
   pending = requestAnimationFrame(async () => {
     pending = null;
-    const cs = getComputedStyle(document.documentElement);
-    const canvas = Object.assign(document.createElement('canvas'), { width: SIZE, height: SIZE });
-    const g = canvas.getContext('2d');
-    drawMark(g, SIZE, {
-      fill: cs.getPropertyValue('--accent').trim(),
-      bars: cs.getPropertyValue('--accent-contrast').trim(),
-      radius: Math.min(SIZE / 2, (parseFloat(cs.getPropertyValue('--radius-sm')) * SIZE) / MARK_PX),
-    });
     try {
+      masks ??= Promise.all([loadImage(linesUrl), loadImage(fillUrl)]);
+      const [lines, fill] = await masks;
+      const colors = ICON_COLORS[resolveStyle(document.documentElement.dataset.style)];
+      const custom = settings.get().appearance?.accent;
+      const canvas = Object.assign(document.createElement('canvas'), { width: SIZE, height: SIZE });
+      const g = canvas.getContext('2d');
+      g.drawImage(tinted(fill, colors.fill, SIZE), 0, 0);
+      g.drawImage(tinted(lines, custom || colors.lines, SIZE), 0, 0);
       const [{ Image }, { getCurrentWindow }] = await Promise.all([import('@tauri-apps/api/image'), import('@tauri-apps/api/window')]);
       const pixels = g.getImageData(0, 0, SIZE, SIZE).data;
       // The buffer, not the Uint8ClampedArray: Tauri only treats Uint8Array/ArrayBuffer as bytes.

@@ -91,20 +91,30 @@ select {
   margin-right: auto;
 }
 
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: var(--glow);
+/* The Jay-C wolf (assets/brand, from scripts/wolf-icon.ps1): two masks in the theme's colors, the
+   head in the accent contrast and the lines in the accent, so it follows style, theme and color. */
+.wolf-mark {
+  position: relative;
+  flex: none;
 }
 
-.brand-mark svg {
-  width: 22px;
-  height: 22px;
+.wolf-mark::before,
+.wolf-mark::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent-contrast);
+  mask: url('../assets/brand/wolf-fill.png') center / contain no-repeat;
+}
+
+.wolf-mark::after {
+  background: var(--accent);
+  mask-image: url('../assets/brand/wolf-lines.png');
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
 }
 
 .brand-name > span {
@@ -267,19 +277,8 @@ select {
 }
 
 .lobby-hero-mark {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  box-shadow: var(--glow), var(--shadow);
-}
-
-.lobby-hero-mark svg {
-  width: 36px;
-  height: 36px;
+  width: 72px;
+  height: 72px;
 }
 
 .lobby-hero h2 {

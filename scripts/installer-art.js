@@ -10,22 +10,25 @@ const PEACH = '#ff9068';
 await document.fonts.load('700 30px Inter');
 await document.fonts.load('600 14px Inter');
 
-/** The brand mark (ui/icons.js logo): three rounded bars in a rounded square. */
-function mark(g, x, y, size, squareColor, barColor) {
-  g.fillStyle = squareColor;
-  g.beginPath();
-  g.roundRect(x, y, size, size, size * 0.28);
-  g.fill();
-  g.strokeStyle = barColor;
-  g.lineCap = 'round';
-  g.lineWidth = size * 0.11;
-  const s = size / 24; // the icon's 24-unit viewBox
-  for (const [bx, y1, y2] of [[8, 9, 15], [12, 6, 18], [16, 9, 15]]) {
-    g.beginPath();
-    g.moveTo(x + bx * s, y + y1 * s);
-    g.lineTo(x + bx * s, y + y2 * s);
-    g.stroke();
-  }
+// The Jay-C wolf (src/assets/brand, from scripts/wolf-icon.ps1): the head and the lines, tinted.
+const load = (src) => new Promise((resolve, reject) => Object.assign(new Image(), { onload: (e) => resolve(e.target), onerror: reject, src }));
+const [wolfLines, wolfFill] = await Promise.all([load('/src/assets/brand/wolf-lines.png'), load('/src/assets/brand/wolf-fill.png')]);
+const HEAD = '#16131b'; // Suave's dark accent contrast, as in the app icon
+
+function tinted(img, color, size) {
+  const c = Object.assign(document.createElement('canvas'), { width: size, height: size });
+  const g = c.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, size, size);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = color;
+  g.fillRect(0, 0, size, size);
+  return c;
+}
+
+function mark(g, x, y, size, lineColor) {
+  g.drawImage(tinted(wolfFill, HEAD, size), x, y);
+  g.drawImage(tinted(wolfLines, lineColor, size), x, y);
 }
 
 function sidebar() {
@@ -47,7 +50,7 @@ function sidebar() {
   g.shadowColor = 'rgba(60, 20, 10, 0.25)';
   g.shadowBlur = 16;
   g.shadowOffsetY = 6;
-  mark(g, 50, 96, 64, '#ffffff', ACCENT);
+  mark(g, 42, 84, 80, '#ffffff');
   g.shadowColor = 'transparent';
   g.fillStyle = '#ffffff';
   g.font = '700 30px Inter';
@@ -63,7 +66,7 @@ function header() {
   const g = c.getContext('2d');
   g.fillStyle = BG;
   g.fillRect(0, 0, 150, 57);
-  mark(g, 52, 13, 31, ACCENT, '#ffffff');
+  mark(g, 50, 10, 36, ACCENT);
   g.fillStyle = TEXT;
   g.font = '700 18px Inter';
   g.fillText('Jay-C', 90, 35);

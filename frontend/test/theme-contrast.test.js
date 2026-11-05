@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { contrastRatio } from '../src/core/appearance.js';
-import { STYLES } from '../src/core/style.js';
+import { STYLES, ICON_COLORS } from '../src/core/style.js';
 
 // The hex tokens of each block in theme.css, keyed by its selector.
 const css = readFileSync(new URL('../src/styles/theme.css', import.meta.url), 'utf8');
@@ -45,3 +45,10 @@ for (const style of STYLES) {
     });
   }
 }
+
+test("the wolf icon's colors are each style's dark accent and accent contrast", () => {
+  for (const style of STYLES) {
+    const p = palette(style, 'dark');
+    assert.deepEqual(ICON_COLORS[style], { lines: p['--accent'], fill: p['--accent-contrast'] }, style);
+  }
+});

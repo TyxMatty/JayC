@@ -120,6 +120,16 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 **Instalador 0.2.6 (05/11/2026):** a 0.2.5 com o ícone da janela e da barra de tarefas no estilo e na cor escolhidos.
 
+**Ícone do Jay-C (05/11/2026, etapa 14.D):** o lobo desenhado pelo usuário substitui a marca provisória.
+- **Onde:** no `.exe`, no instalador (ícone e imagens), no Android, na janela, na barra de tarefas e na marca do topo e do lobby.
+- **Por que não o traço original:** ele some em 16–32 px. Então o ícone é a "cabeça preenchida": traço engrossado e o interior escuro.
+- **Cores:**
+  - `.exe`, instalador e Android: laranja Suave sobre a cabeça `#16131B`.
+  - Janela e barra de tarefas: as cores escuras do estilo (os desenhos do usuário).
+  - Dentro do app: as cores do tema.
+- **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
+- **Ainda não está em nenhum instalador publicado.**
+
 **Instalador 0.3.0 (05/11/2026):**
 - **Live nativa no Windows:** captura, H.264 na placa de vídeo e WebRTC próprio, em ~0,3 núcleo contra ~1,5, com resolução e quadros/s que se adaptam à banda. Vem com o seletor próprio de telas e janelas, com miniaturas, e sem prévia da própria live.
 - **App sem menu nem atalhos de navegador.**

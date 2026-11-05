@@ -138,7 +138,7 @@ export function mountApp(root) {
   const header = h(
     'header',
     { class: 'topbar' },
-    h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: icons.logo, 'aria-hidden': 'true' }), h('span', { class: 'brand-name' }, 'Jay', h('span', {}, '-'), 'C')),
+    h('div', { class: 'brand' }, h('span', { class: 'brand-mark wolf-mark', 'aria-hidden': 'true' }), h('span', { class: 'brand-name' }, 'Jay', h('span', {}, '-'), 'C')),
     createStatusPill(() => openSettings('server')),
     createThemeToggle(),
     h('button', {
