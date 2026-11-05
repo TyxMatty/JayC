@@ -1151,15 +1151,32 @@ fieldset > h3 {
 }
 
 .settings-tabs [role='tab'] {
+  position: relative;
   padding: 9px 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+
+.tab-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tab-icon {
+  display: inline-grid;
+}
+
+.tab-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .settings-tabs [role='tab']:hover {
@@ -1168,8 +1185,24 @@ fieldset > h3 {
 }
 
 .settings-tabs [role='tab'][aria-selected='true'] {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: var(--accent-soft);
   color: var(--text);
+}
+
+.settings-tabs [role='tab'][aria-selected='true'] .tab-icon {
+  color: var(--accent-text, var(--accent));
+}
+
+/* A small bar on the chosen tab's edge. */
+.settings-tabs [role='tab'][aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent);
 }
 
 .settings-tabs [role='tab']:focus-visible {
@@ -1181,6 +1214,27 @@ fieldset > h3 {
   min-height: 0;
   padding: 20px;
   overflow-y: auto;
+  background: color-mix(in srgb, var(--surface-2) 40%, var(--surface));
+}
+
+/* Each section is a card over the panel's background. */
+.settings-panel > fieldset,
+.settings-panel > * > fieldset {
+  margin: 0 0 14px;
+  padding: 16px 18px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-panel fieldset > h3 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 @media (max-width: 600px) {
@@ -2287,7 +2341,8 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
   height: 12px;
   margin-top: 8px;
   border-radius: 999px;
-  background: var(--surface-2);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   overflow: hidden;
 }
 

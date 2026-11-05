@@ -476,11 +476,12 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
   });
 
   // ----- Tabs: one panel per topic instead of one long scrolling column (like Discord's settings) -----
+  const tabLabel = (icon, text) => h('span', { class: 'tab-label' }, h('span', { class: 'tab-icon', html: icon, 'aria-hidden': 'true' }), text);
   const panel = (...children) => h('div', { class: 'settings-panel' }, ...children);
   const items = [
     {
       key: 'profile',
-      label: t('Profile'),
+      label: tabLabel(icons.user, t('Profile')),
       panel: panel(
         h(
           'fieldset',
@@ -508,7 +509,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
     },
     {
       key: 'appearance',
-      label: t('Appearance'),
+      label: tabLabel(icons.palette, t('Appearance')),
       panel: panel(
         h(
           'fieldset',
@@ -557,7 +558,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
     },
     {
       key: 'audio',
-      label: t('Audio'),
+      label: tabLabel(icons.mic, t('Audio')),
       panel: panel(
         audioSettings.element,
         h(
@@ -580,10 +581,10 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
         ),
       ),
     },
-    { key: 'streaming', label: t('Streaming'), panel: panel(streamingSection) },
+    { key: 'streaming', label: tabLabel(icons.screenShare, t('Streaming')), panel: panel(streamingSection) },
     {
       key: 'server',
-      label: t('Server'),
+      label: tabLabel(icons.server, t('Server')),
       panel: panel(
         h(
           'fieldset',
@@ -608,7 +609,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
     },
     {
       key: 'help',
-      label: t('Help'),
+      label: tabLabel(icons.help, t('Help')),
       panel: panel(
         h(
           'fieldset',
