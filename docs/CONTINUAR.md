@@ -132,6 +132,10 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Instalador 0.3.3 (05/11/2026):** a 0.3.2 com as correções da revisão de código (live nativa com a tela parada, quedas de rede, transporte fechado ao parar, parar durante o início, erros do codificador; entrar na sala sem chamada fantasma) e o microfone que volta sozinho ao reconectar. Ver "Correções depois da revisão de código", abaixo.
+
+O servidor mudou: o pedido novo `closeTransport`. Um servidor antigo continua funcionando com o app novo.
+
 **Instalador 0.3.2 (05/11/2026):** a 0.3.1 com:
 - o lobo maior nos ícones (recortado no desenho: 98% do quadrado na janela e na barra de tarefas, 94% no `.exe`);
 - o lado esquerdo do lobby na altura do cartão, com o lobo grande no traço fino original crescendo para preencher;

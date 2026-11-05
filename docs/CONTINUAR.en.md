@@ -134,6 +134,10 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**Installer 0.3.3 (05/11/2026):** 0.3.2 with the code review fixes (native stream on a still screen, network drops, transport closed on stop, stopping while it starts, encoder errors; joining a room without a ghost call) and the mic that comes back by itself when reconnected. See "Fixes after the code review", below.
+
+The server changed: the new `closeTransport` request. An old server still works with the new app.
+
 **Installer 0.3.2 (05/11/2026):** 0.3.1 with:
 - a bigger wolf in the icons (cropped to the drawing: 98% of the square in the window and the taskbar, 94% in the `.exe`);
 - the left side of the lobby as tall as the card, with the big wolf in the original thin line growing to fill it;
@@ -210,6 +214,18 @@ They suggested rewriting without the WebView ("our own engine, Discord style"). 
   - With a window, the stream follows resizing and ends if the window closes.
   - Measured: with a window that really changes, 56–59 frames/s on the sending side.
   - **Correction:** the earlier frame rates were measured with the animation window hidden (see spike 10).
+
+**Fixes after the code review (05/11/2026):**
+- **Native stream:**
+  - Sends a picture even on a still screen (the last frame every 1 s, and right away for whoever starts watching).
+  - Survives network drops of up to 20 s and restarts by itself when the server comes back.
+  - Closes its own transport on the server when it stops (`closeTransport`: **restart the server** to get it; an old server still works).
+  - Really stops if you leave the call while it's starting.
+- **Joining a room:** if the call screen fails to open, the call is ended, instead of staying connected behind the lobby's error.
+- **A mic that disconnects and comes back:** the app checks the mics every 3 s and reopens on its own, without touching a setting.
+  - If the chosen one is gone, it uses the Windows default and switches back to the chosen one when it reappears.
+  - Measured with the real ME6S: it dropped (`0x88890004`), the app moved to the new default (Voicemeeter) with the "Microphone back" notice, and went back to the ME6S 1 s after it reappeared.
+  - **Note:** Windows renamed the ME6S when it reconnected ("8- ME6S" → "3- ME6S"). If the mic was chosen in Settings and its id changes on another USB port, the app stays on the default until it's chosen again.
 
 **No browser look (05/11/2026):** in release, right-clicking outside text fields no longer opens WebView2's menu (Back, Reload, Print, Inspect), and the browser shortcuts are off (`SetAreBrowserAcceleratorKeysEnabled(false)`, in `src-tauri/src/app_chrome.rs`): F5/Ctrl+R don't reload the page (which dropped the call), and Ctrl+P/Ctrl+F don't open print or find. Text fields keep the copy/paste menu. Dev keeps everything, for debugging.
 
