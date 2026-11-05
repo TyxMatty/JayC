@@ -659,12 +659,30 @@ fieldset > h3 {
 }
 
 .welcome-art svg {
-  width: 64px;
-  height: 64px;
+  width: min(100%, 240px);
+  height: 140px;
 }
+
+/* Welcome art (ui/welcome-art.js): theme colors; the accent is currentColor. */
+.wa-card { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+.wa-fill-accent { fill: currentColor; }
+.wa-fill-surface { fill: var(--surface); }
+.wa-fill-muted { fill: var(--surface-2); stroke: var(--border); }
+.wa-fill-green { fill: #16a34a; }
+.wa-fill-red { fill: #dc2626; }
+.wa-stroke-accent { stroke: currentColor; stroke-width: 4; }
+.wa-stroke-muted { stroke: var(--text-muted); stroke-width: 4; opacity: 0.5; }
+.wa-stroke-text { stroke: var(--text); stroke-width: 5; }
+.wa-stroke-surface { stroke: var(--surface); stroke-width: 5; }
+.wa-link { stroke: var(--text-muted); stroke-width: 2.5; stroke-dasharray: 6 6; opacity: 0.6; }
+.wa-ring,
+.wa-speaking { stroke: #16a34a; stroke-width: 3; }
+.wa-dim { opacity: 0.35; }
+.wa-faded { opacity: 0.55; }
 
 .welcome-content {
   display: grid;
+  align-content: start; /* the extra min-height (welcome-modal.js fitHeight) goes below the text */
   gap: 6px;
 }
 
@@ -2059,3 +2077,32 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
   animation-duration: 260ms;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
+/* Welcome tour art (ui/welcome-art.js): each scene moves a little, on a loop. `--d` staggers. */
+:root[data-motion='full'] .welcome-art :is(.wa-pulse, .wa-pop, .wa-walk, .wa-bounce, .wa-slide, .wa-float) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+:root[data-motion='full'] .welcome-art .wa-pulse { animation: wa-pulse 1.4s ease-in-out infinite; }
+:root[data-motion='full'] .welcome-art .wa-wave { animation: wa-wave 1.4s ease-in-out var(--d, 0ms) infinite; }
+:root[data-motion='full'] .welcome-art .wa-pop { animation: wa-pop 420ms cubic-bezier(0.3, 1.5, 0.6, 1) var(--d, 0ms) both; }
+:root[data-motion='full'] .welcome-art .wa-walk { animation: wa-walk 600ms ease-out var(--d, 0ms) both; }
+:root[data-motion='full'] .welcome-art .wa-flow { animation: wa-flow 900ms linear infinite; }
+:root[data-motion='full'] .welcome-art .wa-blink { animation: wa-blink 1.2s ease-in-out infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-caret { animation: wa-blink 600ms steps(2) infinite; }
+:root[data-motion='full'] .welcome-art .wa-hue { animation: wa-hue 6s linear infinite; }
+:root[data-motion='full'] .welcome-art .wa-bounce { animation: wa-bounce 1.6s ease-in-out var(--d, 0ms) infinite; }
+:root[data-motion='full'] .welcome-art .wa-slide { animation: wa-slide 2.4s ease-in-out infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-float { animation: wa-float 2s ease-in-out infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-speaking { animation: wa-blink 1s ease-in-out infinite alternate; }
+
+@keyframes wa-pulse { 50% { scale: 1.12; opacity: 0.4; } }
+@keyframes wa-wave { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes wa-pop { from { scale: 0; opacity: 0; } }
+@keyframes wa-walk { from { translate: 40px 0; opacity: 0; } }
+@keyframes wa-flow { to { stroke-dashoffset: -24; } }
+@keyframes wa-blink { to { opacity: 0.3; } }
+@keyframes wa-hue { to { filter: hue-rotate(360deg); } }
+@keyframes wa-bounce { 0%, 60%, 100% { translate: 0 0; } 30% { translate: 0 -5px; } }
+@keyframes wa-slide { to { translate: 60px -24px; } }
+@keyframes wa-float { from { translate: 0 -4px; } to { translate: 0 4px; } }

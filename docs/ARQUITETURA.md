@@ -396,12 +396,13 @@ Cards que explicam o app passo a passo, para quem usa pela primeira vez.
 | Parte | Entrega | Estado |
 |---|---|---|
 | W1 | **Estrutura:** modal com 7 cards (boas-vindas, servidor, perfil, sala, chamada, live, chat/PiP/ajuda), Back/Next, pontinhos clicáveis, setas do teclado, Skip. Abre sozinho na primeira vez; Settings › Help › "Show the welcome tour" reabre. | ✅ |
-| W2 | **Animações:** uma ilustração animada em SVG/CSS por card (hoje cada card mostra um ícone), transição entre cards e altura estável (hoje o card varia de 476 a 551 px a 360 px de largura). | |
+| W2 | **Animações:** uma ilustração animada em SVG/CSS por card (`ui/welcome-art.js`), transição entre cards e altura estável. | ✅ |
 
 **Como funciona:**
 - **Arquivos:** conteúdo e navegação em `core/welcome.js` (`WELCOME_STEPS`, `clampStep`, `shouldShowWelcome`, com testes), modal em `ui/welcome-modal.js` e CSS `.welcome-*`.
 - **"Já viu":** `settings.welcomeSeen` é gravado **quando o tour abre sozinho**, não quando fecha. Assim ele aparece uma vez mesmo se o app for fechado no meio, e não depende do evento `close` do `<dialog>`, que o Chrome só dispara no próximo quadro desenhado (num painel escondido, nunca chegou). Quem já usava o app vê o tour uma vez ao atualizar.
 - **Atalhos:** o card do servidor abre o guia de setup e o do perfil abre Settings › Profile, por cima do tour, que continua aberto embaixo.
+- **Ilustrações (W2):** uma cena SVG por passo em `ui/welcome-art.js`, com as cores do tema (o destaque é `currentColor`; as classes `.wa-*` usam as variáveis do tema). As animações (`@keyframes wa-*`) só rodam com `<html data-motion="full">`; sem isso, cada cena é uma imagem parada. Trocar de passo faz o card entrar deslizando do lado de onde veio (Web Animations, 220 ms). A altura é a do passo mais longo: `fitHeight()` mede os 7 textos ao abrir e ao redimensionar (depende da largura e do idioma), e o botão de atalho ocupa o espaço mesmo escondido. Medido no app a 1100 px: card com 553 px e título na mesma posição nos 7 passos; 4 a 7 animações por cena; zero com as animações desligadas, nos temas escuro e claro.
 - **Acessibilidade:** o texto do passo fica numa região `aria-live`, e o pontinho atual tem `aria-current="step"`. O foco vai para Next ao abrir. Esc fecha. Não há botão X: o X ficava sobre a ilustração, e Skip, Get started e Esc já fecham.
 
 **Verificado no navegador** (painel do Claude, Vite de dev):

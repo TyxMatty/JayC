@@ -1,18 +1,7 @@
 import { h } from './dom.js';
-import { icons } from './icons.js';
+import { WELCOME_ART } from './welcome-art.js';
 import { WELCOME_STEPS, clampStep } from '../core/welcome.js';
 import { t } from '../core/i18n.js';
-
-// Placeholder art until the animated illustrations (W2): one icon per step.
-const ART_ICONS = {
-  welcome: icons.video,
-  server: icons.server,
-  profile: icons.user,
-  room: icons.door,
-  call: icons.mic,
-  share: icons.screenShare,
-  extras: icons.chat,
-};
 
 /**
  * The "Welcome!" tour: one card per step (core/welcome.js), Back/Next, dots, Skip.
@@ -56,21 +45,42 @@ export function createWelcomeModal({ openGuide, openSettings }) {
   }
 
   function go(target) {
+    const from = index;
     index = clampStep(target);
     const step = WELCOME_STEPS[index];
     const last = index === WELCOME_STEPS.length - 1;
     dialog.dataset.step = step.key;
     art.dataset.art = step.art;
-    art.innerHTML = ART_ICONS[step.art] ?? '';
+    art.innerHTML = WELCOME_ART[step.art] ?? '';
     counter.textContent = t('Step {n} of {total}', { n: index + 1, total: WELCOME_STEPS.length });
     title.textContent = t(step.title);
     body.textContent = t(step.body);
-    action.hidden = !step.action;
-    if (step.action) action.textContent = t(step.action.label);
+    // Hidden but still taking its room, so the card doesn't change height between steps.
+    action.style.visibility = step.action ? '' : 'hidden';
+    action.textContent = step.action ? t(step.action.label) : '';
+    action.disabled = !step.action;
     dotButtons.forEach((dot, i) => (i === index ? dot.setAttribute('aria-current', 'step') : dot.removeAttribute('aria-current')));
     backButton.disabled = index === 0;
     nextButton.textContent = last ? t('Get started') : t('Next');
     skipButton.hidden = last;
+    // The new card slides in from the side it comes from.
+    if (from !== index && document.documentElement.dataset.motion === 'full') {
+      const dx = index > from ? 16 : -16;
+      for (const el of [art, content]) el.animate([{ opacity: 0, translate: `${dx}px 0` }, { opacity: 1, translate: '0 0' }], { duration: 220, easing: 'ease-out' });
+    }
+  }
+
+  /** The text area as tall as the longest step, so the card keeps one height (and the buttons stay put). */
+  function fitHeight() {
+    content.style.minHeight = '';
+    let tallest = 0;
+    for (const step of WELCOME_STEPS) {
+      title.textContent = t(step.title);
+      body.textContent = t(step.body);
+      tallest = Math.max(tallest, content.offsetHeight);
+    }
+    content.style.minHeight = `${tallest}px`;
+    go(index);
   }
 
   action.addEventListener('click', () => {
@@ -89,12 +99,14 @@ export function createWelcomeModal({ openGuide, openSettings }) {
   });
 
   go(0);
+  addEventListener('resize', () => dialog.open && fitHeight());
 
   return {
     element: dialog,
     open() {
-      go(0);
+      index = 0;
       dialog.showModal();
+      fitHeight(); // measured once laid out: depends on the width and the language
       nextButton.focus();
     },
   };
