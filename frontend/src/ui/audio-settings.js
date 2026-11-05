@@ -1,11 +1,13 @@
 // Settings › Audio: which microphone and speakers to use, the mic volume and its sensitivity
-// (a gate: only send the voice above a level), with a live meter during a call.
+// (a gate: only send the voice above a level), with a live meter: the call's mic, or a test mic
+// opened here (out of a call) so the level can be set before joining.
 // Microphone choice, volume and sensitivity need the native mic (Windows); speakers need
 // AudioContext.setSinkId. Each part hides itself where it can't work.
 import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { MAX_MIC_GAIN } from '../core/mic-shape.js';
+import { startNativeMic } from '../core/native-mic.js';
 import { t } from '../core/i18n.js';
 
 const GATE_MIN = -70;
@@ -51,6 +53,8 @@ export function createAudioSettings({ getCall }) {
   const meterFill = h('div', { class: 'mic-meter-fill' });
   const meterMark = h('div', { class: 'mic-meter-mark' });
   const meter = h('div', { class: 'mic-meter', 'aria-hidden': 'true' }, meterFill, meterMark);
+  const meterStatus = h('span', { class: 'hint mic-meter-status', 'aria-live': 'off' });
+  const testButton = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => (test ? stopTest() : startTest()) }, t('Test microphone'));
   const meterHint = h('p', { class: 'hint' });
   const micPart = h(
     'div',
@@ -68,7 +72,12 @@ export function createAudioSettings({ getCall }) {
         h('span', { class: 'hint' }, t('Sounds quieter than the sensitivity level (breathing, typing, the room) are not sent.')),
       ),
     ),
-    h('div', { class: 'field gate-field' }, h('div', { class: 'audio-menu-row' }, h('label', { for: 'settings-mic-gate' }, t('Sensitivity level')), gateValue), gateInput, meter, meterHint),
+    h('div', { class: 'field gate-field' }, h('div', { class: 'audio-menu-row' }, h('label', { for: 'settings-mic-gate' }, t('Sensitivity level')), gateValue),
+      gateInput,
+      meter,
+      h('div', { class: 'audio-menu-row' }, meterStatus, testButton),
+      meterHint,
+    ),
   );
 
   // ----- Speakers -----
@@ -108,6 +117,45 @@ export function createAudioSettings({ getCall }) {
   };
   settings.subscribe(render);
 
+  // ----- Test mic (out of a call): the same device, processing, volume and sensitivity as a call -----
+  /** @type {Awaited<ReturnType<typeof startNativeMic>> | null} */
+  let test = null;
+  let testLevel = -Infinity;
+  let testOpen = false;
+  let testError = '';
+  const testShape = { gain: current.micGain, gateDb: current.micGate };
+  /** Opens the test mic. `previous` (a running test) is closed once the new one replaced it. */
+  async function startTest(previous = null) {
+    const s = settings.get();
+    const claim = { stop() {}, close() {} }; // held while it opens: a second click doesn't open two
+    test = claim;
+    testError = '';
+    try {
+      // Replaces any running capture on the Rust side, so the previous one is closed, not stopped.
+      const mic = await startNativeMic({ ...s.micProcessing, device: s.micDevice, shape: testShape, onLevel: (db, open) => ((testLevel = db), (testOpen = open)) });
+      previous?.close();
+      if (test === claim) test = mic;
+      else if (test === null) mic.stop(); // stopped (or Settings closed) while it opened
+      else mic.close(); // another test replaced it
+    } catch (error) {
+      previous?.close();
+      if (test !== claim) return;
+      test = null;
+      testError = String(error.message ?? error);
+    }
+  }
+  function stopTest() {
+    test?.stop();
+    test = null;
+    testLevel = -Infinity;
+    testOpen = false;
+  }
+  settings.subscribe((next, prev) => {
+    Object.assign(testShape, { gain: next.micGain, gateDb: next.micGate });
+    // Another device or processing: reopen the test mic with it.
+    if (test && (next.micDevice !== prev.micDevice || next.micProcessing !== prev.micProcessing)) startTest(test);
+  });
+
   const option = (value, label, selected) => h('option', { value, selected }, label);
 
   async function refreshMics() {
@@ -135,15 +183,40 @@ export function createAudioSettings({ getCall }) {
     );
   }
 
-  // The meter follows the call's native mic while Settings is open.
+  // The meter follows the call's native mic (even muted: it still captures, nothing is sent), else
+  // the test mic, while Settings is open. Green = loud enough to be sent.
   let frame = 0;
-  const tick = () => {
+  let shownAt = 0;
+  let peak = -Infinity;
+  let sentLately = false;
+  const tick = (now) => {
     const call = getCall();
-    const level = call?.micOn ? call.micLevel : -Infinity;
+    if (call && test) stopTest();
+    const live = call ? Boolean(call.local.audio) : Boolean(test?.track);
+    const level = call ? (call.local.audio ? call.micLevel : -Infinity) : testLevel;
+    // The gate's real state: it stays open a moment after the voice drops, so word ends go too.
+    const sent = live && Number.isFinite(level) && (call ? call.micGateOpen : testOpen);
     meterFill.style.width = meterPercent(level);
-    meterHint.textContent = call
-      ? t('The bar is your microphone now. Set the level just above the noise when you are quiet.')
-      : t('Join a call to see your microphone level here.');
+    meter.classList.toggle('is-sent', sent);
+    // The number is the loudest of the last 250 ms (single frames jump around), so it can be read.
+    peak = Math.max(peak, level);
+    sentLately ||= sent;
+    if (now - shownAt > 250) {
+      shownAt = now;
+      meterStatus.textContent = !live
+        ? ''
+        : `${t('Now: {db} dB', { db: Number.isFinite(peak) ? Math.round(peak) : '−∞' })} · ${sentLately ? t('sent') : t('not sent')}`;
+      peak = -Infinity;
+      sentLately = false;
+    }
+    testButton.hidden = Boolean(call);
+    testButton.textContent = test ? t('Stop test') : t('Test microphone');
+    testButton.setAttribute('aria-pressed', String(Boolean(test)));
+    meterHint.textContent = testError
+      ? t('The microphone did not open: {reason}', { reason: testError })
+      : live
+        ? t('Stay quiet and watch the bar, then talk. Put the sensitivity between the two: green is sent, gray is not.')
+        : t('Test your microphone to see its level here.');
     frame = requestAnimationFrame(tick);
   };
 
@@ -164,6 +237,7 @@ export function createAudioSettings({ getCall }) {
     },
     close() {
       cancelAnimationFrame(frame);
+      stopTest();
     },
   };
 }

@@ -1790,7 +1790,7 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
 /* Settings › Audio devices: the live mic level, with the sensitivity threshold marked. */
 .mic-meter {
   position: relative;
-  height: 8px;
+  height: 12px;
   margin-top: 8px;
   border-radius: 999px;
   background: var(--surface-2);
@@ -1800,8 +1800,17 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
 .mic-meter-fill {
   width: 0;
   height: 100%;
-  background: var(--accent);
+  background: var(--text-muted);
   transition: width 60ms linear;
+}
+
+/* Loud enough to pass the sensitivity: this is what gets sent. */
+.mic-meter.is-sent .mic-meter-fill {
+  background: #16a34a;
+}
+
+.mic-meter-status {
+  font-variant-numeric: tabular-nums;
 }
 
 .mic-meter-mark {

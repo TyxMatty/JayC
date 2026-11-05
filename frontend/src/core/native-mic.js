@@ -11,8 +11,9 @@ export const nativeMicSupported = () => systemAudio.isSupported();
  * Starting a new mic replaces the running one on the Rust side; call `close()` (not `stop()`) on
  * the old handle then, so it doesn't stop the new capture.
  * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean, device?: string | null,
- *   shape?: { gain: number, gateDb: number | null }, onLevel?: (db: number) => void, onError?: (message: string) => void }} [options]
- *   shape: read on every chunk, so changing its fields applies at once; onLevel: each chunk's level (dBFS).
+ *   shape?: { gain: number, gateDb: number | null }, onLevel?: (db: number, open: boolean) => void, onError?: (message: string) => void }} [options]
+ *   shape: read on every chunk, so changing its fields applies at once; onLevel: each chunk's level (dBFS)
+ *   and whether the gate let it through.
  * @returns {Promise<{ track: MediaStreamTrack, device: string, echoReference: boolean, stop(): void, close(): void }>}
  */
 export async function startNativeMic({ onError, shape = { gain: 1, gateDb: null }, onLevel, ...processing } = {}) {
@@ -20,7 +21,7 @@ export async function startNativeMic({ onError, shape = { gain: 1, gateDb: null 
   const state = createShapeState();
   const onAudio = (samples) => {
     const level = shapeMic(samples, state, shape);
-    onLevel?.(level);
+    onLevel?.(level, state.open);
     source.push(samples);
   };
   let info;

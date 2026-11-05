@@ -76,6 +76,8 @@ export class Call extends EventTarget {
   micShape = { gain: 1, gateDb: null };
   /** Latest native mic level in dBFS (for a meter), -Infinity when silent or not native. */
   micLevel = -Infinity;
+  /** Native mic: whether the sensitivity gate is letting the voice through (for the meter). */
+  micGateOpen = false;
   /** Our profile picture (data URL) or null; others see it while our camera is off. */
   avatar = null;
   /** Our profile color ({ from, to?, angle? }) or null = picked from the name (core/profile-color.js). */
@@ -753,7 +755,10 @@ export class Call extends EventTarget {
       ...this.micProcessing,
       device: this.micDeviceId,
       shape: this.micShape,
-      onLevel: (db) => (this.micLevel = db),
+      onLevel: (db, open) => {
+        this.micLevel = db;
+        this.micGateOpen = open;
+      },
       onError: (message) => this.#emit('notice', { message: t('Microphone stopped: {reason}', { reason: message }) }),
     });
     return this.#nativeMic.track;
