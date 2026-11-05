@@ -44,6 +44,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   outputDevice: '',
   /** The "Welcome!" tour (core/welcome.js) already opened by itself once; Settings › Help reopens it. */
   welcomeSeen: false,
+  /** Discord status during calls (Windows, core/discord-presence.js), and whether it names the room. */
+  discordPresence: true,
+  discordShowRoom: false,
 });
 
 function load() {

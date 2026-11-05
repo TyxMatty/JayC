@@ -439,7 +439,7 @@ The status is on by default, with an option to turn it off.
 |---|---|---|
 | D1 | **Connection (Rust, `src-tauri/src/discord.rs`):** Discord's local IPC protocol over the `\\.\pipe\discord-ipc-N` pipe (opcode and length as u32 LE + JSON; handshake and `SET_ACTIVITY`), with no new dependency. A thread takes only the latest status asked for, spaces sends 4 s apart (documented as ~5 per 20 s; not measured), resends every 15 s (a restarted Discord gets the status back) and retries every 10 s while Discord is closed. Command `discord_presence(activity | null)`. | ✅ |
 | D2 | **What shows (JS):** `core/discord-presence.js` turns the call's state into the status (`presenceActivity`, a pure function) and keeps it up to date until the call ends: bursts of events become one update after 250 ms, it only sends when the status changes and, on leaving, it clears without a "1 of 16" first. The `live` icon is `src-tauri/discord-live.png` (the app's monitor icon, white on the danger red, 1024 px). | ✅ |
-| D3 | **Settings:** Settings › Profile: "Show on Discord" (on) and "Show the room name" (off) | |
+| D3 | **Settings:** Settings › Profile › Discord (Windows app only): "Show on Discord" (`discordPresence`, on) and "Show the room name" (`discordShowRoom`, off; hidden while the status is off). They apply right away, during the call; turning it off and on keeps the time in the call. Changing the style changes the wolf. | ✅ |
 | D4 | Docs and release | |
 
 **Discord application:** "Jay-C" (Application ID 1568029459146346599, in `CLIENT_ID`), created by the user with the wolves `jayc_purple`, `jayc_neon`, `jayc_orange_thick` and `jayc_orange` (unused). **Still to upload:** the `live` icon (`src-tauri/discord-live.png`): without it, Discord accepts the status but drops the small image.
@@ -447,6 +447,8 @@ The status is on by default, with an option to turn it off.
 **Measured (D1):** with Discord open, a handshake with a made-up id comes back refused (`Invalid Client ID`), which proves the pipe and the message format. With the real id: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` shows a status for 10 s, then clears it. Measured: Discord answered `name: "Jay-C"`, `type: 0` ("Playing") and the start in milliseconds as sent.
 
 **Measured in a real call** (dev app, test server and a bot; the app's log shows what Discord accepted at each change): on joining, "In a call" / "Talking" (1 of 16) with the purple wolf, already resolved by Discord to the asset's id; the bot joined, 2 of 16; the bot started a stream, no change, since nobody was watching; the app started watching, "Watching a stream"; on leaving, the status was cleared. Each change reached Discord in the same second as the event.
+
+**Measured in Settings (D3)**, through the real UI, during a call: the room name on and the Neon style 2 s later became **one** status, 4 s after the previous one ("In room #rp" with the cyan wolf), which confirms the spacing and that only the latest request goes; turning it off cleared the status right away; turning it on sent it again 4 s later; going back to Calm changed the wolf 4 s after the previous send; leaving the call cleared it.
 
 ### Customization (between 12 and 13, at the user's request)
 

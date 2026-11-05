@@ -41,7 +41,8 @@ test('follows the call: one status per change, nothing for unrelated events, one
   const call = Object.assign(new EventTarget(), { participants: new Map(), sharing: false });
   const emit = (type) => call.dispatchEvent(new Event(type));
   try {
-    startDiscordPresence(call, { room: 'vision' });
+    let options = { showRoom: false };
+    const presence = startDiscordPresence(call, { room: 'vision', since: 42, getOptions: () => options });
     await settle();
     assert.deepEqual(sent.map((a) => a.party.size[0]), [1], 'alone in the room');
 
@@ -61,12 +62,23 @@ test('follows the call: one status per change, nothing for unrelated events, one
     await settle();
     assert.equal(sent.at(-1).state, 'Watching a stream');
 
+    options = { showRoom: true, style: 'soft' }; // Settings changed
+    presence.refresh();
+    await settle();
+    assert.equal(sent.length, 4);
+    assert.equal(sent.at(-1).details, 'In room #vision');
+    assert.equal(sent.at(-1).assets.large_image, 'jayc_orange_thick');
+    assert.equal(sent.at(-1).timestamps.start, 42, 'the time in the call is kept');
+
     // leave(): everyone removed, then 'ended', in one go.
     call.participants.clear();
     emit('participant-removed');
     emit('ended');
     await settle();
-    assert.deepEqual(sent.slice(3), [null], 'cleared, without a last "1 of 16" first');
+    assert.deepEqual(sent.slice(4), [null], 'cleared, without a last "1 of 16" first');
+    presence.stop(); // already stopped by 'ended': nothing more
+    await settle();
+    assert.equal(sent.length, 5);
   } finally {
     delete globalThis.__TAURI_INTERNALS__;
     delete globalThis.window;

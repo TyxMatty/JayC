@@ -111,7 +111,17 @@ export function mountApp(root) {
       micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
     });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
-    startDiscordPresence(call, { room, getStyle: () => settings.get().style }); // until the call ends
+    // Discord status (Settings › Profile), until the call ends; turning it off and on keeps the time.
+    const joinedAt = Date.now();
+    const startPresence = () =>
+      settings.get().discordPresence
+        ? startDiscordPresence(call, {
+            room,
+            since: joinedAt,
+            getOptions: () => ({ showRoom: settings.get().discordShowRoom, style: settings.get().style }),
+          })
+        : null;
+    let presence = startPresence();
     settings.update({ lastRoom: room, recentRooms: addRecentRoom(settings.get().recentRooms, room) });
     // Microphone and streaming options changed in Settings apply to the running call.
     let unsubscribe = () => {};
@@ -129,6 +139,12 @@ export function mountApp(root) {
         if (next.micGain !== prev.micGain || next.micGate !== prev.micGate) call.setMicShape({ gain: next.micGain, gateDb: next.micGate });
         if (next.excludedApps !== prev.excludedApps) {
           call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
+        }
+        if (next.discordPresence !== prev.discordPresence) {
+          presence?.stop();
+          presence = startPresence();
+        } else if (next.discordShowRoom !== prev.discordShowRoom || next.style !== prev.style) {
+          presence?.refresh();
         }
       });
       currentCall = call;

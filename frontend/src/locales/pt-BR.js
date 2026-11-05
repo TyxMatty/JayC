@@ -63,6 +63,11 @@ export default {
   "Watching a stream": "Assistindo uma live",
   "Talking": "Conversando",
   "Live": "Ao vivo",
+  "Show on Discord": "Mostrar no Discord",
+  "During a call, your Discord profile shows Jay-C, how many people are in it and for how long. Discord must be open on this PC.":
+    "Durante uma chamada, seu perfil do Discord mostra o Jay-C, quantas pessoas estão nela e há quanto tempo. O Discord precisa estar aberto neste PC.",
+  "Show the room name": "Mostrar o nome da sala",
+  "Everyone who sees your Discord profile sees which room you are in.": "Quem vê seu perfil do Discord vê em qual sala você está.",
   "Your screen": "Sua tela",
   "Your window": "Sua janela",
   "{name}'s screen": "Tela de {name}",

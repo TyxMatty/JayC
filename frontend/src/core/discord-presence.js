@@ -36,16 +36,17 @@ const setPresence = (activity) =>
   import('@tauri-apps/api/core').then(({ invoke }) => invoke('discord_presence', { activity })).catch(() => {});
 
 /**
- * Keeps the Discord status in step with `call` until it ends or the returned function is called
- * (either clears it).
+ * Keeps the Discord status in step with `call` until it ends or `stop()` (either clears it).
+ * `refresh()`: after an option changed (Settings).
  * @param {import('./call.js').Call} call
- * @param {{ room: string, showRoom?: boolean, getStyle?: () => string | null }} options
+ * @param {{ room: string, since?: number, getOptions?: () => { showRoom?: boolean, style?: string } }} options
+ *   `since`: when we joined (ms), kept when the status is turned off and on again.
+ * @returns {{ refresh: () => void, stop: () => void }}
  */
-export function startDiscordPresence(call, { room, showRoom = false, getStyle = () => null }) {
+export function startDiscordPresence(call, { room, since = Date.now(), getOptions = () => ({}) }) {
   let stopped = false;
   let sent = '';
   let timer = null;
-  const since = Date.now();
   // Bursts (a full room joining, leave() removing everyone before 'ended') become one update.
   const schedule = () => {
     clearTimeout(timer);
@@ -54,6 +55,7 @@ export function startDiscordPresence(call, { room, showRoom = false, getStyle = 
   const update = async () => {
     if (!(await systemAudio.isSupported()) || stopped) return;
     const participants = [...call.participants.values()];
+    const { showRoom = false, style } = getOptions();
     const activity = presenceActivity({
       people: participants.length + 1,
       sharing: call.sharing,
@@ -61,7 +63,7 @@ export function startDiscordPresence(call, { room, showRoom = false, getStyle = 
       room,
       showRoom,
       since,
-      style: getStyle(),
+      style,
     });
     const json = JSON.stringify(activity);
     if (json === sent) return; // participant-updated also fires for mute, previews...
@@ -80,5 +82,5 @@ export function startDiscordPresence(call, { room, showRoom = false, getStyle = 
   };
   call.addEventListener('ended', stop);
   update();
-  return stop;
+  return { refresh: schedule, stop };
 }

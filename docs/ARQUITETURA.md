@@ -437,7 +437,7 @@ O status vem ligado por padrão, com uma opção para desligar.
 |---|---|---|
 | D1 | **Conexão (Rust, `src-tauri/src/discord.rs`):** o protocolo IPC local do Discord pelo pipe `\\.\pipe\discord-ipc-N` (opcode e tamanho em u32 LE + JSON; handshake e `SET_ACTIVITY`), sem dependência nova. Uma thread recebe só o último status pedido, espaça os envios em 4 s (documentado como ~5 a cada 20 s; não medido), reenvia a cada 15 s (um Discord reiniciado recupera o status) e tenta de novo a cada 10 s enquanto ele estiver fechado. Comando `discord_presence(activity | null)`. | ✅ |
 | D2 | **O que aparece (JS):** `core/discord-presence.js` traduz o estado da chamada no status (`presenceActivity`, função pura) e o mantém em dia até a chamada acabar: junta rajadas de eventos em 250 ms, só manda quando o status muda e, ao sair, limpa sem passar por um "1 de 16". O ícone `live` é `src-tauri/discord-live.png` (o ícone de monitor do app, em branco sobre o vermelho de perigo, 1024 px). | ✅ |
-| D3 | **Configurações:** Settings › Perfil: "Mostrar no Discord" (ligado) e "Mostrar o nome da sala" (desligado) | |
+| D3 | **Configurações:** Settings › Perfil › Discord (só no app do Windows): "Mostrar no Discord" (`discordPresence`, ligado) e "Mostrar o nome da sala" (`discordShowRoom`, desligado; some enquanto o status está desligado). Valem na hora, durante a chamada; desligar e ligar mantém o tempo na chamada. Trocar o estilo troca o lobo. | ✅ |
 | D4 | Docs e release | |
 
 **Aplicação no Discord:** "Jay-C" (Application ID 1568029459146346599, no `CLIENT_ID`), criada pelo usuário com os lobos `jayc_purple`, `jayc_neon`, `jayc_orange_thick` e `jayc_orange` (não usado). **Falta enviar** o ícone `live` (`src-tauri/discord-live.png`): sem ele, o Discord aceita o status mas descarta a imagem pequena.
@@ -445,6 +445,8 @@ O status vem ligado por padrão, com uma opção para desligar.
 **Medido (D1):** com o Discord aberto, um handshake com um id inventado volta recusado (`Invalid Client ID`), o que prova o pipe e o formato das mensagens. Com o id real: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` mostra um status por 10 s e depois o limpa. Medido: o Discord devolveu `name: "Jay-C"`, `type: 0` ("Jogando") e o início em milissegundos como enviado.
 
 **Medido numa chamada de verdade** (app de dev, servidor de teste e um bot; o log do app mostra o que o Discord aceitou a cada mudança): ao entrar, "Numa chamada" / "Conversando" (1 de 16) com o lobo roxo, já resolvido pelo Discord para o id do asset; o bot entrou, 2 de 16; o bot começou uma live, sem mudança, porque ninguém assistia; o app passou a assistir, "Assistindo uma live"; ao sair, o status foi limpo. Cada mudança chegou ao Discord no mesmo segundo do evento.
+
+**Medido nas configurações (D3)**, pela interface de verdade, durante uma chamada: o nome da sala ligado e o estilo Neon 2 s depois viraram **um** status só, 4 s depois do anterior ("Na sala #rp" com o lobo ciano), o que confirma o espaçamento e que só vai o último pedido; desligar limpou o status na hora; religar mandou de novo 4 s depois; voltar ao Calmo trocou o lobo 4 s depois do envio anterior; sair da chamada limpou.
 
 ### Customização (entre a 12 e a 13, a pedido do usuário)
 

@@ -475,6 +475,38 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
     }
   });
 
+  // ----- Discord: the call on the user's Discord profile (Windows app, core/discord-presence.js) -----
+  const discordToggle = (key, title, description) =>
+    h(
+      'label',
+      { class: 'toggle-row' },
+      h('input', {
+        type: 'checkbox',
+        role: 'switch',
+        checked: current[key],
+        onChange: (e) => {
+          settings.update({ [key]: e.target.checked });
+          renderDiscord();
+        },
+      }),
+      h('span', { class: 'toggle-text' }, h('span', { class: 'toggle-title' }, t(title)), h('span', { class: 'hint' }, t(description))),
+    );
+  const discordRoom = discordToggle('discordShowRoom', 'Show the room name', 'Everyone who sees your Discord profile sees which room you are in.');
+  const renderDiscord = () => {
+    discordRoom.hidden = !settings.get().discordPresence;
+  };
+  const discordSection = h(
+    'fieldset',
+    { hidden: true },
+    h('h3', {}, 'Discord'),
+    discordToggle('discordPresence', 'Show on Discord', 'During a call, your Discord profile shows Jay-C, how many people are in it and for how long. Discord must be open on this PC.'),
+    discordRoom,
+  );
+  renderDiscord();
+  screenAudioSupported().then((supported) => {
+    discordSection.hidden = !supported;
+  });
+
   // ----- Tabs: one panel per topic instead of one long scrolling column (like Discord's settings) -----
   const tabLabel = (icon, text) => h('span', { class: 'tab-label' }, h('span', { class: 'tab-icon', html: icon, 'aria-hidden': 'true' }), text);
   const panel = (...children) => h('div', { class: 'settings-panel' }, ...children);
@@ -505,6 +537,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
           ),
           createProfileColorField(),
         ),
+        discordSection,
       ),
     },
     {
