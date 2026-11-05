@@ -1716,7 +1716,7 @@ fieldset > h3 {
   max-width: calc(100% - 16px);
   padding: 3px 9px;
   border-radius: max(6px, calc(var(--radius-tile) / 2 - 2px));
-  background: rgb(0 0 0 / 0.5);
+  background: rgb(0 0 0 / 0.6); /* white text >= 4.5:1 even over a white video (5.7:1) */
   backdrop-filter: blur(8px);
   color: #fff;
   font-size: 13px;
@@ -1750,7 +1750,7 @@ fieldset > h3 {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(0 0 0 / 0.45);
+  background: rgb(0 0 0 / 0.6); /* white text >= 4.5:1 over any picture */
   color: #fff;
   font-weight: 600;
 }
@@ -1818,10 +1818,33 @@ fieldset > h3 {
 .tile-stream-actions .btn {
   min-height: 36px;
   border-color: rgb(255 255 255 / 0.12);
-  background: rgb(0 0 0 / 0.5);
+  background: rgb(0 0 0 / 0.6);
   backdrop-filter: blur(8px);
   color: #fff;
   font-size: 14px;
+}
+
+.tile-stream-actions .btn {
+  white-space: nowrap;
+}
+
+/* A narrow live (a phone): compact buttons on one line, so they don't cover the picture. */
+@container (max-width: 520px) {
+  .tile-stream-actions {
+    top: 6px;
+    right: 6px;
+    gap: 6px;
+  }
+
+  .tile-stream-actions .btn {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .tile-stream-actions .btn-icon {
+    width: 32px;
+  }
 }
 
 .tile-stream-actions .btn:hover:not(:disabled) {
@@ -2128,6 +2151,7 @@ fieldset > h3 {
 
 .control-btn {
   display: inline-grid;
+  flex: none; /* never squeezed into an oval */
   place-items: center;
   width: 48px;
   height: 48px;
@@ -2315,6 +2339,24 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
 @media (max-width: 480px) {
   .call {
     padding: 12px;
+  }
+
+  /* Six buttons and the grip fit a 360 px phone. */
+  .call-controls {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .control-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .control-btn[data-control='mic'],
+  .control-btn[data-control='camera'],
+  .control-btn[data-control='share'] {
+    width: 46px;
+    height: 46px;
   }
 
   .call-stage[data-layout='duo'] .tile-local {
@@ -2615,7 +2657,7 @@ html[data-activity-pip] body > :not(.activity-pip-video) {
 .profile-preview-name {
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgb(0 0 0 / 0.55);
+  background: rgb(0 0 0 / 0.6);
   color: #fff;
   font-weight: 600;
 }
