@@ -3,6 +3,7 @@
 # head": lines thickened and the inside of the head filled (chosen on 05/11/2026).
 #   frontend/src/assets/brand/wolf-lines.png  white, alpha = thickened lines (512 px)
 #   frontend/src/assets/brand/wolf-fill.png   white, alpha = inside of the head (512 px)
+#   frontend/src/assets/brand/wolf-lineart.png white, alpha = the original thin lines (512 px; lobby)
 #   frontend/src-tauri/app-icon.png           the .exe/installer/Android icon (Suave colors, 1024 px)
 # The app tints the two masks with the style's colors (CSS mask / canvas). After running this:
 #   cd frontend; npx tauri icon src-tauri/app-icon.png   (then see CLAUDE.md, "Ícone")
@@ -66,7 +67,7 @@ public static class WolfIcon {
     return o;
   }
 
-  public static string Run(string src, string linesOut, string fillOut, string appIconOut) {
+  public static string Run(string src, string linesOut, string fillOut, string lineArtOut, string appIconOut) {
     int w, h; byte[] alpha;
     using (var s = new Bitmap(src)) { w = s.Width; h = s.Height; alpha = Alpha(s); }
     var lines = Dilate(alpha, w, h, LineGrow);
@@ -78,10 +79,12 @@ public static class WolfIcon {
     int cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
     lines = CropSquare(lines, w, h, cx - side / 2, cy - side / 2, side);
     fill = CropSquare(fill, w, h, cx - side / 2, cy - side / 2, side);
+    alpha = CropSquare(alpha, w, h, cx - side / 2, cy - side / 2, side);
     w = h = side;
     int inside = 0; foreach (var v in fill) if (v > 0) inside++;
     using (var l = Tinted(lines, w, h, Color.White)) SaveScaled(l, linesOut, 512, 0);
     using (var f = Tinted(fill, w, h, Color.White)) SaveScaled(f, fillOut, 512, 0);
+    using (var a = Tinted(alpha, w, h, Color.White)) SaveScaled(a, lineArtOut, 512, 0);
     // The app icon: Suave colors (dark theme: lines #FF9068 over the head in #16131B), 2% margin.
     using (var icon = new Bitmap(w, h, PixelFormat.Format32bppArgb)) {
       using (var g = Graphics.FromImage(icon))
@@ -98,4 +101,5 @@ New-Item -ItemType Directory -Force "$root\frontend\src\assets\brand" | Out-Null
   "$root\frontend\src-tauri\app-icon-lineart.png",
   "$root\frontend\src\assets\brand\wolf-lines.png",
   "$root\frontend\src\assets\brand\wolf-fill.png",
+  "$root\frontend\src\assets\brand\wolf-lineart.png",
   "$root\frontend\src-tauri\app-icon.png")

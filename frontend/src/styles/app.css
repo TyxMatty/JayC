@@ -285,6 +285,15 @@ select {
   margin-bottom: 6px;
 }
 
+/* Big enough here for the original thin-line drawing: just the lines, no filled head. */
+.lobby-hero-mark::before {
+  content: none;
+}
+
+.lobby-hero-mark::after {
+  mask-image: url('../assets/brand/wolf-lineart.png');
+}
+
 .lobby-hero h2 {
   margin: 6px 0 0;
   font-size: clamp(28px, 3.4vw, 38px);
