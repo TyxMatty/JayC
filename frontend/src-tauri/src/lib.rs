@@ -1,4 +1,6 @@
 #[cfg(windows)]
+mod app_chrome;
+#[cfg(windows)]
 mod media_permissions;
 #[cfg(windows)]
 mod taskbar_icon;
@@ -25,6 +27,9 @@ pub fn run() {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
                     media_permissions::allow_for_app(&window);
+                    if !cfg!(debug_assertions) {
+                        app_chrome::disable_browser_keys(&window);
+                    }
                 }
             }
             Ok(())
