@@ -56,22 +56,40 @@ public static class WolfIcon {
       o.Save(path, ImageFormat.Png);
     }
   }
+  /// The square around the drawing (its bounding box, centered), so the wolf fills the icon.
+  static byte[] CropSquare(byte[] a, int w, int h, int x0, int y0, int side) {
+    var o = new byte[side * side];
+    for (int y = 0; y < side; y++) for (int x = 0; x < side; x++) {
+      int sx = x0 + x, sy = y0 + y;
+      if (sx >= 0 && sx < w && sy >= 0 && sy < h) o[y * side + x] = a[sy * w + sx];
+    }
+    return o;
+  }
+
   public static string Run(string src, string linesOut, string fillOut, string appIconOut) {
     int w, h; byte[] alpha;
     using (var s = new Bitmap(src)) { w = s.Width; h = s.Height; alpha = Alpha(s); }
     var lines = Dilate(alpha, w, h, LineGrow);
     var fill = Inside(Dilate(alpha, w, h, SealGrow), w, h);
+    // Crop to the drawing: a centered square around its bounding box, plus a 1% edge for smoothing.
+    int bx0 = w, by0 = h, bx1 = -1, by1 = -1;
+    for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) if (lines[y * w + x] > 20) { bx0 = Math.Min(bx0, x); bx1 = Math.Max(bx1, x); by0 = Math.Min(by0, y); by1 = Math.Max(by1, y); }
+    int side = Math.Max(bx1 - bx0 + 1, by1 - by0 + 1); side += side / 50;
+    int cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+    lines = CropSquare(lines, w, h, cx - side / 2, cy - side / 2, side);
+    fill = CropSquare(fill, w, h, cx - side / 2, cy - side / 2, side);
+    w = h = side;
     int inside = 0; foreach (var v in fill) if (v > 0) inside++;
     using (var l = Tinted(lines, w, h, Color.White)) SaveScaled(l, linesOut, 512, 0);
     using (var f = Tinted(fill, w, h, Color.White)) SaveScaled(f, fillOut, 512, 0);
-    // The app icon: Suave colors (dark theme: lines #FF9068 over the head in #16131B), 6% margin.
+    // The app icon: Suave colors (dark theme: lines #FF9068 over the head in #16131B), 2% margin.
     using (var icon = new Bitmap(w, h, PixelFormat.Format32bppArgb)) {
       using (var g = Graphics.FromImage(icon))
       using (var f = Tinted(fill, w, h, ColorTranslator.FromHtml("#16131B")))
       using (var l = Tinted(lines, w, h, ColorTranslator.FromHtml("#FF9068"))) { g.DrawImage(f, 0, 0, w, h); g.DrawImage(l, 0, 0, w, h); }
-      SaveScaled(icon, appIconOut, 1024, 1024 * 6 / 100);
+      SaveScaled(icon, appIconOut, 1024, 1024 * 2 / 100);
     }
-    return string.Format("{0}x{1}; inside of the head: {2:P0} of the picture", w, h, inside / (double)(w * h));
+    return string.Format("cropped to {0}x{0}; inside of the head: {1:P0} of the picture", side, inside / (double)(w * h));
   }
 }
 '@

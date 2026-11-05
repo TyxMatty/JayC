@@ -277,8 +277,10 @@ select {
 }
 
 .lobby-hero-mark {
-  width: 72px;
-  height: 72px;
+  justify-self: center;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 6px;
 }
 
 .lobby-hero h2 {
