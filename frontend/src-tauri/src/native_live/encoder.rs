@@ -5,6 +5,7 @@
 use std::mem::ManuallyDrop;
 
 use windows::core::{Interface, Result, GUID};
+use windows::Win32::Foundation::E_FAIL;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC};
 use windows::Win32::Media::MediaFoundation::*;
@@ -182,8 +183,20 @@ impl Encoder {
     /// Handles the encoder's queued events; returns the frames it finished.
     pub unsafe fn poll(&mut self) -> Result<Vec<Output>> {
         let mut out = Vec::new();
-        while let Ok(event) = self.events.GetEvent(MF_EVENT_FLAG_NO_WAIT) {
+        loop {
+            let event = match self.events.GetEvent(MF_EVENT_FLAG_NO_WAIT) {
+                Ok(event) => event,
+                Err(e) if e.code() == MF_E_NO_EVENTS_AVAILABLE => break,
+                Err(e) => return Err(e),
+            };
+            // A failed MFT (GPU reset, device removed) posts an error status or MEError and then
+            // goes quiet: surface it, so the live ends with a message instead of freezing.
+            let status = event.GetStatus()?;
+            if status.is_err() {
+                return Err(status.into());
+            }
             match event.GetType()? {
+                t if t == MEError.0 as u32 => return Err(windows::core::Error::from(E_FAIL)),
                 t if t == METransformNeedInput.0 as u32 => self.need += 1,
                 t if t == METransformHaveOutput.0 as u32 => {
                     let mut buf = [MFT_OUTPUT_DATA_BUFFER::default()];

@@ -132,6 +132,7 @@ SFU requests, named after the mediasoup API:
 | type | `data` | reply |
 |---|---|---|
 | `createTransport` | `direction: "send" \| "recv"` | `id`, `iceParameters`, `iceCandidates` (with the address this client used), `dtlsParameters` |
+| `closeTransport` | `transportId` (only your own) | — (closes its producers; their consumers get `producer-closed`). The native stream uses a transport of its own and closes it when it stops |
 | `connectTransport` | `transportId`, `dtlsParameters` | — |
 | `restartIce` | `transportId` | `iceParameters` |
 | `produce` | `transportId`, `kind`, `rtpParameters`, `source` (`mic` \| `camera` \| `screen` \| `screen-audio`), `paused?` | `id` |

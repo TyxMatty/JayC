@@ -97,6 +97,16 @@ export class SfuRoom {
     };
   }
 
+  /**
+   * Closes one of the caller's transports (e.g. the native screen share's, when it stops). Its
+   * producers close with it, so everyone consuming them gets `producer-closed`.
+   */
+  async closeTransport(peerId, { transportId }) {
+    const member = this.#member(peerId);
+    this.#transport(peerId, transportId).close();
+    member.transports.delete(transportId);
+  }
+
   async connectTransport(peerId, { transportId, dtlsParameters }) {
     if (!isObject(dtlsParameters)) throw new SfuError('bad-request');
     await this.#transport(peerId, transportId).connect({ dtlsParameters });

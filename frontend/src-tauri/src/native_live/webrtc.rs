@@ -41,8 +41,12 @@ pub struct Signals {
     pub estimate: Option<u64>,
     /// Fraction lost, from the SFU's receiver reports (str0m averages them per stats event).
     pub loss: Option<f32>,
+    /// DTLS finished for the first time: media can flow.
     pub connected: bool,
+    /// ICE lost the server (it may come back by itself: str0m has no "failed" state).
     pub disconnected: bool,
+    /// ICE found the server again after `disconnected`.
+    pub reconnected: bool,
 }
 
 pub struct Sender {
@@ -51,7 +55,8 @@ pub struct Sender {
     local: SocketAddr,
     mid: Mid,
     sps_pps: Vec<u8>,
-    connected: bool,
+    dtls_up: bool,
+    ice_up: bool,
     buf: Vec<u8>,
 }
 
@@ -86,7 +91,7 @@ impl Sender {
         rtc.bwe().set_bitrate(Bitrate::kbps(300), Bitrate::kbps(max_kbps));
 
         Ok((
-            Self { rtc, socket, local, mid, sps_pps: Vec::new(), connected: false, buf: vec![0; 2000] },
+            Self { rtc, socket, local, mid, sps_pps: Vec::new(), dtls_up: false, ice_up: false, buf: vec![0; 2000] },
             Local { fingerprint, ssrc: *ssrc, rtx_ssrc: *rtx_ssrc },
         ))
     }
@@ -109,16 +114,21 @@ impl Sender {
                     }
                     Output::Event(e) => match e {
                         Event::Connected => {
-                            self.connected = true;
+                            self.dtls_up = true;
                             signals.connected = true;
                             signals.keyframe = true; // the first frame anyone gets must be a keyframe
                         }
                         Event::IceConnectionStateChange(s) => {
                             log::info!("native live: ice {s:?}");
+                            let up = matches!(s, IceConnectionState::Connected | IceConnectionState::Completed);
+                            if up && !self.ice_up && self.dtls_up {
+                                signals.reconnected = true;
+                                signals.keyframe = true; // frames were lost while it was down
+                            }
                             if s == IceConnectionState::Disconnected {
-                                self.connected = false;
                                 signals.disconnected = true;
                             }
+                            self.ice_up = up;
                         }
                         Event::KeyframeRequest(r) if matches!(r.kind, KeyframeRequestKind::Pli | KeyframeRequestKind::Fir) => {
                             signals.keyframe = true;
@@ -163,7 +173,7 @@ impl Sender {
                 .flat_map(|n| [&[0u8, 0, 0, 1][..], n].concat())
                 .collect();
         }
-        if !self.connected {
+        if !(self.dtls_up && self.ice_up) {
             return Ok(());
         }
         let data: Vec<u8> = if nal_types.contains(&5) && !nal_types.contains(&7) { [&self.sps_pps[..], annexb].concat() } else { annexb.to_vec() };

@@ -148,6 +148,8 @@ export default {
   "could not reach the server's media port": "não deu pra chegar à porta de mídia do servidor",
   "lost the connection to the server": "a conexão com o servidor caiu",
   "Microphone stopped: {reason}": "O microfone parou: {reason}",
+  "Microphone back: {name}": "Microfone de volta: {name}",
+  "couldn't restart it after reconnecting": "não deu pra retomar depois da reconexão",
   "all apps except Jay-C, {apps}": "todos os apps, menos o Jay-C e {apps}",
   "all apps except Jay-C": "todos os apps, menos o Jay-C",
   "Move the controls to the next edge": "Levar os botões pra próxima borda",

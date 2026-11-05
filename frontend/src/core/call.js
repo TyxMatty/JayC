@@ -13,8 +13,8 @@ import {
   screenCodec,
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
-import { nativeMicSupported, startNativeMic } from './native-mic.js';
-import { startNativeLive } from './native-live.js';
+import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart } from './native-mic.js';
+import { startNativeLive, stopNativeLive } from './native-live.js';
 import { t } from './i18n.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
@@ -107,6 +107,10 @@ export class Call extends EventTarget {
   #nativeLive = null;
   /** What the native share captures ({ kind, id } from the app's picker), for restarts. */
   #nativeSource = null;
+  /** A native share is starting (Rust side up, not yet published). */
+  #nativeStarting = false;
+  /** The signaling connection: 'connecting' | 'open' | 'reconnecting' | 'closed'. */
+  #signalingState = 'connecting';
   /** Native screen-share sound while sharing: { track, stop(), close(), description }. */
   #screenAudio = null;
   /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
@@ -122,6 +126,10 @@ export class Call extends EventTarget {
   #lastChatAt = -Infinity;
   /** Native mic restarts run one after another (two at once could leave a replaced, silent track). */
   #micRestart = Promise.resolve();
+  /** The native mic's capture ended with an error (e.g. unplugged); the watch below reopens it. */
+  #micFailed = false;
+  /** Every few seconds: reopen the native mic when it failed or another one should be used. */
+  #micWatch = null;
   #ended = false;
 
   get micOn() {
@@ -162,7 +170,10 @@ export class Call extends EventTarget {
 
     const signaling = new SignalingClient(url);
     this.#signaling = signaling;
-    signaling.addEventListener('state', (e) => this.#emit('signaling-state', e.detail));
+    signaling.addEventListener('state', (e) => {
+      this.#signalingState = e.detail.state;
+      this.#emit('signaling-state', e.detail);
+    });
     signaling.addEventListener('peer-joined', (e) => this.#addParticipant(e.detail));
     signaling.addEventListener('peer-left', (e) => this.#removeParticipant(e.detail.id));
     signaling.addEventListener('peer-updated', (e) => {
@@ -270,7 +281,7 @@ export class Call extends EventTarget {
   async #doRestartNativeMic() {
     const old = this.#nativeMic;
     const track = await this.#openNativeMic(); // replaces the Rust-side capture
-    old.close();
+    old?.close();
     track.enabled = this.local.audio.enabled; // keep the mute state
     this.local.audio = track;
     await this.#producers.mic?.replaceTrack({ track });
@@ -297,7 +308,8 @@ export class Call extends EventTarget {
   }
 
   get sharing() {
-    return Boolean(this.local.screen || this.#nativeLive);
+    // A native share waiting for the server to come back still counts (the rejoin restarts it).
+    return Boolean(this.local.screen || this.#nativeLive || this.screenShare?.native);
   }
 
   /**
@@ -321,6 +333,7 @@ export class Call extends EventTarget {
         return true;
       }
     }
+    if (this.#ended) return false; // left the call while the native share was starting
     let track;
     try {
       track = await getScreenTrack(mode, quality);
@@ -491,30 +504,50 @@ export class Call extends EventTarget {
   /** Publishes the native share; false if it can't run here (the caller falls back to the picker). */
   async #startNativeLive(quality, source) {
     this.#nativeSource = source;
+    this.#nativeStarting = true;
+    let live;
     try {
-      this.#nativeLive = await startNativeLive({
+      live = await startNativeLive({
         source,
         request: (type, data) => this.#signaling.request(type, data),
         quality,
         onEnded: (reason) => {
-          if (!this.#nativeLive) return;
+          if (this.#nativeLive !== live) return;
+          this.#nativeLive = null;
+          this.#producers.screen = null;
+          // The server went away: the rejoin (#setup) starts the share again on a new transport.
+          if (this.#signalingState !== 'open') return;
           this.#emit('notice', { message: t('Screen share stopped: {reason}', { reason: t(reason) }) });
           this.stopScreenShare();
         },
       });
     } catch (error) {
-      console.warn('[call] native screen share unavailable, using the system picker', error);
-      this.#nativeLive = null;
+      if (!this.#ended) console.warn('[call] native screen share unavailable, using the system picker', error);
+      return false;
+    } finally {
+      this.#nativeStarting = false;
+    }
+    if (this.#ended) {
+      live.close(); // left the call while it was starting
       return false;
     }
-    this.#producers.screen = this.#nativeLive;
+    this.#nativeLive = live;
+    this.#producers.screen = live;
     return true;
   }
 
   /** After a reconnect the server forgot our transports: publish the native share again. */
   async #restartNativeLive() {
     await this.#nativeLive?.close();
-    if (!(await this.#startNativeLive(this.screenQuality, this.#nativeSource))) await this.stopScreenShare();
+    // Once more a second later: seen once, the encoder failed to reopen while Windows was swapping
+    // an audio device at the same moment (docs/spikes/10-live-nativa.md).
+    for (const delay of [0, 1000]) {
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (this.#ended || !this.screenShare?.native) return;
+      if (await this.#startNativeLive(this.screenQuality, this.#nativeSource)) return;
+    }
+    this.#emit('notice', { message: t('Screen share stopped: {reason}', { reason: t("couldn't restart it after reconnecting") }) });
+    await this.stopScreenShare();
   }
 
   async #createTransport(direction, generation) {
@@ -810,7 +843,7 @@ export class Call extends EventTarget {
   }
 
   async #openNativeMic() {
-    this.#nativeMic = await startNativeMic({
+    const mic = await startNativeMic({
       ...this.micProcessing,
       device: this.micDeviceId,
       shape: this.micShape,
@@ -818,14 +851,39 @@ export class Call extends EventTarget {
         this.micLevel = db;
         this.micGateOpen = open;
       },
-      onError: (message) => this.#emit('notice', { message: t('Microphone stopped: {reason}', { reason: message }) }),
+      onError: (message) => {
+        if (this.#nativeMic !== mic) return; // an old capture, already replaced
+        this.#micFailed = true;
+        this.#emit('notice', { message: t('Microphone stopped: {reason}', { reason: message }) });
+      },
     });
-    return this.#nativeMic.track;
+    this.#nativeMic = mic;
+    this.#watchNativeMic();
+    return mic.track;
+  }
+
+  #watchNativeMic() {
+    this.#micWatch ??= setInterval(async () => {
+      if (!this.#nativeMic || this.#ended) return;
+      const mics = await listMics().catch(() => []);
+      if (!micNeedsRestart({ failed: this.#micFailed, preferredId: this.micDeviceId, current: this.#nativeMic.device, mics })) return;
+      const wasFailed = this.#micFailed;
+      try {
+        await this.#restartNativeMic();
+        this.#micFailed = false;
+        if (wasFailed) this.#emit('notice', { message: t('Microphone back: {name}', { name: this.#nativeMic.device }) });
+      } catch {
+        // Still nothing to open: try again on the next check.
+      }
+    }, 3000);
   }
 
   #stopLocal() {
+    clearInterval(this.#micWatch);
+    this.#micWatch = null;
     this.#nativeLive?.close();
     this.#nativeLive = null;
+    if (this.#nativeStarting) stopNativeLive().catch(() => {});
     this.#nativeMic?.stop();
     this.#nativeMic = null;
     this.#screenAudio?.stop();

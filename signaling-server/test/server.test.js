@@ -338,6 +338,28 @@ describe('SFU requests', () => {
     c.client.close();
   });
 
+  test('closeTransport closes only your own transport, and its producers for everyone', async () => {
+    const a = await joined(port, 'sfu-close-transport', 'Alice');
+    const b = await joined(port, 'sfu-close-transport', 'Bob');
+    const caps = b.msg.routerRtpCapabilities;
+    const sendT = (await a.client.request('createTransport', { direction: 'send' })).data;
+    await b.client.request('createTransport', { direction: 'recv' });
+    const produced = await a.client.request('produce', { transportId: sendT.id, kind: 'audio', source: 'mic', rtpParameters: opusRtpParameters });
+    await b.client.next('new-producer');
+    assert.equal((await b.client.request('consume', { producerId: produced.data.id, rtpCapabilities: caps })).ok, true);
+
+    assert.equal((await b.client.request('closeTransport', { transportId: sendT.id })).error, 'unknown-transport'); // not Bob's
+    assert.equal((await a.client.request('closeTransport', { transportId: sendT.id })).ok, true);
+    assert.deepEqual(await b.client.next('producer-closed'), { type: 'producer-closed', peerId: a.msg.id, producerId: produced.data.id });
+    // The transport is gone: it can't be used or closed again, and the source is free for a new producer.
+    assert.equal((await a.client.request('closeTransport', { transportId: sendT.id })).error, 'unknown-transport');
+    const again = (await a.client.request('createTransport', { direction: 'send' })).data;
+    assert.equal((await a.client.request('produce', { transportId: again.id, kind: 'audio', source: 'mic', rtpParameters: opusRtpParameters })).ok, true);
+
+    a.client.close();
+    b.client.close();
+  });
+
   test('screen producers carry the share mode to everyone', async () => {
     const vp8 = {
       codecs: [{ mimeType: 'video/VP8', payloadType: 101, clockRate: 90000, parameters: {}, rtcpFeedback: [] }],

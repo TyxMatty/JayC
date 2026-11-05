@@ -41,6 +41,14 @@ const BUDGET_SHARE: f64 = 0.85;
 const KEYFRAME_GAP: Duration = Duration::from_secs(1);
 const START_KBPS: u32 = 1500;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// The capture only delivers frames when the picture changes: on a still screen the last frame is
+/// sent again this often, so a viewer who starts watching gets a picture (and its keyframe).
+const REFRESH_EVERY: Duration = Duration::from_secs(1);
+/// ICE "disconnected" can come back by itself (a VPN hiccup); only this long without the server
+/// ends the live. Meanwhile a signaling reconnect may restart it on a new transport.
+const DISCONNECT_GRACE: Duration = Duration::from_secs(20);
+/// Capture buffers: one stays held as the frame to resend while the screen is still.
+const POOL_BUFFERS: i32 = 3;
 
 /// The quality picked in Settings › Streaming: the top of the ladder.
 #[derive(Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -99,6 +107,17 @@ fn stop_running() {
     }
 }
 
+/// Stops the live whose stop flag is `stop`, if it's still the registered one.
+fn stop_if_current(stop: &Arc<AtomicBool>) {
+    let mut running = RUNNING.lock().unwrap();
+    if running.as_ref().is_some_and(|r| Arc::ptr_eq(&r.stop, stop)) {
+        let r = running.take().unwrap();
+        drop(running);
+        r.stop.store(true, Ordering::Relaxed);
+        let _ = r.thread.join();
+    }
+}
+
 /// Starts capturing and connecting; resolves once capture and encoder work (so the page can fall
 /// back to getDisplayMedia otherwise), with what goes into `connectTransport` and `produce`.
 #[tauri::command]
@@ -121,9 +140,17 @@ pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Qu
             }
         })
         .map_err(|e| e.to_string())?;
-    let local = ready_rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "the native capture did not start".to_string())??;
-    *RUNNING.lock().unwrap() = Some(Running { stop, quality: shared, thread });
-    Ok(local)
+    // Registered before it's ready, so a stop (or another start) during startup reaches it.
+    *RUNNING.lock().unwrap() = Some(Running { stop: stop.clone(), quality: shared, thread });
+    let ready = ready_rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "the native capture did not start".to_string());
+    match ready {
+        Ok(Ok(_)) if stop.load(Ordering::Relaxed) => Err("the share was stopped".into()),
+        Ok(Ok(local)) => Ok(local),
+        Ok(Err(error)) | Err(error) => {
+            stop_if_current(&stop);
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command]
@@ -216,7 +243,7 @@ unsafe fn run(
         let item = sources::capture_item(source)?;
         let mut size = item.Size().map_err(err("capture"))?;
         let mut capture = (size.Width as u32, size.Height as u32);
-        let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size)
+        let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(&winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, POOL_BUFFERS, size)
             .map_err(err("capture"))?;
         let session = pool.CreateCaptureSession(&item).map_err(err("capture"))?;
         let _ = session.SetIsBorderRequired(false); // no yellow frame, where Windows allows it
@@ -226,6 +253,7 @@ unsafe fn run(
         let mut ladder = Ladder::new(budget);
         let make = |tier: usize, q: &Quality, budget: u32, capture: (u32, u32)| {
             let (w, h, fps, cap) = step(tier, q, capture);
+            log::info!("native live: encoder {}x{} -> {w}x{h}@{fps}, {} kbps", capture.0, capture.1, budget.min(cap));
             let enc = Encoder::new(&device, capture, w, h, fps, budget.min(cap)).map_err(err("H.264 encoder"))?;
             let _ = events.send(LiveEvent::Step { width: w, height: h, fps });
             Ok::<_, String>(enc)
@@ -242,6 +270,13 @@ unsafe fn run(
         let start = Instant::now();
         let mut next_due = start;
         let mut latest = None;
+        // The last frame encoded, kept to resend while the screen is still.
+        let mut last_frame: Option<windows::Graphics::Capture::Direct3D11CaptureFrame> = None;
+        let mut last_encode = start;
+        // Encode `last_frame` on the next chance (a forced keyframe or a new encoder needs a frame).
+        let mut refresh_now = false;
+        let mut keyframe_pending = false;
+        let mut disconnected_since: Option<Instant> = None;
         let mut last_forced: Option<Instant> = None;
         let mut ever_connected = false;
         let mut estimate_budget = budget;
@@ -256,10 +291,11 @@ unsafe fn run(
                 let content = frame.ContentSize().map_err(err("capture"))?;
                 if (content.Width, content.Height) != (size.Width, size.Height) && content.Width > 0 && content.Height > 0 {
                     // The window changed size: new buffers and a new encoder at the new size.
+                    drop(frame);
+                    (latest, last_frame) = (None, None); // old-size frames, back to the old pool
                     size = content;
                     capture = (size.Width as u32, size.Height as u32);
-                    pool.Recreate(&winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, size).map_err(err("capture"))?;
-                    latest = None;
+                    pool.Recreate(&winrt_device, DirectXPixelFormat::B8G8R8A8UIntNormalized, POOL_BUFFERS, size).map_err(err("capture"))?;
                     resized = true;
                     break;
                 }
@@ -268,7 +304,7 @@ unsafe fn run(
             }
             if resized {
                 enc = make(ladder.tier, &quality, budget, capture)?;
-                last_forced = Some(Instant::now());
+                (last_forced, keyframe_pending) = (Some(Instant::now()), false);
             }
             for frame in enc.poll().map_err(err("H.264 encoder"))? {
                 encoded += 1;
@@ -277,14 +313,20 @@ unsafe fn run(
             }
             let now = Instant::now();
             if enc.wants_input() && now >= next_due {
-                if let Some(frame) = latest.take() {
+                let fresh = latest.take();
+                let got_fresh = fresh.is_some();
+                let resend = !got_fresh && (refresh_now || now - last_encode >= REFRESH_EVERY);
+                if let Some(frame) = fresh {
+                    last_frame = Some(frame); // the one it replaces goes back to the pool
+                }
+                if let Some(frame) = last_frame.as_ref().filter(|_| got_fresh || resend) {
                     let tex: ID3D11Texture2D = frame
                         .Surface()
                         .and_then(|s| s.cast::<IDirect3DDxgiInterfaceAccess>())
                         .and_then(|a| a.GetInterface())
                         .map_err(err("capture"))?;
                     enc.encode(&tex, (now - start).as_nanos() as i64 / 100).map_err(err("H.264 encoder"))?;
-                    drop(frame); // back to the pool
+                    (last_encode, refresh_now) = (now, false);
                     next_due = (next_due + Duration::from_secs_f64(1.0 / enc.fps as f64)).max(now);
                 }
             }
@@ -310,6 +352,12 @@ unsafe fn run(
                 let _ = events.send(LiveEvent::Connected);
             }
             if signals.disconnected {
+                disconnected_since.get_or_insert(now);
+            }
+            if signals.reconnected {
+                disconnected_since = None;
+            }
+            if disconnected_since.is_some_and(|t| now - t > DISCONNECT_GRACE) {
                 return Err("lost the connection to the server".into());
             }
             if source.kind == Kind::Window && now - window_checked > Duration::from_millis(500) {
@@ -337,13 +385,15 @@ unsafe fn run(
             if let Some(tier) = ladder.update(budget, now).or(quality_changed.then_some(ladder.tier)) {
                 // New size or fps: a new encoder, whose first frame is a keyframe at the new size.
                 enc = make(tier, &quality, budget, capture)?;
-                last_forced = Some(now);
+                (last_forced, keyframe_pending, refresh_now) = (Some(now), false, true);
             } else if signals.estimate.is_some() || signals.loss.is_some() {
                 enc.set_bitrate(target(budget, ladder.tier, &quality, capture));
             }
-            if signals.keyframe && last_forced.is_none_or(|t| now - t >= KEYFRAME_GAP) {
+            // A keyframe asked for too soon after the last one waits its turn instead of being dropped.
+            keyframe_pending |= signals.keyframe;
+            if keyframe_pending && last_forced.is_none_or(|t| now - t >= KEYFRAME_GAP) {
                 enc.force_keyframe();
-                last_forced = Some(now);
+                (last_forced, keyframe_pending, refresh_now) = (Some(now), false, true);
             }
         }
         let _ = session.Close();

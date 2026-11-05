@@ -112,27 +112,36 @@ export function mountApp(root) {
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
     settings.update({ lastRoom: room, recentRooms: addRecentRoom(settings.get().recentRooms, room) });
     // Microphone and streaming options changed in Settings apply to the running call.
-    const unsubscribe = settings.subscribe((next, prev) => {
-      if (next.micProcessing !== prev.micProcessing) {
-        call.setMicProcessing(next.micProcessing).catch((error) => console.warn('[app] mic options', error));
-      }
-      if (next.avatar !== prev.avatar || next.profileColor !== prev.profileColor) {
-        call.setProfile({ avatar: next.avatar, color: next.profileColor });
-      }
-      if (next.micDevice !== prev.micDevice) {
-        call.setMicDevice(next.micDevice).catch((error) => console.warn('[app] mic device', error));
-      }
-      if (next.micGain !== prev.micGain || next.micGate !== prev.micGate) call.setMicShape({ gain: next.micGain, gateDb: next.micGate });
-      if (next.excludedApps !== prev.excludedApps) {
-        call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
-      }
-    });
-    currentCall = call;
-    show(createCallView(call, { displayName: name, onLeft: showLobby, openSettings }), () => {
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = settings.subscribe((next, prev) => {
+        if (next.micProcessing !== prev.micProcessing) {
+          call.setMicProcessing(next.micProcessing).catch((error) => console.warn('[app] mic options', error));
+        }
+        if (next.avatar !== prev.avatar || next.profileColor !== prev.profileColor) {
+          call.setProfile({ avatar: next.avatar, color: next.profileColor });
+        }
+        if (next.micDevice !== prev.micDevice) {
+          call.setMicDevice(next.micDevice).catch((error) => console.warn('[app] mic device', error));
+        }
+        if (next.micGain !== prev.micGain || next.micGate !== prev.micGate) call.setMicShape({ gain: next.micGain, gateDb: next.micGate });
+        if (next.excludedApps !== prev.excludedApps) {
+          call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
+        }
+      });
+      currentCall = call;
+      show(createCallView(call, { displayName: name, onLeft: showLobby, openSettings }), () => {
+        currentCall = null;
+        unsubscribe();
+        call.leave();
+      });
+    } catch (error) {
+      // Joined but the call screen failed: don't leave a connected call behind the lobby's error.
       currentCall = null;
       unsubscribe();
       call.leave();
-    });
+      throw error;
+    }
   }
 
   const header = h(

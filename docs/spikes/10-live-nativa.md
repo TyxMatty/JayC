@@ -173,6 +173,17 @@ As medições acima eram só de bitrate. Agora a resolução e os quadros/s tamb
 - **Quem assiste a janela** (um segundo participante na mesma página): recebeu 886×592 a 18,8 quadros/s, sem perdas. Mas no meio da medição a janela de animação foi minimizada (o PC estava em uso), e o envio caiu para 0. Então esse número também não vale.
 - **Falta:** medir quem assiste com o PC parado, ou em outro PC.
 
+## Correções da revisão de código (05/11/2026)
+
+Uma revisão do código inteiro apontou problemas na live nativa. Os principais foram corrigidos e testados no app de dev:
+- **Tela parada:** a captura só entrega quadros quando a imagem muda. Antes, quem começava a assistir uma tela parada não via nada até algo mexer. Agora o último quadro fica guardado e é reenviado no mínimo a cada 1 s, e na hora quando é preciso um quadro-chave. Medido com uma janela parada: 0 quadros/s capturados, 1/s enviado, e quem começou a assistir 6 s depois recebeu a imagem em 0,7 s.
+- **Pedidos de quadro-chave** que chegam menos de 1 s depois do último ficam esperando a vez, em vez de serem descartados.
+- **Queda de rede:** o "disconnected" do ICE pode voltar sozinho; a live só termina depois de 20 s sem o servidor. Se a sinalização reconecta (servidor reiniciado), a live recomeça sozinha num transporte novo. Medido: servidor reiniciado no meio da live, reconexão em ~7 s, live de volta sem aviso, e um participante novo recebeu 1080p.
+- **Transporte:** a live fecha o próprio transporte no servidor ao parar (`closeTransport`, novo no protocolo). Um servidor antigo não conhece o pedido; aí o transporte fica até a pessoa sair, como antes.
+- **Parar durante o início:** a live fica registrada antes de estar pronta, então sair da chamada enquanto ela começa a para de verdade (antes, a captura seguia por até ~15 s).
+- **Erros do codificador** (GPU reiniciada, dispositivo removido) agora encerram a live com aviso, em vez de congelar a imagem sem dizer nada.
+- **Visto uma vez, não reproduzido:** ao recomeçar depois de uma reconexão, o codificador falhou ao abrir (`MF_E_UNSUPPORTED_D3D_TYPE`) no mesmo segundo em que o Windows invalidou o microfone. O recomeço agora tenta de novo 1 s depois e, se falhar, avisa.
+
 ## O que ainda falta para virar a live do app
 
 - **Banda estreita:**

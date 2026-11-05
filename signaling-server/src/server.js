@@ -17,6 +17,7 @@ const AVATAR_RE = /^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$/;
 /** SFU requests: `{ type, id, data }` -> `{ type: 'response', id, ok, data | error }`. */
 const REQUESTS = new Set([
   'createTransport',
+  'closeTransport',
   'connectTransport',
   'restartIce',
   'produce',

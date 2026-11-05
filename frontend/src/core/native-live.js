@@ -15,6 +15,9 @@ async function invoke(command, args) {
   return (await import('@tauri-apps/api/core')).invoke(command, args);
 }
 
+/** Stops the native live, even one still starting (e.g. when leaving the call meanwhile). */
+export const stopNativeLive = () => invoke('native_live_stop');
+
 /** Monitors (primary first), then app windows, most recently used first. */
 export const listSources = () => invoke('native_live_sources');
 
@@ -81,20 +84,29 @@ export async function startNativeLive({ source, request, quality, onEnded }) {
   };
   const close = async () => {
     closed = true;
+    // Its transport was only for this share. An old server doesn't know closeTransport: the
+    // transport then stays until we leave, as before.
+    request('closeTransport', { transportId: transport.id }).catch(() => {});
     await invoke('native_live_stop');
   };
-  const local = await invoke('native_live_start', {
-    source: { kind: source.kind, id: source.id },
-    remote: {
-      ufrag: transport.iceParameters.usernameFragment,
-      pwd: transport.iceParameters.password,
-      ip: candidate.ip,
-      port: candidate.port,
-      fingerprint: `sha-256 ${fingerprint.value}`,
-    },
-    quality: nativeQuality(quality),
-    onEvent,
-  });
+  let local;
+  try {
+    local = await invoke('native_live_start', {
+      source: { kind: source.kind, id: source.id },
+      remote: {
+        ufrag: transport.iceParameters.usernameFragment,
+        pwd: transport.iceParameters.password,
+        ip: candidate.ip,
+        port: candidate.port,
+        fingerprint: `sha-256 ${fingerprint.value}`,
+      },
+      quality: nativeQuality(quality),
+      onEvent,
+    });
+  } catch (error) {
+    request('closeTransport', { transportId: transport.id }).catch(() => {});
+    throw error;
+  }
   try {
     const [algorithm, value] = local.fingerprint.split(' ');
     await request('connectTransport', { transportId: transport.id, dtlsParameters: { role: 'client', fingerprints: [{ algorithm, value }] } });

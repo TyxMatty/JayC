@@ -130,6 +130,7 @@ Requisições SFU, com os nomes da API do mediasoup:
 | type | `data` | resposta |
 |---|---|---|
 | `createTransport` | `direction: "send" \| "recv"` | `id`, `iceParameters`, `iceCandidates` (com o endereço que este cliente usou), `dtlsParameters` |
+| `closeTransport` | `transportId` (só os seus) | — (fecha os producers dele; quem consumia recebe `producer-closed`). A live nativa usa um transporte próprio e o fecha ao parar |
 | `connectTransport` | `transportId`, `dtlsParameters` | — |
 | `restartIce` | `transportId` | `iceParameters` |
 | `produce` | `transportId`, `kind`, `rtpParameters`, `source` (`mic` \| `camera` \| `screen` \| `screen-audio`), `paused?` | `id` |
