@@ -6,11 +6,10 @@ import { updateWindowIcon } from './window-icon.js';
 import { normalizeShape } from '../core/call-bar.js';
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
-const reducedMotionQuery = matchMedia('(prefers-reduced-motion: reduce)');
 
-/** <html data-motion="full|reduced"> from Settings › Appearance › Animations and the OS. */
+/** <html data-motion="full|reduced"> from Settings › Appearance › Animations. */
 function applyMotion() {
-  document.documentElement.dataset.motion = resolveMotion(settings.get().motion, reducedMotionQuery.matches);
+  document.documentElement.dataset.motion = resolveMotion(settings.get().motion);
 }
 
 /** <html data-style> from Settings › Appearance › Style (styles/theme.css). */
@@ -69,7 +68,6 @@ export function initTheme() {
     if (next.style !== prev.style || next.theme !== prev.theme || next.appearance !== prev.appearance) updateWindowIcon();
   });
   darkQuery.addEventListener('change', () => (apply(), updateWindowIcon()));
-  reducedMotionQuery.addEventListener('change', applyMotion);
 }
 
 /** Header quick toggle: flips between explicit light and dark. */

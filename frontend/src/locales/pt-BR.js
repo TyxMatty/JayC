@@ -261,7 +261,6 @@ export default {
   "Language": "Idioma",
   "Jay-C reloads to change the language. During a call, it changes when you leave.": "O Jay-C recarrega pra trocar o idioma. Se você tiver numa chamada, troca quando você sair.",
   "Animations": "Animações",
-  "System follows Windows (Accessibility › Visual effects › Animation effects).": "Sistema segue o Windows (Acessibilidade › Efeitos visuais › Efeitos de animação).",
   "Button color": "Cor dos botões",
   "Background": "Fundo",
   "You can also drag the buttons, or the grip next to them, during a call.": "Durante a chamada, dá pra arrastar os botões ou a alça do lado deles.",

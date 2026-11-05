@@ -30,8 +30,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   language: 'system',
   /** The look: 'calm', 'neon' or 'soft' (core/style.js, styles/theme.css). */
   style: 'calm',
-  /** Animations: 'system' (follow the OS's reduce-motion), 'on' or 'off' (core/motion.js). */
-  motion: 'system',
+  /** Animations: 'on' or 'off' (core/motion.js). */
+  motion: 'on',
   /** Executables left out of the entire-screen share's sound, e.g. ['Discord.exe']. */
   excludedApps: [],
   /** Native mic (Windows) endpoint id, or null = the Windows default. */

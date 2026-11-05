@@ -1,4 +1,5 @@
 import { h } from './dom.js';
+import { normalizeMotion } from '../core/motion.js';
 import { resolveStyle } from '../core/style.js';
 import { icons } from './icons.js';
 import { settings } from '../store/settings.js';
@@ -26,7 +27,6 @@ const MIC_OPTIONS = [
 ];
 
 const MOTION_OPTIONS = [
-  ['system', 'System'],
   ['on', 'On'],
   ['off', 'Off'],
 ];
@@ -70,7 +70,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
 
   const motionGroup = h(
     'div',
-    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'motion-label', 'aria-describedby': 'motion-hint' },
+    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'motion-label' },
     MOTION_OPTIONS.map(([value, label]) =>
       h(
         'label',
@@ -79,7 +79,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
           type: 'radio',
           name: 'motion',
           value,
-          checked: (current.motion ?? 'system') === value,
+          checked: normalizeMotion(current.motion) === value,
           onChange: () => settings.update({ motion: value }),
         }),
         t(label),
@@ -139,7 +139,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
 
   // The radios follow changes made elsewhere too (the header's theme button, another tab).
   settings.subscribe((next) => {
-    const values = { style: resolveStyle(next.style), theme: next.theme, motion: next.motion ?? 'system' };
+    const values = { style: resolveStyle(next.style), theme: next.theme, motion: normalizeMotion(next.motion) };
     for (const group of [styleGroup, themeGroup, motionGroup]) {
       for (const radio of group.querySelectorAll('input[type=radio]')) radio.checked = radio.value === values[radio.name];
     }
@@ -529,7 +529,6 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
             { class: 'field' },
             h('span', { class: 'field-label', id: 'motion-label' }, t('Animations')),
             motionGroup,
-            h('p', { class: 'hint', id: 'motion-hint' }, t('System follows Windows (Accessibility › Visual effects › Animation effects).')),
           ),
           h(
             'div',
