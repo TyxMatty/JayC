@@ -27,5 +27,12 @@ desktop.ini
 # Local Claude Code tooling
 .claude/
 
+# Instructions for AI coding agents (kept on each machine, not in the repo)
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.github/copilot-instructions.md
+
 # Machine-local Cargo config (target-dir outside OneDrive)
 /.cargo/

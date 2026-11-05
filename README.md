@@ -1,6 +1,14 @@
 # Jay-C
 
+**Português** · [English](README.en.md)
+
 App leve e open-source de chamadas e compartilhamento de tela para desktop e mobile, com servidor de sinalização self-hosted via Docker.
+
+## Baixar
+
+O instalador para Windows está nos **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: baixe o `Jay-C_<versão>_x64-setup.exe` da versão mais recente. Ele atualiza uma versão anterior por cima e mantém as configurações. Todas as versões ficam em [releases](https://github.com/TyxMatty/JayC/releases).
+
+## Código
 
 | Pasta | Conteúdo |
 |---|---|
