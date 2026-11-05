@@ -424,7 +424,7 @@ Cards que explicam o app passo a passo, para quem usa pela primeira vez.
 Durante uma chamada, o perfil do Discord da pessoa mostra o Jay-C. Só no Windows: no Android, o Discord não tem o canal local.
 
 **O que aparece** (escolhas do usuário):
-- "Jay-C", com o lobo na cor do estilo do app (Calmo `jayc_purple`, Neon `jayc_neon`, Suave `jayc_orange_thick`);
+- "Jay-C", com o lobo na cor do estilo do app (Calmo `jayc_purple_thick`, Neon `jayc_neon_thick`, Suave `jayc_orange_thick`; as imagens saem de `scripts/wolf-icon.ps1`: `app-icon.png` e `discord-wolf-calm.png`/`discord-wolf-neon.png`);
 - "Numa chamada", quantas pessoas (ex.: 3 de 16) e o tempo desde que entrou;
 - em live: "Transmitindo a tela" ou "Assistindo uma live", sem nomes, com um ícone pequeno de live;
 - o nome da sala só com uma opção, desligada por padrão;
@@ -440,7 +440,7 @@ O status vem ligado por padrão, com uma opção para desligar.
 | D3 | **Configurações:** Settings › Perfil › Discord (só no app do Windows): "Mostrar no Discord" (`discordPresence`, ligado) e "Mostrar o nome da sala" (`discordShowRoom`, desligado; some enquanto o status está desligado). Valem na hora, durante a chamada; desligar e ligar mantém o tempo na chamada. Trocar o estilo troca o lobo. | ✅ |
 | D4 | Docs e release | |
 
-**Aplicação no Discord:** "Jay-C" (Application ID 1568029459146346599, no `CLIENT_ID`), criada pelo usuário com os lobos `jayc_purple`, `jayc_neon`, `jayc_orange_thick` e `jayc_orange` (não usado). **Falta enviar** o ícone `live` (`src-tauri/discord-live.png`): sem ele, o Discord aceita o status mas descarta a imagem pequena.
+**Aplicação no Discord:** "Jay-C" (Application ID 1568029459146346599, no `CLIENT_ID`), criada pelo usuário. Imagens que o código usa: `jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick` e `live` (`src-tauri/discord-live.png`). Uma chave que não existe na aplicação é descartada pelo Discord: o status aparece, sem a imagem.
 
 **Medido (D1):** com o Discord aberto, um handshake com um id inventado volta recusado (`Invalid Client ID`), o que prova o pipe e o formato das mensagens. Com o id real: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` mostra um status por 10 s e depois o limpa. Medido: o Discord devolveu `name: "Jay-C"`, `type: 0` ("Jogando") e o início em milissegundos como enviado.
 

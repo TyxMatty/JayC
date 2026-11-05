@@ -5,6 +5,7 @@
 #   frontend/src/assets/brand/wolf-fill.png   white, alpha = inside of the head (512 px)
 #   frontend/src/assets/brand/wolf-lineart.png white, alpha = the original thin lines (512 px; lobby)
 #   frontend/src-tauri/app-icon.png           the .exe/installer/Android icon (Suave colors, 1024 px)
+#   frontend/src-tauri/discord-wolf-*.png     the same in Calmo and Neon, for Discord (1024 px)
 # The app tints the two masks with the style's colors (CSS mask / canvas). After running this:
 #   cd frontend; npx tauri icon src-tauri/app-icon.png   (then see CLAUDE.md, "Ícone")
 #   powershell -File scripts/wolf-icon.ps1
@@ -91,6 +92,16 @@ public static class WolfIcon {
       using (var f = Tinted(fill, w, h, ColorTranslator.FromHtml("#16131B")))
       using (var l = Tinted(lines, w, h, ColorTranslator.FromHtml("#FF9068"))) { g.DrawImage(f, 0, 0, w, h); g.DrawImage(l, 0, 0, w, h); }
       SaveScaled(icon, appIconOut, 1024, 1024 * 2 / 100);
+    }
+    // The same icon in Calmo and Neon (core/style.js ICON_COLORS), for Discord Rich Presence
+    // (core/discord-presence.js; uploaded to the Discord app as jayc_purple_thick, jayc_neon_thick).
+    foreach (var c in new[] { new[] { "calm", "#0F0D16", "#AA8BFF" }, new[] { "neon", "#06060A", "#22D3EE" } }) {
+      using (var icon = new Bitmap(w, h, PixelFormat.Format32bppArgb)) {
+        using (var g = Graphics.FromImage(icon))
+        using (var f = Tinted(fill, w, h, ColorTranslator.FromHtml(c[1])))
+        using (var l = Tinted(lines, w, h, ColorTranslator.FromHtml(c[2]))) { g.DrawImage(f, 0, 0, w, h); g.DrawImage(l, 0, 0, w, h); }
+        SaveScaled(icon, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(appIconOut), "discord-wolf-" + c[0] + ".png"), 1024, 1024 * 2 / 100);
+      }
     }
     return string.Format("cropped to {0}x{0}; inside of the head: {1:P0} of the picture", side, inside / (double)(w * h));
   }

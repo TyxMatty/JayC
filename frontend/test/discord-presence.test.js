@@ -11,20 +11,20 @@ test('in a call: people and time, no room name unless asked', () => {
     details: 'In a call',
     state: 'Talking',
     timestamps: { start: 1_700_000_000_000 },
-    assets: { large_image: 'jayc_neon', large_text: 'Jay-C' },
+    assets: { large_image: 'jayc_neon_thick', large_text: 'Jay-C' },
     party: { size: [3, 16] },
   });
   assert.equal(presenceActivity({ ...base, showRoom: true }).details, 'In room #vision');
   assert.deepEqual(presenceActivity({ ...base, people: 20 }).party.size, [20, 20], 'never more people than the max');
   const wolf = (style) => presenceActivity({ ...base, style }).assets.large_image;
-  assert.deepEqual([wolf('calm'), wolf('soft'), wolf(undefined)], ['jayc_purple', 'jayc_orange_thick', 'jayc_purple'], "each style's wolf");
+  assert.deepEqual([wolf('calm'), wolf('soft'), wolf(undefined)], ['jayc_purple_thick', 'jayc_orange_thick', 'jayc_purple_thick'], "each style's wolf");
 });
 
 test('streams show without names, with the live icon', () => {
   setLanguage('pt-BR');
   const sharing = presenceActivity({ ...base, sharing: true, watching: true });
   assert.equal(sharing.state, 'Transmitindo a tela', 'our own stream wins');
-  assert.deepEqual(sharing.assets, { large_image: 'jayc_neon', large_text: 'Jay-C', small_image: 'live', small_text: 'Ao vivo' });
+  assert.deepEqual(sharing.assets, { large_image: 'jayc_neon_thick', large_text: 'Jay-C', small_image: 'live', small_text: 'Ao vivo' });
   assert.equal(presenceActivity({ ...base, watching: true }).state, 'Assistindo uma live');
   assert.equal(presenceActivity(base).details, 'Numa chamada');
   setLanguage('en');
