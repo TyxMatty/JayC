@@ -1,4 +1,5 @@
-// The right-click menu on a person or a stream: volume (0–200%) and mute, only for us.
+// The right-click menu on a person or a stream: volume (0–200%) and mute, only for us, plus
+// optional actions (a stream: full screen, pop out).
 // Keyboard: focus the tile and press the Menu key (or Shift+F10), which fires the same event.
 import { h } from './dom.js';
 import { MAX_VOLUME } from '../core/playback.js';
@@ -10,6 +11,7 @@ export function createAudioMenu() {
   const slider = h('input', { type: 'range', id: 'audio-menu-volume', min: 0, max: MAX_VOLUME * 100, step: 5 });
   const mute = h('input', { type: 'checkbox', id: 'audio-menu-mute' });
   const muteText = h('span', {});
+  const actions = h('div', { class: 'audio-menu-actions' });
   const el = h(
     'div',
     { class: 'audio-menu', popover: 'auto', 'aria-labelledby': 'audio-menu-title' },
@@ -17,6 +19,7 @@ export function createAudioMenu() {
     h('div', { class: 'audio-menu-row' }, h('label', { for: 'audio-menu-volume' }, t('Volume')), value),
     slider,
     h('label', { class: 'audio-menu-check' }, mute, muteText),
+    actions,
   );
 
   /** @type {{ get: () => { volume: number, muted: boolean }, set: (patch: object) => void } | null} */
@@ -40,7 +43,9 @@ export function createAudioMenu() {
     element: el,
     /**
      * @param {MouseEvent} event the contextmenu event (its position, or the tile's when from the keyboard)
-     * @param {{ title: string, muteLabel: string, get: () => { volume: number, muted: boolean }, set: (patch: object) => void }} options
+     * @param {{ title: string, muteLabel: string, get: () => { volume: number, muted: boolean }, set: (patch: object) => void,
+     *   actions?: { label: string, icon: string, onClick: () => void }[] }} options
+     *   actions: run from the click (it counts as user activation, which full screen and PiP need).
      */
     open(event, options) {
       event.preventDefault();
@@ -48,6 +53,12 @@ export function createAudioMenu() {
       title.textContent = options.title;
       muteText.textContent = options.muteLabel;
       render();
+      actions.replaceChildren(
+        ...(options.actions ?? []).map(({ label, icon, onClick }) =>
+          h('button', { type: 'button', class: 'audio-menu-action', onClick: () => (el.hidePopover(), onClick()) }, h('span', { html: icon }), label),
+        ),
+      );
+      actions.hidden = !options.actions?.length;
       el.showPopover();
       // From the keyboard the event has no pointer position: anchor to the tile instead.
       const anchor = event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : event.currentTarget.getBoundingClientRect();

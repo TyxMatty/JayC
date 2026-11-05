@@ -116,10 +116,18 @@ function createTile({ name, stream, local, getMedia, getAvatar, getColor = () =>
   return tile;
 }
 
-/** A shared screen/window. Double-click toggles fullscreen. Audio (later) plays from the same element. */
-function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus }) {
+/** A shared screen/window. Double-click (or its button) toggles full screen; `onPip` pops it out. */
+function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, onPip }) {
   const video = h('video', { autoplay: true, playsinline: true, muted: true, srcObject: stream });
   const muteButton = local ? null : h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onToggleMute?.() });
+  const iconButton = (label, icon, onClick) =>
+    h('button', { type: 'button', class: 'btn btn-secondary btn-icon', 'aria-label': label, title: label, html: icon, onClick });
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else el.requestFullscreen?.().catch(() => {});
+  };
+  const fullscreenButton = local ? null : iconButton(t('Full screen'), icons.maximize, () => toggleFullscreen());
+  const pipButton = local || !onPip ? null : iconButton(t('Pop out video'), icons.pip, () => onPip());
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
   const nameText = h('span', {}, local ? t('Your screen') : t("{name}'s screen", { name }));
   const el = h(
@@ -132,7 +140,16 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus }
     h('div', { class: 'tile-label' }, icon, nameText),
     ...(local
       ? []
-      : [h('div', { class: 'tile-stream-actions' }, muteButton, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onStop?.() }, t('Stop watching')))]),
+      : [
+          h(
+            'div',
+            { class: 'tile-stream-actions' },
+            muteButton,
+            h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onStop?.() }, t('Stop watching')),
+            pipButton,
+            fullscreenButton,
+          ),
+        ]),
   );
   el.tabIndex = 0;
   // Focus this stream (a double-click's two clicks cancel out, then it goes fullscreen).
@@ -144,13 +161,18 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus }
     }
   });
   if (!local) {
-    el.addEventListener('dblclick', () => {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else el.requestFullscreen?.().catch(() => {});
+    el.addEventListener('dblclick', (e) => !e.target.closest('button') && toggleFullscreen());
+    // Fires on this element when it enters or leaves full screen (Esc included).
+    el.addEventListener('fullscreenchange', () => {
+      const on = document.fullscreenElement === el;
+      fullscreenButton.innerHTML = on ? icons.minimize : icons.maximize;
+      fullscreenButton.setAttribute('aria-label', on ? t('Exit full screen') : t('Full screen'));
+      fullscreenButton.title = fullscreenButton.getAttribute('aria-label');
     });
   }
   return {
     el,
+    toggleFullscreen,
     /** After the tile moved in the page (moving a <video> pauses it). */
     play() {
       video.play().catch(() => {});
@@ -240,12 +262,28 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         togglemicrophone: () => micButton.click(),
         togglecamera: () => camButton.click(),
         hangup: () => call.leave(),
-        onLeave: () => renderPip(),
+        onLeave: () => {
+          pinnedPipTrack = null;
+          renderPip();
+        },
       })
     : null;
+  /** A stream popped out from its own tile or menu: PiP stays on it (not on the featured video) while we watch it. */
+  let pinnedPipTrack = null;
+  const popOut = async (track) => {
+    try {
+      pinnedPipTrack = track;
+      await pip.enter(track);
+    } catch (error) {
+      pinnedPipTrack = null;
+      showToast(t("Couldn't pop out the video: {reason}", { reason: error?.message ?? error }));
+    }
+    renderPip();
+  };
   const pipButton = pip ? controlButton({ label: t('Pop out video') }) : null;
   pipButton?.addEventListener('click', async () => {
     try {
+      pinnedPipTrack = null;
       if (pip.open) await pip.exit();
       else await pip.enter(pickPipTrack(call.participants.values()));
     } catch (error) {
@@ -264,7 +302,9 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         for (const type of ['mute', 'unmute', 'ended']) t.addEventListener(type, renderPip);
       }
     }
-    const track = pickPipTrack(call.participants.values());
+    const pinnedWatched = [...call.participants.values()].some((p) => p.watching && p.screenStream.getVideoTracks().includes(pinnedPipTrack));
+    if (pinnedPipTrack && !(pinnedWatched && pinnedPipTrack.readyState === 'live')) pinnedPipTrack = null;
+    const track = pinnedPipTrack ?? pickPipTrack(call.participants.values());
     if (pip.followsFeatured) {
       pip.show(track); // Android: the app may float on its own at any moment (leaving the app)
     } else if (pip.open) {
@@ -358,15 +398,21 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         onFocus: () => toggleFocus(participant.id),
         onStop: () => call.watchStream(participant.id, false),
         onToggleMute: () => tile.setMuted(mixer.set(streamKey(participant), { muted: !mixer.get(streamKey(participant)).muted }).muted),
+        onPip: pip ? () => popOut(participant.screenStream.getVideoTracks()[0]) : null,
       });
-      tile.el.addEventListener('contextmenu', (e) =>
+      tile.el.addEventListener('contextmenu', (e) => {
+        const full = document.fullscreenElement === tile.el;
         audioMenu.open(e, {
           title: t("{name}'s stream", { name: participant.name }),
           muteLabel: t('Mute stream'),
           get: () => mixer.get(streamKey(participant)),
           set: (patch) => tile.setMuted(mixer.set(streamKey(participant), patch).muted),
-        }),
-      );
+          actions: [
+            { label: full ? t('Exit full screen') : t('Full screen'), icon: full ? icons.minimize : icons.maximize, onClick: () => tile.toggleFullscreen() },
+            ...(pip ? [{ label: t('Pop out video'), icon: icons.pip, onClick: () => popOut(participant.screenStream.getVideoTracks()[0]) }] : []),
+          ],
+        });
+      });
       tile.setMuted(mixer.get(streamKey(participant)).muted);
       tile.el.style.viewTransitionName = `screen-${participant.id}`;
       screenTiles.set(participant.id, tile);

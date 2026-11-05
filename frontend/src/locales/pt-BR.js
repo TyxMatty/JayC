@@ -163,6 +163,8 @@ export default {
   "sent": "vai",
   "not sent": "não vai",
   "Stop test": "Parar teste",
+  "Full screen": "Tela cheia",
+  "Exit full screen": "Sair da tela cheia",
   "Test microphone": "Testar microfone",
   "The microphone did not open: {reason}": "O microfone não abriu: {reason}",
   "Stay quiet and watch the bar, then talk. Put the sensitivity between the two: green is sent, gray is not.": "Fica calado e olha a barra, depois fala. Coloca a sensibilidade entre os dois: verde vai, cinza não vai.",
