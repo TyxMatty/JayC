@@ -49,6 +49,11 @@ const REFRESH_EVERY: Duration = Duration::from_secs(1);
 const DISCONNECT_GRACE: Duration = Duration::from_secs(20);
 /// Capture buffers: one stays held as the frame to resend while the screen is still.
 const POOL_BUFFERS: i32 = 3;
+/// The page's previews of the live (core/screen-preview.js) are about this wide.
+const PREVIEW_WIDTH: u32 = 384;
+
+/// A preview the page asked for, answered by the live's thread from the last frame.
+type PreviewRequest = Arc<Mutex<Option<mpsc::Sender<Result<Vec<u8>, String>>>>>;
 
 /// The quality picked in Settings › Streaming: the top of the ladder.
 #[derive(Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -94,6 +99,7 @@ pub enum LiveEvent {
 struct Running {
     stop: Arc<AtomicBool>,
     quality: Arc<Mutex<Quality>>,
+    preview: PreviewRequest,
     thread: JoinHandle<()>,
 }
 
@@ -125,13 +131,14 @@ pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Qu
     stop_running();
     let stop = Arc::new(AtomicBool::new(false));
     let shared = Arc::new(Mutex::new(quality));
+    let preview: PreviewRequest = Arc::default();
     let (ready_tx, ready_rx) = mpsc::channel();
     let thread = std::thread::Builder::new()
         .name("native-live".into())
         .spawn({
-            let (stop, shared) = (stop.clone(), shared.clone());
+            let (stop, shared, preview) = (stop.clone(), shared.clone(), preview.clone());
             move || {
-                let result = unsafe { run(source, remote, shared, stop, &ready_tx, &on_event) };
+                let result = unsafe { run(source, remote, shared, stop, preview, &ready_tx, &on_event) };
                 if let Err(error) = &result {
                     log::warn!("native live: {error}");
                     let _ = ready_tx.send(Err(error.clone())); // ignored if already started
@@ -141,7 +148,7 @@ pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Qu
         })
         .map_err(|e| e.to_string())?;
     // Registered before it's ready, so a stop (or another start) during startup reaches it.
-    *RUNNING.lock().unwrap() = Some(Running { stop: stop.clone(), quality: shared, thread });
+    *RUNNING.lock().unwrap() = Some(Running { stop: stop.clone(), quality: shared, preview, thread });
     let ready = ready_rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "the native capture did not start".to_string());
     match ready {
         Ok(Ok(_)) if stop.load(Ordering::Relaxed) => Err("the share was stopped".into()),
@@ -174,6 +181,21 @@ pub async fn native_live_thumbnail(source: SourceId) -> Result<tauri::ipc::Respo
     .await
     .map_err(|e| e.to_string())?
     .map(tauri::ipc::Response::new)
+}
+
+/// A small JPEG of what the running live sends (its last frame, scaled on the GPU): the page shows
+/// it on our own tile and sends it to the room. Far cheaper than a new capture (a thumbnail).
+#[tauri::command]
+pub async fn native_live_preview() -> Result<tauri::ipc::Response, String> {
+    let (tx, rx) = mpsc::channel();
+    match RUNNING.lock().unwrap().as_ref() {
+        Some(r) => *r.preview.lock().unwrap() = Some(tx),
+        None => return Err("no live".into()),
+    }
+    tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(2)).map_err(|_| "no frame yet".to_string())?)
+        .await
+        .map_err(|e| e.to_string())?
+        .map(tauri::ipc::Response::new)
 }
 
 /// Settings changed during the share: the new top of the ladder applies right away.
@@ -228,11 +250,21 @@ unsafe fn create_device() -> Result<(ID3D11Device, IDirect3DDevice), String> {
     Ok((device, winrt))
 }
 
+/// The D3D texture behind a capture frame.
+fn frame_texture(frame: &windows::Graphics::Capture::Direct3D11CaptureFrame) -> Result<ID3D11Texture2D, String> {
+    frame
+        .Surface()
+        .and_then(|s| s.cast::<IDirect3DDxgiInterfaceAccess>())
+        .and_then(|a| unsafe { a.GetInterface() })
+        .map_err(err("capture"))
+}
+
 unsafe fn run(
     source: SourceId,
     remote: RemoteArgs,
     shared: Arc<Mutex<Quality>>,
     stop: Arc<AtomicBool>,
+    preview: PreviewRequest,
     ready: &mpsc::Sender<Result<LocalParams, String>>,
     events: &Channel<LiveEvent>,
 ) -> Result<(), String> {
@@ -320,14 +352,15 @@ unsafe fn run(
                     last_frame = Some(frame); // the one it replaces goes back to the pool
                 }
                 if let Some(frame) = last_frame.as_ref().filter(|_| got_fresh || resend) {
-                    let tex: ID3D11Texture2D = frame
-                        .Surface()
-                        .and_then(|s| s.cast::<IDirect3DDxgiInterfaceAccess>())
-                        .and_then(|a| a.GetInterface())
-                        .map_err(err("capture"))?;
+                    let tex = frame_texture(frame)?;
                     enc.encode(&tex, (now - start).as_nanos() as i64 / 100).map_err(err("H.264 encoder"))?;
                     (last_encode, refresh_now) = (now, false);
                     next_due = (next_due + Duration::from_secs_f64(1.0 / enc.fps as f64)).max(now);
+                }
+            }
+            if let Some(frame) = last_frame.as_ref() {
+                if let Some(reply) = preview.lock().unwrap().take() {
+                    let _ = reply.send(frame_texture(frame).and_then(|tex| sources::frame_jpeg(&device, &tex, PREVIEW_WIDTH)));
                 }
             }
             std::thread::sleep(Duration::from_millis(1));

@@ -4,6 +4,7 @@ export const describePeer = (peer) => ({
   name: peer.name,
   ...(peer.avatar ? { avatar: peer.avatar } : {}),
   ...(peer.color ? { color: peer.color } : {}),
+  ...(peer.preview ? { preview: peer.preview } : {}),
 });
 
 /**

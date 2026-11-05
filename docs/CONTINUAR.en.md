@@ -134,6 +134,18 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**After 0.3.3 (05/11/2026), no installer yet:**
+- **No text selection:** dragging with the left button no longer selects labels, buttons and images (`user-select: none` on `body`). Text fields, chat messages and the setup guide stay selectable. Measured with a real drag (CDP): nothing selected; with selection forced back on, the same drag picks up the lobby's text.
+- **Jay-C in the stream:**
+  - The native stream no longer hides the Jay-C window (affinity 0 during an entire-screen stream).
+  - The picker lists Jay-C's own window (`own`), streamed without sound: its sound is the call's and would go back to everyone.
+  - Only a stream through the system picker, which has a local preview, still hides Jay-C (mirror effect).
+- **Stream preview:**
+  - Whoever streams sends a picture (a 320 px JPEG, ~10 KB) every 6 s, with the new `screen-preview` message. "Watch stream" becomes a card with the picture.
+  - Your own stream's tile, which said "Live · no preview", shows the picture, refreshed every 2 s.
+  - On the native stream the picture comes from the stream's last frame, scaled down on the GPU (mipmaps): ~10 ms and ~15 ms of CPU in the dev build, against 230 ms and 166 ms with a new capture (the picker's thumbnail).
+  - Old server: the app doesn't send the pictures (`joined` doesn't list `features`).
+
 **Installer 0.3.3 (05/11/2026):** 0.3.2 with the code review fixes (native stream on a still screen, network drops, transport closed on stop, stopping while it starts, encoder errors; joining a room without a ghost call) and the mic that comes back by itself when reconnected. See "Fixes after the code review", below.
 
 The server changed: the new `closeTransport` request. An old server still works with the new app.

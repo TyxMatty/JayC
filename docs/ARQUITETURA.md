@@ -122,6 +122,7 @@ Cliente → servidor:
 | `join` | `room`, `name`, `avatar?`, `color?` | entra na sala (cria se não existir) |
 | `profile` | `avatar` (data URL ou `null`), `color` (`{from, to?, angle?}` ou `null`) | troca a foto ou a cor de perfil durante a chamada; os outros recebem `peer-updated`. A cor só aceita `#rrggbb` e ângulo inteiro 0–360 |
 | `chat` | `text` (1–500 caracteres) | mensagem para a sala; os outros recebem `chat`. Nada fica guardado no servidor |
+| `screen-preview` | `image` (JPEG em data URL, até 48 000 caracteres, ou `null` ao parar) | uma imagem da própria live, a cada 6 s; os outros recebem `screen-preview`, e quem entra depois recebe a última no `joined`. Até 1 a cada 2 s (rajada de 3). Só é enviado se o `joined` listar `screen-preview` em `features` |
 | `leave` | — | sai da sala |
 | *requisição SFU* | `id`, `data` | resposta: `{type: "response", id, ok, data}` ou `{…, ok: false, error}` |
 
@@ -143,10 +144,11 @@ Servidor → cliente:
 
 | type | campos | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | quem já está na sala, o que cada um publica e as capacidades do router |
+| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, preview?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities`, `features` | quem já está na sala, o que cada um publica e as capacidades do router. `features`: as mensagens novas que o servidor aceita (hoje, `screen-preview`); um servidor antigo não manda o campo |
 | `peer-joined` / `peer-left` | `id`, `name`, `avatar?`, `color?` (só no `peer-joined`) | |
 | `peer-updated` | `id`, `avatar`, `color` | alguém trocou ou tirou (`null`) a foto ou a cor de perfil |
 | `chat` | `id`, `name`, `text` | mensagem de alguém da sala (quebras de linha mantidas; caracteres de controle removidos) |
+| `screen-preview` | `id`, `image` | uma imagem da live de alguém (`null` = parou). O card "Assistir live" do card da pessoa mostra a imagem |
 | `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | alguém começou a publicar uma faixa |
 | `producer-state` | `peerId`, `producerId`, `paused` | só para quem consome: mutou ou desligou a câmera, ou voltou |
 | `producer-closed` | `peerId`, `producerId` | só para quem consome |
@@ -261,7 +263,7 @@ Tudo fica no painel "Share" da chamada, que é um `popover`. As escolhas são sa
 
 Bitrate automático: ~0,08 bit/pixel/quadro, e os quadros acima de 30 fps contam pela metade. Dá ≈5 Mbps em 1080p30 e ≈7,5 Mbps em 1080p60, entre 0,2 e 12 Mbps.
 
-A tela vai numa única camada, sem simulcast, em **H.264 High** (`profile-level-id` 640032, adicionado ao router). Com esse perfil, o WebView2 usa o encoder da placa de vídeo (Media Foundation: `NVIDIA H.264 Encoder MFT` medido numa RTX 3050). O H.264 constrained baseline (42e01f) fica no OpenH264 em software, mesmo em 720p, e o VP8 fica no libvpx. Servidor antigo, sem o perfil High: VP8. Durante a live de **tela inteira**, a janela do Jay-C sai da captura (`setContentProtected` = `WDA_EXCLUDEFROMCAPTURE`), para não filmar a própria prévia (efeito espelho).
+A tela vai numa única camada, sem simulcast, em **H.264 High** (`profile-level-id` 640032, adicionado ao router). Com esse perfil, o WebView2 usa o encoder da placa de vídeo (Media Foundation: `NVIDIA H.264 Encoder MFT` medido numa RTX 3050). O H.264 constrained baseline (42e01f) fica no OpenH264 em software, mesmo em 720p, e o VP8 fica no libvpx. Servidor antigo, sem o perfil High: VP8. Durante a live de **tela inteira pelo seletor do sistema** (o caminho sem a live nativa), a janela do Jay-C sai da captura (`setContentProtected` = `WDA_EXCLUDEFROMCAPTURE`), para não filmar a própria prévia (efeito espelho). A live nativa não tem vídeo local, então o Jay-C aparece nela, e a própria janela do Jay-C pode ser transmitida (sem o som, que seria o da chamada).
 
 **Para quem assiste:** o layout vira *presenting*, com as telas em destaque e as câmeras numa faixa de 160 px (pedindo a camada mais baixa). Clique duplo na tela abre em tela cheia. Quem transmite vê uma prévia pequena no canto.
 

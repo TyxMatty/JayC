@@ -11,6 +11,8 @@ const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_NAME_LENGTH = 32;
 /** A 128 px WebP from the app is ~5-15 KB as a data URL; this leaves room without letting it grow. */
 const MAX_AVATAR_LENGTH = 32_000;
+/** A screen-share preview from the app is a ~320 px JPEG: ~10-30 KB as a data URL. */
+const MAX_PREVIEW_LENGTH = 48_000;
 // Raster images only (an SVG can carry scripts), inline only (a remote URL would track viewers).
 const AVATAR_RE = /^data:image\/(?:webp|jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$/;
 
@@ -68,10 +70,10 @@ function cleanColor(value) {
   return to ? { from: from.toLowerCase(), to: to.toLowerCase(), angle } : { from: from.toLowerCase() };
 }
 
-/** The profile picture as sent: null when absent, undefined when invalid. */
-function cleanAvatar(value) {
+/** An image as sent (profile picture, share preview): null when absent, undefined when invalid. */
+function cleanImage(value, maxLength = MAX_AVATAR_LENGTH) {
   if (value === undefined || value === null || value === '') return null;
-  return typeof value === 'string' && value.length <= MAX_AVATAR_LENGTH && AVATAR_RE.test(value) ? value : undefined;
+  return typeof value === 'string' && value.length <= maxLength && AVATAR_RE.test(value) ? value : undefined;
 }
 
 /**
@@ -125,11 +127,15 @@ export function startServer(config, { log = defaultLog } = {}) {
     const bucket = new TokenBucket({ capacity: 300, perSecond: 100 });
     // Chat fans out to the whole room, so it gets a much smaller budget of its own.
     const chatBucket = new TokenBucket({ capacity: 10, perSecond: 2 });
+    // Share previews fan out too, and are big: one every few seconds is plenty.
+    const previewBucket = new TokenBucket({ capacity: 3, perSecond: 0.5 });
     const peer = {
       id: randomUUID(),
       name: null,
       avatar: null,
       color: null,
+      /** The last still of their screen share (data URL) or null. */
+      preview: null,
       room: null,
       announcedAddress: null,
       send(message) {
@@ -147,7 +153,7 @@ export function startServer(config, { log = defaultLog } = {}) {
 
     async function join(msg) {
       const name = cleanName(msg.name);
-      const avatar = cleanAvatar(msg.avatar);
+      const avatar = cleanImage(msg.avatar);
       const color = cleanColor(msg.color);
       if (typeof msg.room !== 'string' || !ROOM_RE.test(msg.room) || !name || avatar === undefined || color === undefined) {
         return fail('bad-message', 'join');
@@ -169,6 +175,8 @@ export function startServer(config, { log = defaultLog } = {}) {
         peers: result.others.map((p) => ({ ...describePeer(p), producers: room.producersOf(p.id) })),
         iceServers: config.iceServers,
         routerRtpCapabilities: room.rtpCapabilities,
+        // Messages newer clients may send only when the server lists them (an old one refuses them).
+        features: ['screen-preview'],
       });
       log('info', 'joined', { peer: peer.id, room: msg.room, size: result.others.length + 1 });
     }
@@ -210,13 +218,21 @@ export function startServer(config, { log = defaultLog } = {}) {
         });
       } else if (msg.type === 'profile') {
         // A new profile picture or color mid-call: the others get it right away.
-        const avatar = cleanAvatar(msg.avatar);
+        const avatar = cleanImage(msg.avatar);
         const color = cleanColor(msg.color);
         if (avatar === undefined || color === undefined) return fail('bad-message', 'profile');
         if (!peer.room) return fail('not-in-room', 'profile');
         peer.avatar = avatar;
         peer.color = color;
         for (const other of registry.othersInRoom(peer)) other.send({ type: 'peer-updated', id: peer.id, avatar, color });
+      } else if (msg.type === 'screen-preview') {
+        // A still of their screen share, for the tiles of those not watching it (latecomers get the last one).
+        if (!peer.room) return fail('not-in-room', 'screen-preview');
+        if (!previewBucket.take()) return fail('rate-limited', 'screen-preview');
+        const image = cleanImage(msg.image, MAX_PREVIEW_LENGTH);
+        if (image === undefined) return fail('bad-message', 'screen-preview');
+        peer.preview = image;
+        for (const other of registry.othersInRoom(peer)) other.send({ type: 'screen-preview', id: peer.id, image });
       } else if (msg.type === 'chat') {
         // Relayed to the others in the room; nothing is stored (late joiners don't see history).
         if (!peer.room) return fail('not-in-room', 'chat');

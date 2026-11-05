@@ -132,6 +132,18 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Depois da 0.3.3 (05/11/2026), ainda sem instalador:**
+- **Sem seleção de texto:** arrastar com o botão esquerdo não seleciona mais rótulos, botões e imagens (`user-select: none` no `body`). Campos de texto, mensagens do chat e o guia de setup continuam selecionáveis. Medido com arraste real (CDP): nada selecionado; com a seleção forçada de volta, o mesmo arraste pega o texto do lobby.
+- **O Jay-C na live:**
+  - A live nativa não esconde mais a janela do Jay-C (afinidade 0 durante a live da tela inteira).
+  - O seletor lista a janela do próprio Jay-C (`own`), transmitida sem som: o som dela é o da chamada e voltaria para todos.
+  - Só a live pelo seletor do sistema, que tem prévia local, ainda esconde o Jay-C (efeito espelho).
+- **Prévia da live:**
+  - Quem transmite manda uma imagem (JPEG de 320 px, ~10 KB) a cada 6 s, pela mensagem nova `screen-preview`. O "Assistir live" vira um card com a imagem.
+  - O próprio card da live, que era "Ao vivo · sem prévia", mostra a imagem, atualizada a cada 2 s.
+  - Na live nativa, a imagem sai do último quadro da live, reduzido na GPU (mipmaps): ~10 ms e ~15 ms de CPU no build de dev, contra 230 ms e 166 ms com uma captura nova (a miniatura do seletor).
+  - Servidor antigo: o app não manda as imagens (o `joined` não lista `features`).
+
 **Instalador 0.3.3 (05/11/2026):** a 0.3.2 com as correções da revisão de código (live nativa com a tela parada, quedas de rede, transporte fechado ao parar, parar durante o início, erros do codificador; entrar na sala sem chamada fantasma) e o microfone que volta sozinho ao reconectar. Ver "Correções depois da revisão de código", abaixo.
 
 O servidor mudou: o pedido novo `closeTransport`. Um servidor antigo continua funcionando com o app novo.

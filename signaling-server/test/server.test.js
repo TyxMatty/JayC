@@ -223,6 +223,29 @@ describe('signaling server', () => {
     for (const client of [a, b, c]) client.close();
   });
 
+  test('screen previews reach the room, and latecomers get the last one', async () => {
+    const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+    const a = await joined(port, 'room-preview', 'Alice');
+    assert.deepEqual(a.msg.features, ['screen-preview']);
+    const b = await joined(port, 'room-preview', 'Bob');
+    a.client.send({ type: 'screen-preview', image: jpeg });
+    assert.deepEqual(await b.client.next('screen-preview'), { type: 'screen-preview', id: a.msg.id, image: jpeg });
+    for (const bad of ['data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', `data:image/jpeg;base64,${'A'.repeat(50_000)}`]) {
+      a.client.send({ type: 'screen-preview', image: bad });
+      assert.deepEqual(await a.client.next('error'), { type: 'error', code: 'bad-message', ref: 'screen-preview' });
+    }
+    // Rate-limited: the bucket (3) is spent by now.
+    a.client.send({ type: 'screen-preview', image: jpeg });
+    assert.deepEqual(await a.client.next('error'), { type: 'error', code: 'rate-limited', ref: 'screen-preview' });
+
+    b.client.close();
+    await a.client.next('peer-left');
+    const late = await joined(port, 'room-preview', 'Carol');
+    assert.equal(late.msg.peers[0].preview, jpeg);
+    a.client.close();
+    late.client.close();
+  });
+
   test('malformed messages get bad-message errors', async () => {
     const c = connect(port);
     await c.open();

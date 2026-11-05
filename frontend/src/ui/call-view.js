@@ -57,11 +57,13 @@ function createTile({ name, stream, local, getMedia, getAvatar, getColor = () =>
   const mutedIcon = h('span', { class: 'tile-muted', title: t('Microphone off'), html: icons.micOff, hidden: true });
   const label = h('div', { class: 'tile-label' }, mutedIcon, nameText);
   const overlay = h('div', { class: 'tile-overlay', hidden: true });
+  // A still of their stream (refreshed every few seconds) when the server relays one.
+  const watchPreview = h('img', { class: 'tile-watch-preview', alt: '', hidden: true });
   const watchButton = h(
     'button',
     { type: 'button', class: 'tile-watch', hidden: true, onClick: () => onWatch?.() },
-    h('span', { class: 'live-badge' }, t('LIVE')),
-    t('Watch stream'),
+    watchPreview,
+    h('span', { class: 'tile-watch-label' }, h('span', { class: 'live-badge' }, t('LIVE')), t('Watch stream')),
   );
   const el = h('div', { class: local ? 'tile tile-local' : 'tile', tabindex: local ? false : 0 }, video, avatar, overlay, watchButton, label);
 
@@ -108,9 +110,13 @@ function createTile({ name, stream, local, getMedia, getAvatar, getColor = () =>
       overlay.textContent = text ?? '';
       overlay.hidden = !text;
     },
-    /** Shows "Watch stream" while they share a stream we aren't watching. */
-    setLive(unwatched) {
+    /** Shows "Watch stream" (with a still of it, if any) while they share a stream we aren't watching. */
+    setLive(unwatched, preview = null) {
       watchButton.hidden = !unwatched;
+      const shown = unwatched ? preview : null;
+      watchPreview.hidden = !shown;
+      if (shown && watchPreview.getAttribute('src') !== shown) watchPreview.src = shown;
+      watchButton.classList.toggle('has-preview', Boolean(shown));
       watchButton.setAttribute('aria-label', t("Watch {name}'s stream", { name: shownName }));
     },
   };
@@ -133,6 +139,8 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
   const note = local
     ? h('div', { class: 'tile-screen-note', title: t('Sent straight from the GPU: no preview, to save CPU.') }, t('Live · no preview'))
     : null;
+  // The native share's stills (every 2 s): what we're sending, without decoding it again.
+  const preview = local ? h('img', { class: 'tile-screen-preview', alt: '', hidden: true }) : null;
   const el = h(
     'div',
     {
@@ -140,6 +148,7 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
       title: local ? t('Click to show it bigger, or back in the corner') : t('Click to focus · double-click for fullscreen'),
     },
     video,
+    preview,
     note,
     h('div', { class: 'tile-label' }, icon, nameText),
     ...(local
@@ -181,6 +190,13 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
     play() {
       video.play().catch(() => {});
     },
+    /** Our native share's latest still (local tile only). */
+    setPreview(url) {
+      if (!preview) return;
+      preview.hidden = !url || stream.getVideoTracks().length > 0;
+      if (url && preview.getAttribute('src') !== url) preview.src = url;
+      note.hidden = stream.getVideoTracks().length > 0 || !preview.hidden;
+    },
     /** The stream's sound is muted just for us. */
     setMuted(muted) {
       if (!muteButton) return;
@@ -192,7 +208,7 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
       nameText.textContent = local
         ? t(mode === 'window' ? 'Your window' : 'Your screen')
         : t(mode === 'window' ? "{name}'s window" : "{name}'s screen", { name: next });
-      if (note) note.hidden = stream.getVideoTracks().length > 0;
+      if (note) note.hidden = stream.getVideoTracks().length > 0 || !preview.hidden;
       if (video.srcObject !== stream || video.dataset.tracks !== String(stream.getTracks().length)) {
         video.srcObject = stream;
         video.dataset.tracks = String(stream.getTracks().length);
@@ -467,7 +483,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     const connection = CONNECTION_LABELS[participant.connectionState];
     tile.setOverlay(connection && t(connection));
     tile.refresh();
-    tile.setLive(participant.media.screen && !participant.watching);
+    tile.setLive(participant.media.screen && !participant.watching, participant.preview);
     mixer.play(voiceKey(participant), participant.stream.getAudioTracks()[0] ?? null);
     renderScreen(participant);
     renderPip();
@@ -493,8 +509,10 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       stage.append(localScreenTile.el);
       layout();
     }
+    localScreenTile.setPreview(call.screenPreview);
     localScreenTile.refresh({ mode: call.screenShare?.mode });
   };
+  call.addEventListener('screen-preview', () => localScreenTile?.setPreview(call.screenPreview));
 
   call.addEventListener('participant-added', (e) => renderParticipant(e.detail.participant, { announce: true }));
   call.addEventListener('participant-updated', (e) => renderParticipant(e.detail.participant, { announce: false }));
@@ -601,8 +619,9 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   camButton.addEventListener('click', guarded(camButton, () => call.toggleCamera(), 'camera'));
   call.addEventListener('local-updated', renderControls);
 
-  // Sharing the entire screen: keep this window out of the capture, or it films its own preview
-  // (a mirror that, measured, sent ~2.5x the data while focused). Windows: WDA_EXCLUDEFROMCAPTURE.
+  // Sharing the entire screen through the system picker: keep this window out of the capture, or it
+  // films its own preview (a mirror that, measured, sent ~2.5x the data while focused). Windows:
+  // WDA_EXCLUDEFROMCAPTURE. The native share has no local preview, so Jay-C stays in it.
   let hiddenFromCapture = false;
   const hideFromCapture = (on) => {
     if (on === hiddenFromCapture || !('__TAURI_INTERNALS__' in window)) return;
@@ -612,7 +631,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       .then(({ getCurrentWindow }) => getCurrentWindow().setContentProtected(on))
       .catch(() => {});
   };
-  call.addEventListener('local-updated', () => hideFromCapture(call.screenShare?.mode === 'screen'));
+  call.addEventListener('local-updated', () => hideFromCapture(call.screenShare?.mode === 'screen' && !call.screenShare.native));
   call.addEventListener('ended', () => hideFromCapture(false));
 
   // ----- Who's speaking: a green ring on their tile -----

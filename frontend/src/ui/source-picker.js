@@ -10,7 +10,7 @@ import { t } from '../core/i18n.js';
 const HIDDEN_APPS = new Set(['ApplicationFrameHost']);
 
 /**
- * @returns {{ element: HTMLDialogElement, open: () => Promise<{ kind: 'monitor' | 'window', id: number, title: string } | null> }}
+ * @returns {{ element: HTMLDialogElement, open: () => Promise<{ kind: 'monitor' | 'window', id: number, title: string, own: boolean } | null> }}
  */
 export function createSourcePicker() {
   const body = h('div', { class: 'modal-body source-picker-body' });
@@ -43,7 +43,7 @@ export function createSourcePicker() {
     const thumb = h('div', { class: 'source-thumb is-loading' });
     const button = h(
       'button',
-      { type: 'button', class: 'source-option', onClick: () => finish({ kind: source.kind, id: source.id, title }) },
+      { type: 'button', class: 'source-option', onClick: () => finish({ kind: source.kind, id: source.id, title, own: source.own }) },
       thumb,
       h('span', { class: 'source-title', title }, title),
       subtitle ? h('span', { class: 'source-subtitle' }, subtitle) : null,

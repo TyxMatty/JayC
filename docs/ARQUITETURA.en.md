@@ -124,6 +124,7 @@ Client → server:
 | `join` | `room`, `name`, `avatar?`, `color?` | joins the room (creates it if it doesn't exist) |
 | `profile` | `avatar` (data URL or `null`), `color` (`{from, to?, angle?}` or `null`) | changes the profile picture or color during the call; the others get `peer-updated`. The color only accepts `#rrggbb` and an integer angle 0–360 |
 | `chat` | `text` (1–500 characters) | message to the room; the others get `chat`. Nothing is stored on the server |
+| `screen-preview` | `image` (JPEG data URL, up to 48,000 characters, or `null` when stopping) | a picture of your own stream, every 6 s; the others get `screen-preview`, and whoever joins later gets the last one in `joined`. At most 1 every 2 s (burst of 3). Only sent when `joined` lists `screen-preview` in `features` |
 | `leave` | — | leaves the room |
 | *SFU request* | `id`, `data` | reply: `{type: "response", id, ok, data}` or `{…, ok: false, error}` |
 
@@ -145,10 +146,11 @@ Server → client:
 
 | type | fields | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities` | who is already in the room, what each one publishes and the router's capabilities |
+| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, preview?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities`, `features` | who is already in the room, what each one publishes and the router's capabilities. `features`: the newer messages the server accepts (today, `screen-preview`); an old server doesn't send the field |
 | `peer-joined` / `peer-left` | `id`, `name`, `avatar?`, `color?` (only in `peer-joined`) | |
 | `peer-updated` | `id`, `avatar`, `color` | someone changed or removed (`null`) their profile picture or color |
 | `chat` | `id`, `name`, `text` | a message from someone in the room (line breaks kept; control characters removed) |
+| `screen-preview` | `id`, `image` | a picture of someone's stream (`null` = stopped). The "Watch stream" card on their tile shows it |
 | `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | someone started publishing a track |
 | `producer-state` | `peerId`, `producerId`, `paused` | only for consumers: muted or turned the camera off, or back on |
 | `producer-closed` | `peerId`, `producerId` | only for consumers |
@@ -263,7 +265,7 @@ Everything is in the call's "Share" panel, which is a `popover`. The choices are
 
 Automatic bitrate: ~0.08 bit/pixel/frame, with frames above 30 fps counting half. That gives ≈5 Mbps at 1080p30 and ≈7.5 Mbps at 1080p60, between 0.2 and 12 Mbps.
 
-The screen goes as a single layer, without simulcast, in **H.264 High** (`profile-level-id` 640032, added to the router). With this profile WebView2 uses the graphics card's encoder (Media Foundation: `NVIDIA H.264 Encoder MFT`, measured on an RTX 3050). Constrained-baseline H.264 (42e01f) stays on OpenH264 in software, even at 720p, and VP8 stays on libvpx. An old server, without the High profile: VP8. During an **entire screen** stream, Jay-C's window leaves the capture (`setContentProtected` = `WDA_EXCLUDEFROMCAPTURE`), so it doesn't film its own preview (mirror effect).
+The screen goes as a single layer, without simulcast, in **H.264 High** (`profile-level-id` 640032, added to the router). With this profile WebView2 uses the graphics card's encoder (Media Foundation: `NVIDIA H.264 Encoder MFT`, measured on an RTX 3050). Constrained-baseline H.264 (42e01f) stays on OpenH264 in software, even at 720p, and VP8 stays on libvpx. An old server, without the High profile: VP8. During an **entire screen** stream **through the system picker** (the path without the native stream), Jay-C's window leaves the capture (`setContentProtected` = `WDA_EXCLUDEFROMCAPTURE`), so it doesn't film its own preview (mirror effect). The native stream has no local video, so Jay-C shows up in it, and Jay-C's own window can be streamed (without its sound, which would be the call's).
 
 **For viewers:** the layout switches to *presenting*, with the screens featured and the cameras in a 160 px strip (asking for the lowest layer). Double-clicking the screen opens it full screen. The streamer sees a small preview in a corner.
 

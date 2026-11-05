@@ -49,6 +49,8 @@ pub struct Source {
     pub width: u32,
     pub height: u32,
     pub primary: bool,
+    /// A Jay-C window: shared without sound (its sound is the call's voices).
+    pub own: bool,
 }
 
 pub fn capture_item(source: SourceId) -> Result<GraphicsCaptureItem, String> {
@@ -88,6 +90,7 @@ fn monitors() -> Vec<Source> {
                 width: (r.right - r.left) as u32,
                 height: (r.bottom - r.top) as u32,
                 primary: info.dwFlags & MONITORINFOF_PRIMARY != 0,
+                own: false,
             });
         }
         TRUE
@@ -133,9 +136,6 @@ unsafe fn describe(hwnd: HWND) -> Option<Source> {
     }
     let mut pid = 0;
     GetWindowThreadProcessId(hwnd, Some(&mut pid));
-    if pid == GetCurrentProcessId() {
-        return None;
-    }
     let mut title = [0u16; 256];
     let n = GetWindowTextW(hwnd, &mut title);
     if n == 0 {
@@ -158,6 +158,7 @@ unsafe fn describe(hwnd: HWND) -> Option<Source> {
         width,
         height,
         primary: false,
+        own: pid == GetCurrentProcessId(),
     })
 }
 
@@ -226,6 +227,58 @@ pub unsafe fn thumbnail(source: SourceId, max_width: u32) -> Result<Vec<u8>, Str
     let pixels = std::slice::from_raw_parts(mapped.pData as *const u8, (mapped.RowPitch * desc.Height) as usize).to_vec();
     context.Unmap(&staging, 0);
     jpeg(&pixels, desc.Width, desc.Height, mapped.RowPitch, max_width)
+}
+
+/// A capture frame (BGRA texture) -> JPEG about `max_width` wide, for the live's previews. The GPU
+/// halves it with mipmaps down to under twice that width; WIC scales the rest and encodes.
+pub unsafe fn frame_jpeg(device: &ID3D11Device, tex: &ID3D11Texture2D, max_width: u32) -> Result<Vec<u8>, String> {
+    let mut desc = D3D11_TEXTURE2D_DESC::default();
+    tex.GetDesc(&mut desc);
+    let mut level = 0;
+    while level < 12 && desc.Width >> (level + 1) >= max_width {
+        level += 1;
+    }
+    let mips_desc = D3D11_TEXTURE2D_DESC {
+        Width: desc.Width,
+        Height: desc.Height,
+        MipLevels: level + 1,
+        ArraySize: 1,
+        Format: desc.Format,
+        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: (D3D11_BIND_RENDER_TARGET.0 | D3D11_BIND_SHADER_RESOURCE.0) as u32,
+        CPUAccessFlags: 0,
+        MiscFlags: D3D11_RESOURCE_MISC_GENERATE_MIPS.0 as u32,
+    };
+    let mut mips = None;
+    device.CreateTexture2D(&mips_desc, None, Some(&mut mips)).map_err(err("preview"))?;
+    let mips = mips.unwrap();
+    let mut view = None;
+    device.CreateShaderResourceView(&mips, None, Some(&mut view)).map_err(err("preview"))?;
+    let context = device.GetImmediateContext().map_err(err("preview"))?;
+    context.CopySubresourceRegion(&mips, 0, 0, 0, 0, tex, 0, None);
+    context.GenerateMips(&view.unwrap());
+
+    let (width, height) = ((desc.Width >> level).max(1), (desc.Height >> level).max(1));
+    let staging_desc = D3D11_TEXTURE2D_DESC {
+        Width: width,
+        Height: height,
+        MipLevels: 1,
+        Usage: D3D11_USAGE_STAGING,
+        BindFlags: 0,
+        CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+        MiscFlags: 0,
+        ..mips_desc
+    };
+    let mut staging = None;
+    device.CreateTexture2D(&staging_desc, None, Some(&mut staging)).map_err(err("preview"))?;
+    let staging = staging.unwrap();
+    context.CopySubresourceRegion(&staging, 0, 0, 0, 0, &mips, level, None);
+    let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+    context.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped)).map_err(err("preview"))?;
+    let pixels = std::slice::from_raw_parts(mapped.pData as *const u8, (mapped.RowPitch * height) as usize).to_vec();
+    context.Unmap(&staging, 0);
+    jpeg(&pixels, width, height, mapped.RowPitch, max_width)
 }
 
 /// BGRA pixels -> scaled JPEG, with WIC (Windows' own codecs).

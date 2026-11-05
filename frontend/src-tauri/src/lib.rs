@@ -24,7 +24,9 @@ pub fn run() {
             #[cfg(windows)]
             native_live::native_live_sources,
             #[cfg(windows)]
-            native_live::native_live_thumbnail
+            native_live::native_live_thumbnail,
+            #[cfg(windows)]
+            native_live::native_live_preview
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

@@ -19,6 +19,7 @@ export class SignalingError extends Error {
  *   peer-joined     { id, name, avatar?, color? }
  *   peer-left       { id, name }
  *   peer-updated    { id, avatar, color } a roommate changed their profile picture or color (null = none)
+ *   screen-preview  { id, image }  a still of a roommate's screen share (data URL; null = stopped)
  *   new-producer    { peerId, producerId, kind, source, paused }
  *   producer-closed { peerId, producerId }
  *   producer-state  { peerId, producerId, paused }
@@ -45,6 +46,8 @@ export class SignalingClient extends EventTarget {
 
   /** Our peer id, assigned by the server on every (re)join. */
   id = null;
+  /** Newer messages the server accepts (from `joined`); an old server refuses them. */
+  features = [];
 
   constructor(url) {
     super();
@@ -89,6 +92,12 @@ export class SignalingClient extends EventTarget {
     this.#avatar = avatar;
     this.#color = color;
     if (this.id && this.#ws?.readyState === WebSocket.OPEN) this.#ws.send(JSON.stringify({ type: 'profile', avatar, color }));
+  }
+
+  /** Sends a still of our screen share to the room (null: stopped), when the server knows the message. */
+  sendScreenPreview(image) {
+    if (!this.id || this.#ws?.readyState !== WebSocket.OPEN || !this.features.includes('screen-preview')) return;
+    this.#ws.send(JSON.stringify({ type: 'screen-preview', image }));
   }
 
   /** Sends a chat message to the room. False when not connected (the caller keeps the text). */
@@ -161,6 +170,7 @@ export class SignalingClient extends EventTarget {
     switch (msg.type) {
       case 'joined':
         this.id = msg.id;
+        this.features = Array.isArray(msg.features) ? msg.features : [];
         this.#attempt = 0;
         this.#emit('state', { state: 'open' });
         if (this.#pendingJoin) {
@@ -193,6 +203,7 @@ export class SignalingClient extends EventTarget {
       case 'peer-joined':
       case 'peer-left':
       case 'peer-updated':
+      case 'screen-preview':
       case 'new-producer':
       case 'producer-closed':
       case 'producer-state':

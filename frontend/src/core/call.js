@@ -15,6 +15,7 @@ import {
 import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart } from './native-mic.js';
 import { startNativeLive, stopNativeLive } from './native-live.js';
+import { capturePreview } from './screen-preview.js';
 import { t } from './i18n.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
@@ -47,6 +48,7 @@ function cameraLayerFor(cameraCount, presenting) {
  *   participant-removed { participant }
  *   participant-updated { participant }   tracks, mute state or connection changed
  *   local-updated       {}                local tracks changed (mute, camera on/off, screen share)
+ *   screen-preview      { image }         a new still of our screen share (see screenPreview)
  *   signaling-state     { state }
  *   notice              { message }       something worth telling the user (e.g. no screen sound)
  *   ended               {}
@@ -57,9 +59,14 @@ function cameraLayerFor(cameraCount, presenting) {
  *   screenStream: MediaStream,  their screen share, if any
  *   media: { audio, video, screen },
  *   screenMode: 'screen' | 'window' | null,
+ *   preview: string | null,     a still of their screen share (data URL), refreshed every few seconds
  * }
  */
 const isStream = (source) => source === 'screen' || source === 'screen-audio';
+/** Our share's still: refreshed this often for our own tile... */
+const PREVIEW_EVERY_MS = 2000;
+/** ...and sent to the room this often (~30 KB each, to everyone). */
+const PREVIEW_SEND_MS = 6000;
 
 export class Call extends EventTarget {
   local = { audio: null, video: null, screen: null };
@@ -89,6 +96,8 @@ export class Call extends EventTarget {
   color = null;
   /** Executables left out of an entire-screen share's sound (see setExcludedApps). */
   excludedApps = [];
+  /** The latest still of our screen share (data URL) while sharing, else null. */
+  screenPreview = null;
   /** @type {Map<string, object>} */
   participants = new Map();
   mediaErrors = {};
@@ -111,6 +120,8 @@ export class Call extends EventTarget {
   #nativeStarting = false;
   /** The signaling connection: 'connecting' | 'open' | 'reconnecting' | 'closed'. */
   #signalingState = 'connecting';
+  #previewTimer = null;
+  #previewSentAt = 0;
   /** Native screen-share sound while sharing: { track, stop(), close(), description }. */
   #screenAudio = null;
   /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
@@ -181,6 +192,12 @@ export class Call extends EventTarget {
       if (!participant) return;
       participant.avatar = e.detail.avatar ?? null;
       participant.color = e.detail.color ?? null;
+      this.#emit('participant-updated', { participant });
+    });
+    signaling.addEventListener('screen-preview', (e) => {
+      const participant = this.participants.get(e.detail.id);
+      if (!participant) return;
+      participant.preview = e.detail.image ?? null;
       this.#emit('participant-updated', { participant });
     });
     signaling.addEventListener('new-producer', (e) => this.#consume(e.detail));
@@ -317,7 +334,7 @@ export class Call extends EventTarget {
    * captured and encoded in Rust, ~20x less CPU. Otherwise, or if that fails, the system picker
    * opens; resolves false if the user cancelled it.
    * @param {{ mode: 'screen' | 'window', quality: typeof DEFAULT_STREAM_QUALITY,
-   *   source?: { kind: 'monitor' | 'window', id: number } }} options
+   *   source?: { kind: 'monitor' | 'window', id: number, own?: boolean } }} options
    */
   async startScreenShare({ mode, quality, source }) {
     if (source && this.#signaling) {
@@ -328,7 +345,9 @@ export class Call extends EventTarget {
         // windowHandle: the window's sound is captured from its process (core/screen-audio.js).
         this.screenShare = { mode: window ? 'window' : 'screen', windowHandle: window ? source.id : null, audio: null, native: true };
         this.screenStream = new MediaStream();
-        await this.#startScreenAudio();
+        // A Jay-C window's sound is the call itself: sending it would echo everyone's voices back.
+        if (!source.own) await this.#startScreenAudio();
+        this.#startPreviews();
         this.#emit('local-updated', {});
         return true;
       }
@@ -353,11 +372,49 @@ export class Call extends EventTarget {
     await this.#applyCaptureQuality();
     if (this.#send) await this.#produceScreen();
     await this.#startScreenAudio();
+    this.#startPreviews();
     this.#emit('local-updated', {});
     return true;
   }
 
+  /** Stills of the share, every PREVIEW_EVERY_MS, while it runs (see core/screen-preview.js). */
+  #startPreviews() {
+    clearInterval(this.#previewTimer);
+    this.#previewSentAt = 0;
+    let busy = false;
+    const tick = async () => {
+      const share = this.screenShare;
+      if (!share || busy) return;
+      busy = true;
+      let image;
+      try {
+        image = await capturePreview(share.native ? { native: true } : { track: this.local.screen });
+      } catch {
+        return; // e.g. the shared window is closing; the next tick tries again
+      } finally {
+        busy = false;
+      }
+      if (this.screenShare !== share) return;
+      this.screenPreview = image;
+      this.#emit('screen-preview', { image });
+      if (performance.now() - this.#previewSentAt >= PREVIEW_SEND_MS) {
+        this.#previewSentAt = performance.now();
+        this.#signaling?.sendScreenPreview(image);
+      }
+    };
+    this.#previewTimer = setInterval(tick, PREVIEW_EVERY_MS);
+    tick();
+  }
+
+  #stopPreviews() {
+    clearInterval(this.#previewTimer);
+    this.#previewTimer = null;
+    if (this.screenPreview) this.#signaling?.sendScreenPreview(null);
+    this.screenPreview = null;
+  }
+
   async stopScreenShare() {
+    this.#stopPreviews();
     this.#nativeLive = null; // its close() runs below, as the screen producer's
     this.#screenAudio?.stop();
     this.#screenAudio = null;
@@ -684,7 +741,7 @@ export class Call extends EventTarget {
 
   // ---------- Receiving ----------
 
-  #addParticipant({ id, name, avatar, color }) {
+  #addParticipant({ id, name, avatar, color, preview }) {
     if (this.participants.has(id)) return this.participants.get(id);
     const participant = {
       id,
@@ -693,6 +750,8 @@ export class Call extends EventTarget {
       avatar: avatar ?? null,
       /** Profile color { from, to?, angle? } (validated by the server) or null. */
       color: color ?? null,
+      /** A still of their screen share (data URL, validated by the server) or null. */
+      preview: preview ?? null,
       stream: new MediaStream(),
       screenStream: new MediaStream(),
       media: { audio: false, video: false, screen: false },
@@ -881,6 +940,8 @@ export class Call extends EventTarget {
   #stopLocal() {
     clearInterval(this.#micWatch);
     this.#micWatch = null;
+    clearInterval(this.#previewTimer);
+    this.#previewTimer = null;
     this.#nativeLive?.close();
     this.#nativeLive = null;
     if (this.#nativeStarting) stopNativeLive().catch(() => {});

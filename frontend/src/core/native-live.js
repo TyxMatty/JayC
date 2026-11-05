@@ -27,6 +27,9 @@ export async function sourceThumbnail({ kind, id }) {
   return URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
 }
 
+/** A JPEG (Blob, 384 px wide) of what the running native share sends: its last frame. */
+export const livePreview = async () => new Blob([await invoke('native_live_preview')], { type: 'image/jpeg' });
+
 /** The quality picked in Settings › Streaming, as the top of Rust's quality ladder. */
 export function nativeQuality({ resolution, fps }, screen = window.screen, ratio = window.devicePixelRatio || 1) {
   const screenHeight = Math.round(screen.height * ratio);

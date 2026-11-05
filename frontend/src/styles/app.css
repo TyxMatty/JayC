@@ -24,6 +24,20 @@ body {
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* An app, not a page: dragging doesn't select labels and buttons. */
+  user-select: none;
+}
+
+/* Text meant to be copied stays selectable. */
+input,
+textarea,
+.chat-text,
+.markdown {
+  user-select: text;
+}
+
+img {
+  -webkit-user-drag: none;
 }
 
 h1,
@@ -1906,6 +1920,39 @@ fieldset > h3 {
 
 .tile-watch:hover {
   background: rgb(0 0 0 / 0.8);
+}
+
+.tile-watch-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* With a still of the stream: a small card, the picture over the label. */
+.tile-watch.has-preview {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px 4px 6px;
+  border-radius: var(--radius-control);
+}
+
+.tile-watch-preview {
+  display: block;
+  width: clamp(120px, 22vw, 220px);
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  border-radius: calc(var(--radius-control) - 4px);
+  background: #000;
+}
+
+.tile-screen-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
 }
 
 /* Speaking: a green ring (3.3:1 on light, 4.8:1 on dark surfaces). */
