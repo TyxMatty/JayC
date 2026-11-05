@@ -209,6 +209,18 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
   - Medido: com uma janela que muda de verdade, 56–59 quadros/s no envio.
   - **Correção:** as taxas de quadros anteriores foram medidas com a janela de animação escondida (ver o spike 10).
 
+**Correções depois da revisão de código (05/11/2026):**
+- **Live nativa:**
+  - Envia imagem mesmo com a tela parada (o último quadro a cada 1 s, e na hora para quem começa a assistir).
+  - Aguenta quedas de rede de até 20 s e recomeça sozinha quando o servidor volta.
+  - Fecha o próprio transporte no servidor ao parar (`closeTransport`: **reinicie o servidor** para ter isso; um servidor antigo continua funcionando).
+  - Para de verdade se você sair da chamada enquanto ela começa.
+- **Entrar na sala:** se a tela da chamada falhar ao abrir, a chamada é encerrada, em vez de ficar conectada atrás do erro do lobby.
+- **Microfone que desconecta e volta:** o app verifica os microfones a cada 3 s e reabre sozinho, sem precisar mexer numa configuração.
+  - Se o escolhido sumiu, ele usa o padrão do Windows e volta para o escolhido quando ele reaparece.
+  - Medido com o ME6S de verdade: ele caiu (`0x88890004`), o app foi para o novo padrão (Voicemeeter) com o aviso "Microfone de volta", e voltou para o ME6S 1 s depois de ele reaparecer.
+  - **Atenção:** o Windows renomeou o ME6S ao reconectar ("8- ME6S" → "3- ME6S"). Se o microfone foi escolhido em Configurações e o id mudar ao trocar de porta USB, o app fica no padrão até ele ser escolhido de novo.
+
 **Sem cara de navegador (05/11/2026):** no release, o clique direito fora dos campos de texto não abre mais o menu do WebView2 (Voltar, Atualizar, Imprimir, Inspecionar), e os atalhos de navegador ficam desligados (`SetAreBrowserAcceleratorKeysEnabled(false)`, em `src-tauri/src/app_chrome.rs`): F5/Ctrl+R não recarregam a página (o que derrubava a chamada), nem Ctrl+P/Ctrl+F abrem impressão e busca. Campos de texto mantêm o menu de copiar/colar. O dev mantém tudo, para depurar.
 
 **Android em dev** (emulador ou celular com depuração USB):

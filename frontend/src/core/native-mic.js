@@ -7,6 +7,23 @@ import { shapeMic, createShapeState } from './mic-shape.js';
 
 export const nativeMicSupported = () => systemAudio.isSupported();
 
+/** Microphones Windows has right now: `[{ id, name, isDefault }]`. */
+export const listMics = () => systemAudio.listMics();
+
+/**
+ * Whether the call's native mic should be reopened, checked every few seconds: it failed (e.g.
+ * unplugged; Windows ends the capture) and a microphone is there to open, or it's running on another
+ * mic than the one wanted (the chosen one came back, or Windows' default changed).
+ * @param {{ failed: boolean, preferredId: string | null, current: string | null,
+ *   mics: Array<{ id: string, name: string, isDefault: boolean }> }} state `current`: the open mic's name.
+ */
+export function micNeedsRestart({ failed, preferredId, current, mics }) {
+  if (!mics.length) return false;
+  if (failed) return true;
+  const wanted = (preferredId && mics.find((m) => m.id === preferredId)) || mics.find((m) => m.isDefault);
+  return Boolean(wanted && current && wanted.name !== current);
+}
+
 /**
  * Starting a new mic replaces the running one on the Rust side; call `close()` (not `stop()`) on
  * the old handle then, so it doesn't stop the new capture.
