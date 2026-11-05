@@ -1,6 +1,8 @@
 #[cfg(windows)]
 mod app_chrome;
 #[cfg(windows)]
+mod discord;
+#[cfg(windows)]
 mod media_permissions;
 #[cfg(windows)]
 mod native_live;
@@ -26,7 +28,9 @@ pub fn run() {
             #[cfg(windows)]
             native_live::native_live_thumbnail,
             #[cfg(windows)]
-            native_live::native_live_preview
+            native_live::native_live_preview,
+            #[cfg(windows)]
+            discord::discord_presence
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

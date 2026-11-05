@@ -421,6 +421,31 @@ Cards that explain the app step by step, for first-time users.
 - at 360×640, every card fits without scrolling;
 - light theme.
 
+### Discord Rich Presence (user's request, after 0.3.3)
+
+During a call, the person's Discord profile shows Jay-C. Windows only: on Android, Discord has no local channel.
+
+**What shows** (the user's choices):
+- "Jay-C", with the wolf;
+- "In a call", how many people (e.g. 3 of 16) and the time since joining;
+- while streaming: "Streaming their screen" or "Watching a stream", with no names and a small live icon;
+- the room name only with an option, off by default;
+- no button;
+- nothing in the lobby; leaving the call clears the status.
+
+The status is on by default, with an option to turn it off.
+
+| Part | Delivery | Status |
+|---|---|---|
+| D1 | **Connection (Rust, `src-tauri/src/discord.rs`):** Discord's local IPC protocol over the `\\.\pipe\discord-ipc-N` pipe (opcode and length as u32 LE + JSON; handshake and `SET_ACTIVITY`), with no new dependency. A thread takes only the latest status asked for, spaces sends 4 s apart (documented as ~5 per 20 s; not measured), resends every 15 s (a restarted Discord gets the status back) and retries every 10 s while Discord is closed. Command `discord_presence(activity | null)`. | ✅ |
+| D2 | **What shows (JS):** `core/discord-presence.js` turns the call's state into the status and updates it when someone joins or leaves and when a stream starts or stops; the `live` icon | |
+| D3 | **Settings:** Settings › Profile: "Show on Discord" (on) and "Show the room name" (off) | |
+| D4 | Docs and release | |
+
+**Left to the user:** create the "Jay-C" application on the Discord Developer Portal, with the wolf as the `wolf` asset, and put its Application ID (public) in `CLIENT_ID`. While it's empty, the command does nothing.
+
+**Measured (D1):** with Discord open, a handshake with a made-up id comes back refused (`Invalid Client ID`), which proves the pipe and the message format. With the real id: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` shows a status for 10 s, then clears it.
+
 ### Customization (between 12 and 13, at the user's request)
 
 Plugins were left for after the release. Plugins without isolation on the client are ruled out: they would reach Tauri's IPC (audio, screen and microphone capture). Customization comes in three parts:

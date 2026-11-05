@@ -419,6 +419,31 @@ Cards que explicam o app passo a passo, para quem usa pela primeira vez.
 - a 360×640, todos os cards cabem sem rolagem;
 - tema claro.
 
+### Discord Rich Presence (pedido do usuário, depois da 0.3.3)
+
+Durante uma chamada, o perfil do Discord da pessoa mostra o Jay-C. Só no Windows: no Android, o Discord não tem o canal local.
+
+**O que aparece** (escolhas do usuário):
+- "Jay-C", com o lobo;
+- "Numa chamada", quantas pessoas (ex.: 3 de 16) e o tempo desde que entrou;
+- em live: "Transmitindo a tela" ou "Assistindo uma live", sem nomes, com um ícone pequeno de live;
+- o nome da sala só com uma opção, desligada por padrão;
+- sem botão;
+- nada no lobby; ao sair da chamada, o status some.
+
+O status vem ligado por padrão, com uma opção para desligar.
+
+| Parte | Entrega | Estado |
+|---|---|---|
+| D1 | **Conexão (Rust, `src-tauri/src/discord.rs`):** o protocolo IPC local do Discord pelo pipe `\\.\pipe\discord-ipc-N` (opcode e tamanho em u32 LE + JSON; handshake e `SET_ACTIVITY`), sem dependência nova. Uma thread recebe só o último status pedido, espaça os envios em 4 s (documentado como ~5 a cada 20 s; não medido), reenvia a cada 15 s (um Discord reiniciado recupera o status) e tenta de novo a cada 10 s enquanto ele estiver fechado. Comando `discord_presence(activity | null)`. | ✅ |
+| D2 | **O que aparece (JS):** `core/discord-presence.js` traduz o estado da chamada no status e atualiza quando alguém entra ou sai e quando uma live começa ou para; o ícone `live` | |
+| D3 | **Configurações:** Settings › Perfil: "Mostrar no Discord" (ligado) e "Mostrar o nome da sala" (desligado) | |
+| D4 | Docs e release | |
+
+**Falta do usuário:** criar a aplicação "Jay-C" no Discord Developer Portal, com o lobo como asset `wolf`, e passar o Application ID (público) para o `CLIENT_ID`. Enquanto ele estiver vazio, o comando não faz nada.
+
+**Medido (D1):** com o Discord aberto, um handshake com um id inventado volta recusado (`Invalid Client ID`), o que prova o pipe e o formato das mensagens. Com o id real: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` mostra um status por 10 s e depois o limpa.
+
 ### Customização (entre a 12 e a 13, a pedido do usuário)
 
 Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão descartados: eles alcançariam o IPC do Tauri (captura de áudio, tela e microfone). A customização vem em três partes:
