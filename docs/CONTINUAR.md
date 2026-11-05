@@ -130,6 +130,13 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Instalador 0.3.2 (05/11/2026):** a 0.3.1 com:
+- o lobo maior nos ícones (recortado no desenho: 98% do quadrado na janela e na barra de tarefas, 94% no `.exe`);
+- o lado esquerdo do lobby na altura do cartão, com o lobo grande no traço fino original crescendo para preencher;
+- Animações só com Ligado (padrão) e Desligado, sem seguir o Windows.
+
+O servidor não mudou.
+
 **Instalador 0.3.1 (05/11/2026):** a 0.3.0 com o ícone do Jay-C (o lobo) no `.exe`, no instalador, na janela, na barra de tarefas e na marca do app. O servidor não mudou.
 
 **Instalador 0.3.0 (05/11/2026):**
