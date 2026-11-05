@@ -47,7 +47,7 @@ const THEMES = [
  * Builds the Settings dialog. Changes apply immediately (theme switches live).
  * @param {{ openGuide: () => void }} options
  */
-export function createSettingsModal({ openGuide, getCall = () => null }) {
+export function createSettingsModal({ openGuide, getCall = () => null, openWelcome = () => {} }) {
   const current = settings.get();
 
   const nameInput = h('input', {
@@ -542,7 +542,24 @@ export function createSettingsModal({ openGuide, getCall = () => null }) {
         ),
       ),
     },
-    { key: 'help', label: t('Help'), panel: panel(h('fieldset', {}, h('h3', {}, t('Troubleshooting')), h('div', { class: 'field' }, diagButton, diagHint, diagText))) },
+    {
+      key: 'help',
+      label: t('Help'),
+      panel: panel(
+        h(
+          'fieldset',
+          {},
+          h('h3', {}, t('Getting started')),
+          h(
+            'div',
+            { class: 'field' },
+            h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => (dialog.close(), openWelcome()) }, t('Show the welcome tour')),
+            h('p', { class: 'hint' }, t('A quick walk through servers, rooms, calls and screen sharing.')),
+          ),
+        ),
+        h('fieldset', {}, h('h3', {}, t('Troubleshooting')), h('div', { class: 'field' }, diagButton, diagHint, diagText)),
+      ),
+    },
   ];
   const panels = h('div', { class: 'settings-panels' }, items.map((item) => item.panel));
   const tabs = createTabs({ idPrefix: 'settings', label: t('Settings sections'), className: 'settings-tabs', vertical: true, items, onSelect: () => (panels.scrollTop = 0) });

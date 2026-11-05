@@ -107,6 +107,8 @@ Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Pl
 
 O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
+**Tour "Welcome!" (04/11/2026):** W1 pronta: 7 cards, abre na primeira vez e reabre por Settings › Help. Falta a **W2**, com as ilustrações animadas no lugar dos ícones. Plano e detalhes em ARQUITETURA.md, seção 10, "Tour Welcome!".
+
 **Testes de áudio ao vivo** (tocam som no alto-falante), em `plugins/tauri-plugin-system-audio`:
 `cargo test --lib -- --ignored --nocapture --test-threads 1 exclusion_live` e `cargo test --release --lib -- --ignored --nocapture cpu_many_streams`.
 
@@ -152,7 +154,7 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
 
 **Android em dev** (emulador ou celular com depuração USB):
 - **Modo de Desenvolvedor do Windows ligado:** o Tauri cria symlinks para a `.so` em `jniLibs`.
-- `scriptsndroid-dev.ps1` recarrega PATH, `JAVA_HOME`, `ANDROID_HOME` e `NDK_HOME` e roda `tauri android dev`. O app carrega o Vite pelo IP do PC na porta 5173.
+- `scripts\android-dev.ps1` recarrega PATH, `JAVA_HOME`, `ANDROID_HOME` e `NDK_HOME` e roda `tauri android dev`. O app carrega o Vite pelo IP do PC na porta 5173.
 - **Servidor no emulador:** use `10.0.2.2:3000`, que é o PC visto de dentro do emulador. No celular, use o IP do PC na rede.
 - **Permissões:** o app pede câmera e microfone na primeira chamada. Em testes automáticos, conceda antes com `adb shell pm grant io.github.tyxmatty.jayc.debug android.permission.CAMERA` (e `RECORD_AUDIO`).
 

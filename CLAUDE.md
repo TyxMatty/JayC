@@ -69,4 +69,6 @@ npm run build        # instalador Windows de release (NSIS), ~7–9 min
 - **Faixas remotas chegam `muted`** e só desmutam com os primeiros quadros, sem evento de participante. Uma interface que depende de "tem vídeo?" precisa ouvir `mute`/`unmute` da faixa.
 - **Cor escolhida pelo usuário como texto** (o hífen da marca, as iniciais) usa `--accent-text`, misturada com a cor de texto do tema. Medido: ≥ 5,4:1 nos dois temas.
 - **PiP no Android = a activity inteira** (a WebView não tem PiP de `<video>`). Em PiP, o Android pausa a activity e o wry pausa a WebView junto: a mini-janela congela e a página fica `hidden`. O plugin `pip` chama `webView.onResume()` enquanto está em PiP. O evento `pipModeChanged` só chega no fim da animação do sistema (~4,5 s no emulador).
+- **Evento `close` do `<dialog>`** só chega no próximo quadro desenhado. Com o painel do navegador escondido, ele nunca chegou. Não guarde estado importante só nele: o tour "Welcome!" grava `welcomeSeen` ao abrir.
+- **Tour "Welcome!"** (`core/welcome.js` + `ui/welcome-modal.js`): para testar a primeira abertura, apague `welcomeSeen` (ou a chave `jayc.settings` num perfil de teste) e recarregue. Settings › Help reabre o tour.
 - **Python no Windows grava CRLF** com `write_text`. Use `newline="\n"`, ou o arquivo aparece como modificado.

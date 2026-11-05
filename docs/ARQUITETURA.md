@@ -389,6 +389,30 @@ Cada etapa termina com algo testável.
 - **Tela inteira com som:** com o seletor trocado por um canvas, um tom de teste tocado em outro processo chega ao bot em estéreo, a −37 dBFS (L 445 Hz, R 656 Hz; o tom era 440/660 Hz).
 - **Não testado:** o seletor de tela real e o SmartScreen numa máquina sem o projeto.
 
+### Tour "Welcome!" (pedido do usuário, depois da 0.2.1)
+
+Cards que explicam o app passo a passo, para quem usa pela primeira vez.
+
+| Parte | Entrega | Estado |
+|---|---|---|
+| W1 | **Estrutura:** modal com 7 cards (boas-vindas, servidor, perfil, sala, chamada, live, chat/PiP/ajuda), Back/Next, pontinhos clicáveis, setas do teclado, Skip. Abre sozinho na primeira vez; Settings › Help › "Show the welcome tour" reabre. | ✅ |
+| W2 | **Animações:** uma ilustração animada em SVG/CSS por card (hoje cada card mostra um ícone), transição entre cards e altura estável (hoje o card varia de 476 a 551 px a 360 px de largura). | |
+
+**Como funciona:**
+- **Arquivos:** conteúdo e navegação em `core/welcome.js` (`WELCOME_STEPS`, `clampStep`, `shouldShowWelcome`, com testes), modal em `ui/welcome-modal.js` e CSS `.welcome-*`.
+- **"Já viu":** `settings.welcomeSeen` é gravado **quando o tour abre sozinho**, não quando fecha. Assim ele aparece uma vez mesmo se o app for fechado no meio, e não depende do evento `close` do `<dialog>`, que o Chrome só dispara no próximo quadro desenhado (num painel escondido, nunca chegou). Quem já usava o app vê o tour uma vez ao atualizar.
+- **Atalhos:** o card do servidor abre o guia de setup e o do perfil abre Settings › Profile, por cima do tour, que continua aberto embaixo.
+- **Acessibilidade:** o texto do passo fica numa região `aria-live`, e o pontinho atual tem `aria-current="step"`. O foco vai para Next ao abrir. Esc fecha. Não há botão X: o X ficava sobre a ilustração, e Skip, Get started e Esc já fecham.
+
+**Verificado no navegador** (painel do Claude, Vite de dev):
+- primeira abertura sem configurações salvas;
+- os 7 passos por setas e pelos pontinhos (Back desligado no primeiro; no último, "Get started" e sem Skip);
+- os dois atalhos;
+- reload sem reabrir;
+- reabrir pelo Help;
+- a 360×640, todos os cards cabem sem rolagem;
+- tema claro.
+
 ### Customização (entre a 12 e a 13, a pedido do usuário)
 
 Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão descartados: eles alcançariam o IPC do Tauri (captura de áudio, tela e microfone). A customização vem em três partes:
