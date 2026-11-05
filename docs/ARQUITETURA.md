@@ -1,5 +1,7 @@
 # Jay-C — Arquitetura
 
+**Português** · [English](ARQUITETURA.en.md)
+
 App leve e open-source de chamadas e compartilhamento de tela, para desktop e mobile, com servidor de sinalização self-hosted via Docker.
 
 ## 1. Visão geral

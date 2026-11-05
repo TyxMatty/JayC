@@ -1,5 +1,7 @@
 # Continuar o Jay-C em outro PC
 
+**Português** · [English](CONTINUAR.en.md)
+
 Atualizado em 2026-11-03, no commit seguinte a `d8f7f8b`.
 
 ## 0. No PC que já tem o projeto (ex.: o notebook)
@@ -83,7 +85,7 @@ npm test           # testes
 
 ## 4. Claude Code no PC novo
 
-Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O [CLAUDE.md](../CLAUDE.md) é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 14 (release)."*
+Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O `CLAUDE.md` é carregado automaticamente e traz as regras de trabalho e as armadilhas de build e de áudio. **Desde 05/11/2026 ele não vai para o git** (está no `.gitignore`): copie-o deste PC para a raiz do clone. As notas de "memória" do Claude ficam neste PC; o que importa delas está no CLAUDE.md. Para retomar, diga algo como: *"Leia CLAUDE.md e docs/CONTINUAR.md e siga para a etapa 14 (release)."*
 
 ## 5. Estado atual
 

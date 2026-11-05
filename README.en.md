@@ -16,8 +16,8 @@ The Windows installer is in the **[releases](https://github.com/TyxMatty/JayC/re
 | [`frontend/`](frontend/) | Tauri v2 + vanilla JS app (Vite) |
 | [`plugins/tauri-plugin-system-audio/`](plugins/tauri-plugin-system-audio/) | Per-process audio capture for streams (Windows) |
 | `plugins/tauri-plugin-pip/` | Picture-in-picture plugin for Android/iOS *(work in progress)* |
-| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Architecture, technical decisions and milestones (in Portuguese) |
-| [`docs/CONTINUAR.md`](docs/CONTINUAR.md) | Setting up a new PC, current state and next steps (in Portuguese) |
+| [`docs/ARQUITETURA.en.md`](docs/ARQUITETURA.en.md) | Architecture, technical decisions and milestones |
+| [`docs/CONTINUAR.en.md`](docs/CONTINUAR.en.md) | Setting up a new PC, current state and next steps |
 | [`scripts/`](scripts/) | Development tools: the app with debugging on, running JS in the real app, a test tone |
 
 ## Running the app
