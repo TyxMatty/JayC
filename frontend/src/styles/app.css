@@ -1626,7 +1626,7 @@ fieldset > h3 {
   inset: 0;
   display: none;
   place-items: center;
-  font-size: 22cqmin;
+  font-size: min(20cqmin, 64px); /* about 40% of the circle, which stops at 160 px */
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
