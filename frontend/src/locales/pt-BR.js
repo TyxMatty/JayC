@@ -164,6 +164,7 @@ export default {
   "not sent": "não vai",
   "Stop test": "Parar teste",
   "Full screen": "Tela cheia",
+  "{name} left.": "{name} saiu.",
   "Exit full screen": "Sair da tela cheia",
   "Test microphone": "Testar microfone",
   "The microphone did not open: {reason}": "O microfone não abriu: {reason}",

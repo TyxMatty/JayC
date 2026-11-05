@@ -3,6 +3,7 @@ import { icons } from './icons.js';
 import { canShareScreen } from '../core/media.js';
 import { createSharePanel } from './share-panel.js';
 import { pipSupported, pickPipTrack, createPip } from '../core/pip.js';
+import { fullscreenElement, toggleFullscreen as toggleElementFullscreen, exitFullscreen } from '../core/fullscreen.js';
 import { createControlBar } from './control-bar.js';
 import { createAudioMenu } from './audio-menu.js';
 import { createChatPanel } from './chat-panel.js';
@@ -122,10 +123,7 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
   const muteButton = local ? null : h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => onToggleMute?.() });
   const iconButton = (label, icon, onClick) =>
     h('button', { type: 'button', class: 'btn btn-secondary btn-icon', 'aria-label': label, title: label, html: icon, onClick });
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else el.requestFullscreen?.().catch(() => {});
-  };
+  const toggleFullscreen = () => toggleElementFullscreen(el);
   const fullscreenButton = local ? null : iconButton(t('Full screen'), icons.maximize, () => toggleFullscreen());
   const pipButton = local || !onPip ? null : iconButton(t('Pop out video'), icons.pip, () => onPip());
   const icon = h('span', { class: 'tile-screen-icon', html: icons.monitor });
@@ -164,7 +162,7 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
     el.addEventListener('dblclick', (e) => !e.target.closest('button') && toggleFullscreen());
     // Fires on this element when it enters or leaves full screen (Esc included).
     el.addEventListener('fullscreenchange', () => {
-      const on = document.fullscreenElement === el;
+      const on = fullscreenElement() === el;
       fullscreenButton.innerHTML = on ? icons.minimize : icons.maximize;
       fullscreenButton.setAttribute('aria-label', on ? t('Exit full screen') : t('Full screen'));
       fullscreenButton.title = fullscreenButton.getAttribute('aria-label');
@@ -384,6 +382,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     mixer.play(streamKey(participant), (participant.watching && participant.screenStream.getAudioTracks()[0]) || null);
     if (!participant.media.screen || !participant.watching) {
       if (tile) {
+        if (fullscreenElement() === tile.el) exitFullscreen(); // Android's pinned full screen outlives the element
         tile.el.remove();
         screenTiles.delete(participant.id);
         layout();
@@ -401,7 +400,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
         onPip: pip ? () => popOut(participant.screenStream.getVideoTracks()[0]) : null,
       });
       tile.el.addEventListener('contextmenu', (e) => {
-        const full = document.fullscreenElement === tile.el;
+        const full = fullscreenElement() === tile.el;
         audioMenu.open(e, {
           title: t("{name}'s stream", { name: participant.name }),
           muteLabel: t('Mute stream'),
@@ -488,14 +487,16 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     speaking.forget(participant.id);
     mixer.stop(voiceKey(participant));
     mixer.stop(streamKey(participant));
-    screenTiles.get(participant.id)?.el.remove();
+    const screenTile = screenTiles.get(participant.id);
+    if (screenTile && fullscreenElement() === screenTile.el) exitFullscreen();
+    screenTile?.el.remove();
     screenTiles.delete(participant.id);
     renderPip();
     const tile = tiles.get(participant.id);
     if (!tile) return layout();
     tile.el.remove();
     tiles.delete(participant.id);
-    showToast(`${participant.name} left.`);
+    showToast(t('{name} left.', { name: participant.name }));
     layout();
   });
   // People already in the room when we joined (their events fired before this view existed).
@@ -613,6 +614,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     mixer.close();
     pip?.exit().catch(() => {});
     pip?.destroy?.();
+    exitFullscreen();
     controlBar.destroy();
     onLeft();
   });

@@ -1,12 +1,13 @@
 ## Default Permission
 
-Lets the app put itself in Picture-in-Picture during a call and hear when it does (mobile).
+Lets the app put itself in Picture-in-Picture during a call and hear when it does, and go full screen for a stream (mobile).
 
 #### This default permission set includes the following:
 
 - `allow-is-supported`
 - `allow-set-auto-enter`
 - `allow-enter`
+- `allow-set-immersive`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -145,6 +146,32 @@ Enables the set_auto_enter command without any pre-configured scope.
 <td>
 
 Denies the set_auto_enter command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`pip:allow-set-immersive`
+
+</td>
+<td>
+
+Enables the set_immersive command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`pip:deny-set-immersive`
+
+</td>
+<td>
+
+Denies the set_immersive command without any pre-configured scope.
 
 </td>
 </tr>

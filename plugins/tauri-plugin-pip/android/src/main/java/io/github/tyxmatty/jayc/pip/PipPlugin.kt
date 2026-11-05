@@ -2,6 +2,7 @@ package io.github.tyxmatty.jayc.pip
 
 import android.app.Activity
 import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
@@ -12,6 +13,9 @@ import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.util.Consumer
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -26,6 +30,11 @@ class AutoEnterArgs {
     var enabled: Boolean = false
     var width: Int = 16
     var height: Int = 9
+}
+
+@InvokeArg
+class ImmersiveArgs {
+    var enabled: Boolean = false
 }
 
 @InvokeArg
@@ -134,6 +143,28 @@ class PipPlugin(private val activity: Activity) : Plugin(activity) {
         aspect = clampedAspect(args.width, args.height)
         if (!supported()) return invoke.reject("Picture-in-Picture isn't supported on this device")
         invoke.resolve(JSObject().put("entered", enterNow()))
+    }
+
+    /**
+     * A stream in full screen (the page pins it over everything): hide the status and navigation
+     * bars (a swipe from the edge shows them for a moment) and turn to landscape; off restores both.
+     */
+    @Command
+    fun setImmersive(invoke: Invoke) {
+        val args = invoke.parseArgs(ImmersiveArgs::class.java)
+        activity.runOnUiThread {
+            val window = activity.window
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            if (args.enabled) {
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+            invoke.resolve(JSObject().put("immersive", args.enabled))
+        }
     }
 
     private fun supported(): Boolean =

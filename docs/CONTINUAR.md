@@ -42,7 +42,7 @@ Opcionais:
 | Ferramenta | Para quê | Como |
 |---|---|---|
 | Docker Desktop | rodar o servidor em container (`docker compose`) | `winget install -e --id Docker.DockerDesktop` |
-| Android Studio + SDK/NDK | só para o Android | ver `docs/ARQUITETURA.md`, seção 9 |
+| Android Studio + SDK/NDK | só para o Android | ver `docs/ARQUITETURA.md`, seção 9, ou só a linha de comando (abaixo) |
 
 O WebView2 já vem no Windows 11.
 
@@ -163,10 +163,14 @@ Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Rec
 - `scripts\android-dev.ps1` recarrega PATH, `JAVA_HOME`, `ANDROID_HOME` e `NDK_HOME` e roda `tauri android dev`. O app carrega o Vite pelo IP do PC na porta 5173.
 - **Servidor no emulador:** use `10.0.2.2:3000`, que é o PC visto de dentro do emulador. No celular, use o IP do PC na rede.
 - **Permissões:** o app pede câmera e microfone na primeira chamada. Em testes automáticos, conceda antes com `adb shell pm grant io.github.tyxmatty.jayc.debug android.permission.CAMERA` (e `RECORD_AUDIO`).
+- **SDK sem o Android Studio** (feito no PC atual, sem UAC): JDK 21 da Microsoft (zip) em `%LOCALAPPDATA%\Programs\MicrosoftJDK`, command-line tools em `%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest`, e `JAVA_HOME`/`ANDROID_HOME`/`NDK_HOME` nas variáveis do usuário. O `sdkmanager` novo é um atalho do "Android CLI": pelo Bash, os pacotes vão com barra (`platforms/android-37.0`, `ndk/30.0.16248370`), porque o `;` quebra no `.bat`. Instalados: platform-tools, emulator, platforms 37.0, build-tools 37.0.0, NDK 30.0.16248370 e a imagem `android-36/google_apis/x86_64`.
+- **Emulador neste PC:** não roda. A virtualização está desligada na BIOS/UEFI (`VirtualizationFirmwareEnabled = False`) e falta a Plataforma do Hipervisor do Windows.
+- **Sem o Modo de Desenvolvedor**, o `tauri android build` compila o Rust e para no symlink da `.so`. Para conferir só o Kotlin de um plugin: `gradlew :tauri-plugin-pip:compileDebugKotlin` em `frontend/src-tauri/gen/android`.
 
 **Ainda não verificado:**
 - O instalador em outro PC, o seletor de tela real no app instalado e a conexão de amigos pela internet/VPN (aguardando o retorno do teste externo).
 - Android num celular real, e o PiP no Android 8–11 (entrada pelo user-leave hint).
+- **Tela cheia da live no Android** (barras escondidas, paisagem, voltar sai): o Kotlin compila e a parte da página foi testada simulando Android no PC, mas não rodou num aparelho.
 - Sala com 16 pessoas com mídia real (foi testado com 6 abas, e com 16 só no protocolo).
 - IP de VPN (ZeroTier/Radmin).
 - Som no modo janela com o seletor real (o caminho foi validado por partes).

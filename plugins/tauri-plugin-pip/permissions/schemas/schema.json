@@ -355,10 +355,22 @@
           "markdownDescription": "Denies the set_auto_enter command without any pre-configured scope."
         },
         {
-          "description": "Lets the app put itself in Picture-in-Picture during a call and hear when it does (mobile).\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-set-auto-enter`\n- `allow-enter`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Enables the set_immersive command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-immersive",
+          "markdownDescription": "Enables the set_immersive command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_immersive command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-immersive",
+          "markdownDescription": "Denies the set_immersive command without any pre-configured scope."
+        },
+        {
+          "description": "Lets the app put itself in Picture-in-Picture during a call and hear when it does, and go full screen for a stream (mobile).\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-set-auto-enter`\n- `allow-enter`\n- `allow-set-immersive`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Lets the app put itself in Picture-in-Picture during a call and hear when it does (mobile).\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-set-auto-enter`\n- `allow-enter`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Lets the app put itself in Picture-in-Picture during a call and hear when it does, and go full screen for a stream (mobile).\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-set-auto-enter`\n- `allow-enter`\n- `allow-set-immersive`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

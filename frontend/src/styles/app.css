@@ -1123,9 +1123,20 @@ fieldset > h3 {
   background: #000;
 }
 
-.tile-screen:fullscreen {
+.tile-screen:fullscreen,
+.tile.tile-screen.is-fullscreen {
   border: 0;
   border-radius: 0;
+}
+
+/* Android: the WebView has no element full screen, so the stream is pinned over the page
+   (core/fullscreen.js) while the app hides the system bars. */
+.tile.tile-screen.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: auto;
+  height: auto;
 }
 
 /* Preview of what you're sharing, floating in a corner. */
