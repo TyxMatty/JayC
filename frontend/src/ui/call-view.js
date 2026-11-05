@@ -531,7 +531,18 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     send: (text) => call.sendChat(text, displayName),
     onIncoming: ({ name, text }) => showToast(`${name || t('Guest')}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}`),
   });
-  call.addEventListener('chat', (e) => chat.add(e.detail));
+  // Each message with the sender's picture and profile color, as on their tile.
+  call.addEventListener('chat', (e) => {
+    const { id, name, mine } = e.detail;
+    const sender = mine ? null : call.participants.get(id);
+    const shownName = mine ? displayName : (sender?.name ?? name);
+    chat.add({
+      ...e.detail,
+      name: mine ? displayName : name,
+      avatar: mine ? call.avatar : (sender?.avatar ?? null),
+      background: profileBackground(mine ? call.color : sender?.color, shownName),
+    });
+  });
 
   // Screen sharing (desktop only: mobile WebViews have no getDisplayMedia).
   const sharePanel = canShareScreen() ? createSharePanel(call, { onError: showToast }) : null;

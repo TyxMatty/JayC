@@ -8,6 +8,8 @@ import { t } from '../core/i18n.js';
 const MAX_LENGTH = 500;
 /** Older messages are dropped past this, so a long call doesn't grow the page forever. */
 const MAX_SHOWN = 200;
+/** Messages from the same person within this gap share one avatar and name (like Discord). */
+const GROUP_MS = 5 * 60 * 1000;
 
 /**
  * @param {{ send: (text: string) => boolean, onIncoming?: (message: { name: string, text: string }) => void }} options
@@ -18,10 +20,20 @@ export function createChatPanel({ send, onIncoming }) {
   const badge = h('span', { class: 'control-badge', hidden: true });
   const button = h('button', { type: 'button', class: 'control-btn', 'aria-expanded': 'false', html: icons.chat }, badge);
   const log = h('ol', { class: 'chat-log', role: 'log', 'aria-live': 'polite', 'aria-label': t('Messages') });
-  const empty = h('p', { class: 'chat-empty hint' }, t('Messages sent here go to everyone in the call. They disappear when the call ends.'));
+  const empty = h(
+    'div',
+    { class: 'chat-empty' },
+    h('span', { class: 'chat-empty-icon', html: icons.chat, 'aria-hidden': 'true' }),
+    h('p', { class: 'hint' }, t('Messages sent here go to everyone in the call. They disappear when the call ends.')),
+  );
   const input = h('input', { class: 'input', type: 'text', maxlength: MAX_LENGTH, placeholder: t('Message everyone'), 'aria-label': t('Message') });
   const status = h('p', { class: 'hint', 'aria-live': 'polite' });
-  const form = h('form', { class: 'chat-form' }, input, h('button', { type: 'submit', class: 'btn' }, t('Send')));
+  const form = h(
+    'form',
+    { class: 'chat-form' },
+    input,
+    h('button', { type: 'submit', class: 'btn chat-send', 'aria-label': t('Send'), title: t('Send'), html: icons.send }),
+  );
   const close = h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Close chat'), html: icons.close });
   const panel = h(
     'aside',
@@ -78,15 +90,35 @@ export function createChatPanel({ send, onIncoming }) {
   return {
     button,
     element: panel,
-    /** @param {{ name: string, text: string, mine: boolean }} message */
-    add({ name, text, mine }) {
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    /**
+     * @param {{ id?: string, name: string, text: string, mine: boolean, avatar?: string | null, background?: string }} message
+     *   avatar: the sender's picture (data URL); background: their profile color, behind the initial.
+     */
+    add({ id, name, text, mine, avatar = null, background = '' }) {
+      const now = Date.now();
+      const time = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const shownName = mine ? t('You') : name || t('Guest');
+      const sender = mine ? 'me' : `peer:${id ?? name ?? ''}`;
+      // Several in a row from the same person, close together: one avatar, name and time on top.
+      const previous = log.lastElementChild;
+      const continued = previous?.dataset.sender === sender && now - Number(previous.dataset.at) < GROUP_MS;
+      const face = h(
+        'span',
+        { class: 'chat-avatar', 'aria-hidden': 'true' },
+        avatar ? h('img', { src: avatar, alt: '' }) : ((mine ? name : shownName).trim()[0] ?? '?').toUpperCase(),
+      );
+      if (background) face.style.setProperty('--tile-bg', background);
       log.append(
         h(
           'li',
-          { class: mine ? 'chat-message mine' : 'chat-message' },
-          h('div', { class: 'chat-meta' }, h('strong', {}, mine ? t('You') : name || t('Guest')), h('time', {}, time)),
-          h('p', {}, text),
+          { class: `chat-message${mine ? ' mine' : ''}${continued ? ' continued' : ''}`, dataset: { sender, at: String(now) } },
+          face,
+          h(
+            'div',
+            { class: 'chat-body' },
+            h('div', { class: 'chat-meta' }, h('strong', {}, shownName), h('time', {}, time)),
+            h('p', { class: 'chat-text' }, text),
+          ),
         ),
       );
       while (log.children.length > MAX_SHOWN) log.firstElementChild.remove();

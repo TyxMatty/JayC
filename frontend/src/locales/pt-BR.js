@@ -98,7 +98,7 @@ export default {
   "{problems}. You can still see and hear others.": "{problems}. Você ainda vê e ouve os outros.",
   "Messages": "Mensagens",
   "Messages sent here go to everyone in the call. They disappear when the call ends.": "O que você mandar aqui vai pra todo mundo da chamada. Some quando a chamada acaba.",
-  "Message everyone": "Manda uma mensagem pra galera",
+  "Message everyone": "Mensagem pra galera",
   "Message": "Mensagem",
   "Send": "Enviar",
   "Close chat": "Fechar chat",

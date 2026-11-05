@@ -19,6 +19,7 @@ export const icons = {
   arrowDown: svg('<path d="m6 9 6 6 6-6"/>'),
   grip: svg('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'),
   users: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  send: svg('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>'),
   arrowRight: svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
   /** The brand mark: a sound wave (three bars). */
   logo: svg('<path d="M8 9v6M12 6v12M16 9v6" stroke-width="2.6"/>'),
