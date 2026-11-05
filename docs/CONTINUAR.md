@@ -164,7 +164,13 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 Eles sugeriram reescrever sem o WebView ("engine própria, estilo Discord"). Recomendação dada: não. O Discord também é Chromium (Electron), e o que ele faz diferente é capturar e codificar em código nativo. Se os itens 2 e 3 apontarem para o WebView, a saída é uma etapa de captura de vídeo nativa (WGC/DXGI + H.264 por hardware).
 
-**Live nativa, spike (05/11/2026):** ver [spikes/10-live-nativa.md](spikes/10-live-nativa.md). Captura (Windows Graphics Capture) e H.264 por hardware (Media Foundation) em Rust, enviados por RTP a um `PlainTransport` do mediasoup (`createTransport` com `plain: true`). Medido: a live atual gasta ~1,3 núcleo só no vídeo, e a nativa gasta 0,07, com mais quadros (55/s a 1080p). Quem assiste no app recebeu tudo sem congelar. Antes de integrar: decidir o transporte (SRTP com porta fixa, ou WebRTC nativo na porta 40000) e fazer o controle de banda. Depois, o seletor próprio com miniaturas.
+**Live nativa, spike (05/11/2026):** ver [spikes/10-live-nativa.md](spikes/10-live-nativa.md).
+- **O que é:** captura (Windows Graphics Capture) e H.264 por hardware (Media Foundation) em Rust, enviados por WebRTC (str0m) ao mesmo `WebRtcTransport` e à mesma porta 40000 do app. O servidor não muda.
+- **Medido:**
+  - CPU: a live atual gasta ~1,3 núcleo só no vídeo, e a nativa gasta ~0,05.
+  - Quem assiste recebe 1080p sem perdas.
+  - A estimativa de banda baixa e sobe o bitrate numa rede estreita simulada, mas a queda causa um congelamento de ~5 s.
+- **Próximo passo:** baixar a resolução e os quadros/s quando a banda cai. Depois, integrar ao app (comando do plugin, sinalização no JS) com o seletor próprio.
 
 **Sem cara de navegador (05/11/2026):** no release, o clique direito fora dos campos de texto não abre mais o menu do WebView2 (Voltar, Atualizar, Imprimir, Inspecionar), e os atalhos de navegador ficam desligados (`SetAreBrowserAcceleratorKeysEnabled(false)`, em `src-tauri/src/app_chrome.rs`): F5/Ctrl+R não recarregam a página (o que derrubava a chamada), nem Ctrl+P/Ctrl+F abrem impressão e busca. Campos de texto mantêm o menu de copiar/colar. O dev mantém tudo, para depurar.
 

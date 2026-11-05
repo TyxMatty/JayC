@@ -370,25 +370,6 @@ describe('SFU requests', () => {
     for (const x of [a, b, c]) x.client.close();
   });
 
-  test('a native sender gets a plain RTP port and can publish a screen share', async () => {
-    const a = await joined(port, 'sfu-plain', 'Alice');
-    const b = await joined(port, 'sfu-plain', 'Bob');
-    assert.equal((await a.client.request('createTransport', { direction: 'recv', plain: true })).error, 'bad-request');
-
-    const plain = (await a.client.request('createTransport', { direction: 'send', plain: true })).data;
-    assert.equal(plain.ip, '127.0.0.1');
-    assert.ok(Number.isInteger(plain.port) && plain.port > 0);
-    const h264 = {
-      codecs: [{ mimeType: 'video/H264', payloadType: 102, clockRate: 90000, parameters: { 'packetization-mode': 1, 'profile-level-id': '640032' }, rtcpFeedback: [{ type: 'nack', parameter: 'pli' }] }],
-      encodings: [{ ssrc: 22222222 }],
-    };
-    const produced = await a.client.request('produce', { transportId: plain.id, kind: 'video', source: 'screen', mode: 'screen', rtpParameters: h264 });
-    assert.equal(produced.ok, true);
-    const notice = await b.client.next('new-producer');
-    assert.equal(notice.producerId, produced.data.id);
-    assert.equal(notice.source, 'screen');
-  });
-
   test('leaving closes your producers for everyone consuming them', async () => {
     const a = await joined(port, 'sfu-leave', 'Alice');
     const b = await joined(port, 'sfu-leave', 'Bob');

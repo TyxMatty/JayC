@@ -48,10 +48,9 @@ export class Sfu {
   /** @type {Map<string, Promise<SfuRoom>>} */
   #rooms = new Map();
 
-  constructor(worker, webRtcServer, listenIp) {
+  constructor(worker, webRtcServer) {
     this.worker = worker;
     this.webRtcServer = webRtcServer;
-    this.listenIp = listenIp;
   }
 
   static async create(config, log) {
@@ -68,7 +67,7 @@ export class Sfu {
         { protocol: 'tcp', ip: config.rtcListenIp, ...port },
       ],
     });
-    return new Sfu(worker, webRtcServer, config.rtcListenIp);
+    return new Sfu(worker, webRtcServer);
   }
 
   /** Router-backed media state for a room, created on first use. */
@@ -77,7 +76,7 @@ export class Sfu {
     if (!room) {
       room = this.worker
         .createRouter({ mediaCodecs: MEDIA_CODECS })
-        .then((router) => new SfuRoom({ router, webRtcServer: this.webRtcServer, listenIp: this.listenIp }));
+        .then((router) => new SfuRoom({ router, webRtcServer: this.webRtcServer }));
       this.#rooms.set(roomId, room);
     }
     return room;

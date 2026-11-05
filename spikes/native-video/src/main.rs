@@ -1,10 +1,12 @@
 //! Spike: capture the primary monitor with Windows Graphics Capture, convert BGRA -> NV12 on the
 //! GPU (D3D11 video processor) and encode H.264 with the hardware Media Foundation encoder, all on
-//! the GPU. Prints frames, bitrate, encode latency and this process's CPU time.
+//! the GPU. Sends it over WebRTC (str0m) to a mediasoup WebRtcTransport when given the server's
+//! transport parameters; send.mjs does the signaling. Prints frames, bitrate, encode latency,
+//! bandwidth estimates and this process's CPU time.
 //!
-//!   cargo run --release -- [seconds=20] [fps=60] [kbps=6000] [out.h264 or -] [rtp host:port ssrc pt]
+//!   native-video-spike [seconds=20] [fps=60] [max kbps=6000] [out.h264 or -] [ufrag pwd ip:port "sha-256 AB:.."]
 
-mod rtp;
+mod webrtc;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -48,10 +50,22 @@ fn main() -> Result<()> {
     let fps: u32 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(60);
     let kbps: u32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(6000);
     let mut out = args.get(4).filter(|p| *p != "-").map(|p| File::create(p).expect("output file"));
-    let mut rtp = match (args.get(5), args.get(6), args.get(7)) {
-        (Some(addr), Some(ssrc), Some(pt)) => Some(rtp::RtpSender::new(addr, ssrc.parse().unwrap(), pt.parse().unwrap()).expect("udp")),
+    let start_kbps = 1500;
+    let mut net = match (args.get(5), args.get(6), args.get(7), args.get(8)) {
+        (Some(ufrag), Some(pwd), Some(addr), Some(fingerprint)) => {
+            let remote = webrtc::Remote { ufrag: ufrag.clone(), pwd: pwd.clone(), addr: addr.parse().expect("ip:port"), fingerprint: fingerprint.clone() };
+            let (sender, local) = webrtc::Sender::new(&remote, start_kbps, kbps as u64).expect("webrtc");
+            // One JSON line for send.mjs: what goes into connectTransport and produce.
+            println!(r#"{{"fingerprint":"{}","ssrc":{},"rtxSsrc":{}}}"#, local.fingerprint, local.ssrc, local.rtx_ssrc);
+            std::io::stdout().flush().unwrap();
+            Some(sender)
+        }
         _ => None,
     };
+    // The encoder follows the bandwidth estimate (85% of it, at most `kbps`).
+    let mut target_kbps = if net.is_some() { start_kbps as u32 } else { kbps };
+    let mut estimates: Vec<(f64, u64)> = Vec::new();
+    let shape_kbps: Option<u64> = std::env::var("JAYC_SHAPE_KBPS").ok().and_then(|v| v.parse().ok());
 
     unsafe {
         RoInitialize(RO_INIT_MULTITHREADED)?;
@@ -156,23 +170,7 @@ fn main() -> Result<()> {
         manager.ResetDevice(&device, token)?;
         encoder.ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, manager.as_raw() as usize)?;
 
-        let out_type = MFCreateMediaType()?;
-        out_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
-        out_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)?;
-        out_type.SetUINT32(&MF_MT_AVG_BITRATE, kbps * 1000)?;
-        out_type.SetUINT64(&MF_MT_FRAME_SIZE, pack(w, h))?;
-        out_type.SetUINT64(&MF_MT_FRAME_RATE, pack(fps, 1))?;
-        out_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
-        out_type.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
-        encoder.SetOutputType(0, &out_type, 0)?;
-        let in_type = MFCreateMediaType()?;
-        in_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
-        in_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
-        in_type.SetUINT64(&MF_MT_FRAME_SIZE, pack(w, h))?;
-        in_type.SetUINT64(&MF_MT_FRAME_RATE, pack(fps, 1))?;
-        in_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
-        encoder.SetInputType(0, &in_type, 0)?;
-
+        // Before the media types: some encoders only read these when the types are set.
         let codec = encoder.cast::<ICodecAPI>().ok();
         if let Some(codec) = &codec {
             let set = |guid: &GUID, v: VARIANT, what: &str| {
@@ -182,9 +180,27 @@ fn main() -> Result<()> {
             };
             set(&CODECAPI_AVLowLatencyMode, VARIANT::from(true), "low latency");
             set(&CODECAPI_AVEncCommonRateControlMode, VARIANT::from(eAVEncCommonRateControlMode_CBR.0 as u32), "CBR");
-            set(&CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(kbps * 1000), "bitrate");
+            set(&CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(target_kbps * 1000), "bitrate");
             set(&CODECAPI_AVEncMPVGOPSize, VARIANT::from(fps * 4), "GOP");
         }
+        let out_type = MFCreateMediaType()?;
+        out_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+        out_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264)?;
+        out_type.SetUINT32(&MF_MT_AVG_BITRATE, target_kbps * 1000)?;
+        out_type.SetUINT64(&MF_MT_FRAME_SIZE, pack(w, h))?;
+        out_type.SetUINT64(&MF_MT_FRAME_RATE, pack(fps, 1))?;
+        out_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
+        out_type.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
+        out_type.SetUINT32(&MF_MT_MAX_KEYFRAME_SPACING, fps * 4)?;
+        encoder.SetOutputType(0, &out_type, 0)?;
+        let in_type = MFCreateMediaType()?;
+        in_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+        in_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
+        in_type.SetUINT64(&MF_MT_FRAME_SIZE, pack(w, h))?;
+        in_type.SetUINT64(&MF_MT_FRAME_RATE, pack(fps, 1))?;
+        in_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
+        encoder.SetInputType(0, &in_type, 0)?;
+
         let provides_samples = encoder.GetOutputStreamInfo(0)?.dwFlags & MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.0 as u32 != 0;
         encoder.ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0)?;
         encoder.ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0)?;
@@ -240,20 +256,14 @@ fn main() -> Result<()> {
                         if let Some(f) = out.as_mut() {
                             f.write_all(std::slice::from_raw_parts(ptr, len as usize)).unwrap();
                         }
-                        if let Some(r) = rtp.as_mut() {
-                            r.send_frame(std::slice::from_raw_parts(ptr, len as usize), (time * 9 / 1000) as u32);
+                        if let Some(n) = net.as_mut() {
+                            n.send_frame(std::slice::from_raw_parts(ptr, len as usize), (time * 9 / 1000) as u64).expect("send");
                         }
                         media.Unlock()?;
                         bytes += len as u64;
                         encoded += 1;
                     }
                     _ => {}
-                }
-            }
-            // The SFU asks for a keyframe when a viewer starts watching (PLI/FIR).
-            if rtp.as_mut().is_some_and(|r| r.keyframe_requested()) {
-                if let Some(c) = &codec {
-                    let _ = c.SetValue(&CODECAPI_AVEncVideoForceKeyFrame, &VARIANT::from(1u32));
                 }
             }
             // Feed the newest frame, at most `fps` per second.
@@ -294,6 +304,31 @@ fn main() -> Result<()> {
                 }
             }
             std::thread::sleep(Duration::from_millis(1));
+            if let Some(n) = net.as_mut() {
+                // Test: JAYC_SHAPE_KBPS narrows the uplink during the middle third of the run.
+                let t = start.elapsed().as_secs_f64() / seconds as f64;
+                n.shape_kbps = shape_kbps.filter(|_| (1.0 / 3.0..2.0 / 3.0).contains(&t));
+                {
+                    let signals = n.drive().expect("network");
+                    // A viewer started watching (PLI/FIR), or we just connected.
+                    if signals.keyframe {
+                        if let Some(c) = &codec {
+                            let _ = c.SetValue(&CODECAPI_AVEncVideoForceKeyFrame, &VARIANT::from(1u32));
+                        }
+                    }
+                    if let Some(bps) = signals.estimate {
+                        estimates.push((start.elapsed().as_secs_f64(), bps / 1000));
+                        let want = ((bps / 1000) as f64 * 0.85).min(kbps as f64) as u32;
+                        if want.abs_diff(target_kbps) * 10 > target_kbps {
+                            target_kbps = want;
+                            eprintln!("{:.1}s encoder target {target_kbps} kbps", start.elapsed().as_secs_f64());
+                            if let Some(c) = &codec {
+                                let _ = c.SetValue(&CODECAPI_AVEncCommonMeanBitRate, &VARIANT::from(target_kbps * 1000));
+                            }
+                        }
+                    }
+                }
+            }
         }
         session.Close()?;
         let wall = start.elapsed().as_secs_f64();
@@ -310,14 +345,17 @@ fn main() -> Result<()> {
             cpu / wall,
             cpu / wall / 12.0 * 100.0
         );
-        if let Some(r) = &rtp {
+        if let Some(n) = &net {
+            let every_5s: Vec<String> = (0..=seconds / 3)
+                .filter_map(|k| estimates.iter().rev().find(|(t, _)| *t <= (k * 3) as f64 + 0.5).map(|(t, e)| format!("{t:.0}s:{e}")))
+                .collect();
             println!(
-                "rtp: {} packets ({:.0}/s), {} keyframe requests, {} send errors, {} retransmitted",
-                r.packets,
-                r.packets as f64 / wall,
-                r.keyframe_requests,
-                r.send_errors,
-                r.retransmitted
+                "webrtc: connected {} | {} frames sent | {} keyframe requests | shaper dropped {} | estimate kbps {} | encoder target {target_kbps} kbps",
+                n.connected(),
+                n.frames_sent,
+                n.keyframe_requests,
+                n.shaper_dropped(),
+                every_5s.join(" ")
             );
         }
         let _ = sent;
