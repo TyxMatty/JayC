@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeQuality, nativeRtpParameters } from '../src/core/native-live.js';
+import { nativeQuality, nativeRtpParameters, avcCodec } from '../src/core/native-live.js';
 
 test('the picked quality becomes the top of the native ladder', () => {
   const screen = { width: 1920, height: 1080 };
@@ -26,4 +26,11 @@ test('the native producer matches what the Rust sender puts on the wire', () => 
     { 2: 'abs-send-time', 3: 'draft-holmer-rmcat-transport-wide-cc-extensions-01', 4: 'mid' },
   );
   assert.deepEqual(p.encodings, [{ ssrc: 1111, rtx: { ssrc: 2222 } }]);
+});
+
+test('the decoder codec comes from the keyframe\'s SPS', () => {
+  // start code, SPS (High = 100, constraints 0, level 4.2), PPS, start of an IDR
+  const keyframe = new Uint8Array([0, 0, 0, 1, 0x67, 100, 0, 42, 0xac, 0, 0, 0, 1, 0x68, 0xee, 0, 0, 1, 0x65, 0x88]);
+  assert.equal(avcCodec(keyframe), 'avc1.64002a');
+  assert.equal(avcCodec(new Uint8Array([0, 0, 1, 0x65, 0x88])), 'avc1.640032', 'no SPS: what the encoder sends');
 });

@@ -132,6 +132,12 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Depois da 0.3.4 (05/11/2026), ainda sem instalador:**
+- **A própria live no card de quem transmite**, com a qualidade e os quadros/s de verdade: o Rust entrega os quadros H.264 à página e o WebCodecs decodifica na GPU. ~0,2 núcleo a mais enquanto o card aparece; pausa com o app minimizado. Ver docs/spikes/10-live-nativa.md, "A própria live no card".
+- **Janela compartilhada minimizada** não encerra mais a live (o último quadro segue saindo).
+- **Compartilhar de novo depois de uma live que acabou sozinha** (janela fechada) não cai mais no seletor do sistema.
+- **Discord:** os lobos grossos em todos os estilos (`jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick`).
+
 **Instalador 0.3.4 (05/11/2026):** a 0.3.3 com o que está abaixo e o Discord Rich Presence: durante uma chamada, o perfil do Discord mostra o Jay-C (pessoas, tempo, live sem nomes, o lobo do estilo), com as opções em Settings › Perfil › Discord. Plano e medições em ARQUITETURA.md, seção 10, "Discord Rich Presence". O servidor mudou (a mensagem `screen-preview`); um servidor antigo continua funcionando, sem as prévias.
 
 **Entre a 0.3.3 e a 0.3.4 (05/11/2026):**

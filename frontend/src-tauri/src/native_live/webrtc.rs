@@ -162,9 +162,10 @@ impl Sender {
         }
     }
 
-    /// Queues one encoded frame (Annex B). Keyframes without SPS/PPS get the last ones seen, so a
-    /// viewer that joins later can decode. Dropped until connected.
-    pub fn send_frame(&mut self, annexb: &[u8], rtp_time_90k: u64) -> Result<(), Error> {
+    /// One encoded frame (Annex B) made decodable on its own: keyframes without SPS/PPS get the
+    /// last ones seen, so a decoder can start there (a viewer who joins later, our own tile).
+    /// Returns it and whether it's a keyframe.
+    pub fn complete(&mut self, annexb: &[u8]) -> (Vec<u8>, bool) {
         let nal_types: Vec<u8> = split_annexb(annexb).iter().map(|n| n[0] & 0x1f).collect();
         if nal_types.contains(&7) {
             self.sps_pps = split_annexb(annexb)
@@ -173,13 +174,19 @@ impl Sender {
                 .flat_map(|n| [&[0u8, 0, 0, 1][..], n].concat())
                 .collect();
         }
+        let key = nal_types.contains(&5);
+        let data = if key && !nal_types.contains(&7) { [&self.sps_pps[..], annexb].concat() } else { annexb.to_vec() };
+        (data, key)
+    }
+
+    /// Queues one frame from `complete`. Dropped until connected.
+    pub fn send_frame(&mut self, frame: Vec<u8>, rtp_time_90k: u64) -> Result<(), Error> {
         if !(self.dtls_up && self.ice_up) {
             return Ok(());
         }
-        let data: Vec<u8> = if nal_types.contains(&5) && !nal_types.contains(&7) { [&self.sps_pps[..], annexb].concat() } else { annexb.to_vec() };
         // No writer once the server has closed the connection (e.g. the call ended).
         let writer = self.rtc.writer(self.mid).ok_or("lost the connection to the server")?;
-        writer.write(Pt::from(PT), Instant::now(), MediaTime::from_90khz(rtp_time_90k), data)?;
+        writer.write(Pt::from(PT), Instant::now(), MediaTime::from_90khz(rtp_time_90k), frame)?;
         Ok(())
     }
 }

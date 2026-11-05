@@ -18,7 +18,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use tauri::ipc::Channel;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use windows::core::Interface;
 use windows::Graphics::Capture::Direct3D11CaptureFramePool;
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
@@ -52,8 +52,30 @@ const POOL_BUFFERS: i32 = 3;
 /// The page's previews of the live (core/screen-preview.js) are about this wide.
 const PREVIEW_WIDTH: u32 = 384;
 
-/// A preview the page asked for, answered by the live's thread from the last frame.
-type PreviewRequest = Arc<Mutex<Option<mpsc::Sender<Result<Vec<u8>, String>>>>>;
+/// What the page reaches in a running live, besides its quality and stopping it.
+#[derive(Clone, Default)]
+struct Taps {
+    /// A preview the page asked for (for the room), answered from the last frame.
+    preview: Arc<Mutex<Option<mpsc::Sender<Result<Vec<u8>, String>>>>>,
+    /// Our own tile: gets every encoded frame (see `native_live_watch`).
+    watcher: Arc<Mutex<Option<Channel<InvokeResponseBody>>>>,
+    /// A new watcher's decoder needs a keyframe to start.
+    keyframe: Arc<AtomicBool>,
+}
+
+impl Taps {
+    /// Hands one frame (from `Sender::complete`) to the watcher, if any: time in µs (u64 LE),
+    /// keyframe (u8), Annex B data.
+    fn show(&self, frame: &[u8], key: bool, time_100ns: i64) {
+        if let Some(watcher) = self.watcher.lock().unwrap().as_ref() {
+            let mut message = Vec::with_capacity(9 + frame.len());
+            message.extend_from_slice(&((time_100ns / 10) as u64).to_le_bytes());
+            message.push(key as u8);
+            message.extend_from_slice(frame);
+            let _ = watcher.send(InvokeResponseBody::Raw(message));
+        }
+    }
+}
 
 /// The quality picked in Settings › Streaming: the top of the ladder.
 #[derive(Deserialize, Clone, Copy, PartialEq, Debug)]
@@ -99,7 +121,7 @@ pub enum LiveEvent {
 struct Running {
     stop: Arc<AtomicBool>,
     quality: Arc<Mutex<Quality>>,
-    preview: PreviewRequest,
+    taps: Taps,
     thread: JoinHandle<()>,
 }
 
@@ -131,14 +153,14 @@ pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Qu
     stop_running();
     let stop = Arc::new(AtomicBool::new(false));
     let shared = Arc::new(Mutex::new(quality));
-    let preview: PreviewRequest = Arc::default();
+    let taps = Taps::default();
     let (ready_tx, ready_rx) = mpsc::channel();
     let thread = std::thread::Builder::new()
         .name("native-live".into())
         .spawn({
-            let (stop, shared, preview) = (stop.clone(), shared.clone(), preview.clone());
+            let (stop, shared, taps) = (stop.clone(), shared.clone(), taps.clone());
             move || {
-                let result = unsafe { run(source, remote, shared, stop, preview, &ready_tx, &on_event) };
+                let result = unsafe { run(source, remote, shared, stop, taps, &ready_tx, &on_event) };
                 if let Err(error) = &result {
                     log::warn!("native live: {error}");
                     let _ = ready_tx.send(Err(error.clone())); // ignored if already started
@@ -148,7 +170,7 @@ pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Qu
         })
         .map_err(|e| e.to_string())?;
     // Registered before it's ready, so a stop (or another start) during startup reaches it.
-    *RUNNING.lock().unwrap() = Some(Running { stop: stop.clone(), quality: shared, preview, thread });
+    *RUNNING.lock().unwrap() = Some(Running { stop: stop.clone(), quality: shared, taps, thread });
     let ready = ready_rx.recv_timeout(Duration::from_secs(10)).map_err(|_| "the native capture did not start".to_string());
     match ready {
         Ok(Ok(_)) if stop.load(Ordering::Relaxed) => Err("the share was stopped".into()),
@@ -189,13 +211,30 @@ pub async fn native_live_thumbnail(source: SourceId) -> Result<tauri::ipc::Respo
 pub async fn native_live_preview() -> Result<tauri::ipc::Response, String> {
     let (tx, rx) = mpsc::channel();
     match RUNNING.lock().unwrap().as_ref() {
-        Some(r) => *r.preview.lock().unwrap() = Some(tx),
+        Some(r) => *r.taps.preview.lock().unwrap() = Some(tx),
         None => return Err("no live".into()),
     }
     tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(2)).map_err(|_| "no frame yet".to_string())?)
         .await
         .map_err(|e| e.to_string())?
         .map(tauri::ipc::Response::new)
+}
+
+/// Our own live as it's sent, for our tile (core/native-live.js decodes it with WebCodecs): every
+/// encoded frame goes to `on_frame`, starting at a keyframe.
+#[tauri::command]
+pub fn native_live_watch(on_frame: Channel<InvokeResponseBody>) {
+    if let Some(r) = RUNNING.lock().unwrap().as_ref() {
+        r.taps.keyframe.store(true, Ordering::Relaxed);
+        *r.taps.watcher.lock().unwrap() = Some(on_frame);
+    }
+}
+
+#[tauri::command]
+pub fn native_live_unwatch() {
+    if let Some(r) = RUNNING.lock().unwrap().as_ref() {
+        *r.taps.watcher.lock().unwrap() = None;
+    }
 }
 
 /// Settings changed during the share: the new top of the ladder applies right away.
@@ -264,7 +303,7 @@ unsafe fn run(
     remote: RemoteArgs,
     shared: Arc<Mutex<Quality>>,
     stop: Arc<AtomicBool>,
-    preview: PreviewRequest,
+    taps: Taps,
     ready: &mpsc::Sender<Result<LocalParams, String>>,
     events: &Channel<LiveEvent>,
 ) -> Result<(), String> {
@@ -321,7 +360,10 @@ unsafe fn run(
             let mut resized = false;
             while let Ok(frame) = pool.TryGetNextFrame() {
                 let content = frame.ContentSize().map_err(err("capture"))?;
-                if (content.Width, content.Height) != (size.Width, size.Height) && content.Width > 0 && content.Height > 0 {
+                if (content.Width as u32) < sources::MIN_SIDE || (content.Height as u32) < sources::MIN_SIDE {
+                    continue; // minimized: the last frame keeps going out until the window is back
+                }
+                if (content.Width, content.Height) != (size.Width, size.Height) {
                     // The window changed size: new buffers and a new encoder at the new size.
                     drop(frame);
                     (latest, last_frame) = (None, None); // old-size frames, back to the old pool
@@ -341,7 +383,9 @@ unsafe fn run(
             for frame in enc.poll().map_err(err("H.264 encoder"))? {
                 encoded += 1;
                 bytes += frame.data.len() as u64;
-                net.send_frame(&frame.data, (frame.time * 9 / 1000) as u64).map_err(|e| format!("WebRTC: {e}"))?;
+                let (data, key) = net.complete(&frame.data);
+                taps.show(&data, key, frame.time);
+                net.send_frame(data, (frame.time * 9 / 1000) as u64).map_err(|e| format!("WebRTC: {e}"))?;
             }
             let now = Instant::now();
             if enc.wants_input() && now >= next_due {
@@ -359,7 +403,7 @@ unsafe fn run(
                 }
             }
             if let Some(frame) = last_frame.as_ref() {
-                if let Some(reply) = preview.lock().unwrap().take() {
+                if let Some(reply) = taps.preview.lock().unwrap().take() {
                     let _ = reply.send(frame_texture(frame).and_then(|tex| sources::frame_jpeg(&device, &tex, PREVIEW_WIDTH)));
                 }
             }
@@ -423,7 +467,7 @@ unsafe fn run(
                 enc.set_bitrate(target(budget, ladder.tier, &quality, capture));
             }
             // A keyframe asked for too soon after the last one waits its turn instead of being dropped.
-            keyframe_pending |= signals.keyframe;
+            keyframe_pending |= signals.keyframe || taps.keyframe.swap(false, Ordering::Relaxed);
             if keyframe_pending && last_forced.is_none_or(|t| now - t >= KEYFRAME_GAP) {
                 enc.force_keyframe();
                 (last_forced, keyframe_pending, refresh_now) = (Some(now), false, true);

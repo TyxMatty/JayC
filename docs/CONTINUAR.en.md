@@ -134,6 +134,12 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**After 0.3.4 (05/11/2026), no installer yet:**
+- **Your own stream on your tile**, at its real quality and frame rate: Rust hands the H.264 frames to the page and WebCodecs decodes them on the GPU. ~0.2 core more while the tile shows; paused while the app is minimized. See docs/spikes/10-live-nativa.md (in Portuguese).
+- **A minimized shared window** no longer ends the stream (the last frame keeps going out).
+- **Sharing again after a stream that ended by itself** (window closed) no longer falls back to the system picker.
+- **Discord:** the thick wolves in every style (`jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick`).
+
 **Installer 0.3.4 (05/11/2026):** 0.3.3 with what's below and Discord Rich Presence: during a call, the Discord profile shows Jay-C (people, time, streams without names, the style's wolf), with the options in Settings › Profile › Discord. Plan and measurements in ARQUITETURA.en.md, section 10, "Discord Rich Presence". The server changed (the `screen-preview` message); an old server still works, without the previews.
 
 **Between 0.3.3 and 0.3.4 (05/11/2026):**

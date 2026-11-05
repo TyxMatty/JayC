@@ -11,6 +11,7 @@ import { createChatPanel } from './chat-panel.js';
 import { createMixer } from '../core/playback.js';
 import { createSpeakingDetector } from '../core/speaking.js';
 import { profileBackground } from '../core/profile-color.js';
+import { watchNativeLive } from '../core/native-live.js';
 import { settings } from '../store/settings.js';
 import { t } from '../core/i18n.js';
 
@@ -139,8 +140,8 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
   const note = local
     ? h('div', { class: 'tile-screen-note', title: t('Sent straight from the GPU: no preview, to save CPU.') }, t('Live · no preview'))
     : null;
-  // The native share's stills (every 2 s): what we're sending, without decoding it again.
-  const preview = local ? h('img', { class: 'tile-screen-preview', alt: '', hidden: true }) : null;
+  // The native share as it's sent, decoded here (core/native-live.js): full quality and frame rate.
+  const preview = local ? h('canvas', { class: 'tile-screen-preview', hidden: true }) : null;
   const el = h(
     'div',
     {
@@ -190,12 +191,13 @@ function createScreenTile({ name, stream, local, onStop, onToggleMute, onFocus, 
     play() {
       video.play().catch(() => {});
     },
-    /** Our native share's latest still (local tile only). */
-    setPreview(url) {
-      if (!preview) return;
-      preview.hidden = !url || stream.getVideoTracks().length > 0;
-      if (url && preview.getAttribute('src') !== url) preview.src = url;
-      note.hidden = stream.getVideoTracks().length > 0 || !preview.hidden;
+    /** Shows our native share on the tile (local tile only). Returns stop(). */
+    watchNative() {
+      return watchNativeLive(preview, () => {
+        if (!preview.hidden) return;
+        preview.hidden = false;
+        note.hidden = true;
+      });
     },
     /** The stream's sound is muted just for us. */
     setMuted(muted) {
@@ -493,6 +495,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const renderLocalScreen = () => {
     if (!call.screenStream) {
       if (localScreenTile) {
+        localScreenTile.stopWatch?.();
         localScreenTile.el.remove();
         localScreenTile = null;
         layout();
@@ -500,19 +503,20 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       return;
     }
     if (!localScreenTile || localScreenTile.stream !== call.screenStream) {
+      localScreenTile?.stopWatch?.();
       localScreenTile?.el.remove();
       localScreenTile = {
         ...createScreenTile({ name: displayName, stream: call.screenStream, local: true, onFocus: () => toggleFocus('local') }),
         stream: call.screenStream,
       };
+      if (call.screenShare?.native) localScreenTile.stopWatch = localScreenTile.watchNative();
       localScreenTile.el.style.viewTransitionName = 'screen-local';
       stage.append(localScreenTile.el);
       layout();
     }
-    localScreenTile.setPreview(call.screenPreview);
     localScreenTile.refresh({ mode: call.screenShare?.mode });
   };
-  call.addEventListener('screen-preview', () => localScreenTile?.setPreview(call.screenPreview));
+  call.addEventListener('ended', () => localScreenTile?.stopWatch?.());
 
   call.addEventListener('participant-added', (e) => renderParticipant(e.detail.participant, { announce: true }));
   call.addEventListener('participant-updated', (e) => renderParticipant(e.detail.participant, { announce: false }));

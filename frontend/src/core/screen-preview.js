@@ -1,5 +1,5 @@
-// Stills of our screen share: our own tile shows them during a native share (it has no local
-// video), and the room gets one every few seconds for the tiles of those not watching it.
+// Stills of our screen share: the room gets one every few seconds, for the tiles of those not
+// watching it (the "Watch stream" card).
 import { livePreview } from './native-live.js';
 
 const MAX_WIDTH = 320;

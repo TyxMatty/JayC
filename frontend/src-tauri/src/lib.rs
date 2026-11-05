@@ -30,6 +30,10 @@ pub fn run() {
             #[cfg(windows)]
             native_live::native_live_preview,
             #[cfg(windows)]
+            native_live::native_live_watch,
+            #[cfg(windows)]
+            native_live::native_live_unwatch,
+            #[cfg(windows)]
             discord::discord_presence
         ])
         .setup(|app| {

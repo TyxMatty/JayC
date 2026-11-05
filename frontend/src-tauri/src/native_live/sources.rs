@@ -22,6 +22,10 @@ use windows::core::{factory, Interface, PWSTR};
 
 use super::err;
 
+/// Windows smaller than this (either side) aren't offered, nor encoded: a minimized window reports
+/// just its title bar (146x28), which the GPU encoder refuses.
+pub const MIN_SIDE: u32 = 64;
+
 /// A monitor (`id` = HMONITOR) or a top-level window (`id` = HWND).
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -144,7 +148,7 @@ unsafe fn describe(hwnd: HWND) -> Option<Source> {
     let mut rect = RECT::default();
     let _ = GetClientRect(hwnd, &mut rect);
     let (width, height) = ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32);
-    if width < 64 || height < 64 {
+    if width < MIN_SIDE || height < MIN_SIDE {
         return None;
     }
     let title = String::from_utf16_lossy(&title[..n as usize]);

@@ -27,6 +27,100 @@ export async function sourceThumbnail({ kind, id }) {
   return URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
 }
 
+/** 'avc1.PPCCLL' (profile, constraints, level) from the SPS in an Annex B keyframe, for WebCodecs. */
+export function avcCodec(annexb) {
+  const hex = (byte) => byte.toString(16).padStart(2, '0');
+  for (let i = 0; i + 6 < annexb.length; i++) {
+    if (annexb[i] === 0 && annexb[i + 1] === 0 && annexb[i + 2] === 1 && (annexb[i + 3] & 0x1f) === 7) {
+      return `avc1.${hex(annexb[i + 4])}${hex(annexb[i + 5])}${hex(annexb[i + 6])}`;
+    }
+  }
+  return 'avc1.640032'; // High 5.0, what the GPU encoder sends
+}
+
+/**
+ * Shows our running native share on `canvas` as it's sent, at full quality and frame rate: Rust
+ * hands over each encoded frame (native_live_watch) and WebCodecs decodes it on the GPU (~0.2 core
+ * at 50 fps, measured). Paused while the app is minimized (e.g. while streaming a game); WebView2
+ * doesn't mark the page hidden then (measured), so the window is asked.
+ * `onFrame` runs after each frame drawn. Returns stop().
+ */
+export function watchNativeLive(canvas, onFrame = () => {}) {
+  let stopped = false;
+  let Channel = null;
+  let decoder = null;
+  let lastFrameAt = performance.now();
+  let paused = false;
+  const context = canvas.getContext('2d');
+  const closeDecoder = () => {
+    if (decoder && decoder.state !== 'closed') decoder.close();
+    decoder = null;
+  };
+  // Also gets a keyframe: a decoder can only start at one. A new channel each time: Tauri
+  // unregisters a channel's callback once Rust drops it (on unwatch, or when replaced).
+  const watch = () => {
+    if (stopped || paused || !Channel) return;
+    const channel = new Channel();
+    channel.onmessage = onMessage;
+    invoke('native_live_watch', { onFrame: channel }).catch(() => {});
+  };
+  const onMessage = (message) => {
+    if (stopped || !(message instanceof ArrayBuffer)) return;
+    const view = new DataView(message);
+    const key = view.getUint8(8) === 1;
+    const data = new Uint8Array(message, 9);
+    if (!decoder) {
+      if (!key) return;
+      decoder = new VideoDecoder({
+        output: (frame) => {
+          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+            [canvas.width, canvas.height] = [frame.displayWidth, frame.displayHeight];
+          }
+          context.drawImage(frame, 0, 0);
+          frame.close();
+          lastFrameAt = performance.now();
+          onFrame();
+        },
+        error: () => {
+          closeDecoder();
+          watch(); // start over at a new keyframe
+        },
+      });
+      decoder.configure({ codec: avcCodec(data), optimizeForLatency: true });
+    }
+    decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: Number(view.getBigUint64(0, true)), data }));
+  };
+  import('@tauri-apps/api/core').then((core) => {
+    Channel = core.Channel;
+    watch();
+  });
+  const appWindow = import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow());
+  const watchdog = setInterval(async () => {
+    const minimized = await (await appWindow).isMinimized().catch(() => false);
+    if (stopped) return;
+    if (minimized !== paused) {
+      paused = minimized;
+      closeDecoder();
+      lastFrameAt = performance.now();
+      if (paused) invoke('native_live_unwatch').catch(() => {});
+      else watch();
+      return;
+    }
+    // Rust sends a frame at least every second: nothing for longer means the live restarted (after
+    // a reconnect) or the decoder stalled. Watch again.
+    if (paused || performance.now() - lastFrameAt < 3000) return;
+    closeDecoder();
+    watch();
+    lastFrameAt = performance.now();
+  }, 1000);
+  return () => {
+    stopped = true;
+    clearInterval(watchdog);
+    closeDecoder();
+    invoke('native_live_unwatch').catch(() => {});
+  };
+}
+
 /** A JPEG (Blob, 384 px wide) of what the running native share sends: its last frame. */
 export const livePreview = async () => new Blob([await invoke('native_live_preview')], { type: 'image/jpeg' });
 

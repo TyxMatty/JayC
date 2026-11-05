@@ -48,7 +48,6 @@ function cameraLayerFor(cameraCount, presenting) {
  *   participant-removed { participant }
  *   participant-updated { participant }   tracks, mute state or connection changed
  *   local-updated       {}                local tracks changed (mute, camera on/off, screen share)
- *   screen-preview      { image }         a new still of our screen share (see screenPreview)
  *   signaling-state     { state }
  *   notice              { message }       something worth telling the user (e.g. no screen sound)
  *   ended               {}
@@ -63,10 +62,8 @@ function cameraLayerFor(cameraCount, presenting) {
  * }
  */
 const isStream = (source) => source === 'screen' || source === 'screen-audio';
-/** Our share's still: refreshed this often for our own tile... */
-const PREVIEW_EVERY_MS = 2000;
-/** ...and sent to the room this often (~30 KB each, to everyone). */
-const PREVIEW_SEND_MS = 6000;
+/** A still of our share goes to the room this often (~10-30 KB each, to everyone). */
+const PREVIEW_EVERY_MS = 6000;
 
 export class Call extends EventTarget {
   local = { audio: null, video: null, screen: null };
@@ -121,7 +118,6 @@ export class Call extends EventTarget {
   /** The signaling connection: 'connecting' | 'open' | 'reconnecting' | 'closed'. */
   #signalingState = 'connecting';
   #previewTimer = null;
-  #previewSentAt = 0;
   /** Native screen-share sound while sharing: { track, stop(), close(), description }. */
   #screenAudio = null;
   /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
@@ -377,10 +373,9 @@ export class Call extends EventTarget {
     return true;
   }
 
-  /** Stills of the share, every PREVIEW_EVERY_MS, while it runs (see core/screen-preview.js). */
+  /** Stills of the share for the room, every PREVIEW_EVERY_MS, while it runs (core/screen-preview.js). */
   #startPreviews() {
     clearInterval(this.#previewTimer);
-    this.#previewSentAt = 0;
     let busy = false;
     const tick = async () => {
       const share = this.screenShare;
@@ -396,11 +391,7 @@ export class Call extends EventTarget {
       }
       if (this.screenShare !== share) return;
       this.screenPreview = image;
-      this.#emit('screen-preview', { image });
-      if (performance.now() - this.#previewSentAt >= PREVIEW_SEND_MS) {
-        this.#previewSentAt = performance.now();
-        this.#signaling?.sendScreenPreview(image);
-      }
+      this.#signaling?.sendScreenPreview(image);
     };
     this.#previewTimer = setInterval(tick, PREVIEW_EVERY_MS);
     tick();
@@ -574,6 +565,8 @@ export class Call extends EventTarget {
           this.#producers.screen = null;
           // The server went away: the rejoin (#setup) starts the share again on a new transport.
           if (this.#signalingState !== 'open') return;
+          // Its transport (and producer) on the server, or the next share is refused (duplicate-source).
+          live.close();
           this.#emit('notice', { message: t('Screen share stopped: {reason}', { reason: t(reason) }) });
           this.stopScreenShare();
         },

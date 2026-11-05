@@ -184,6 +184,21 @@ Uma revisão do código inteiro apontou problemas na live nativa. Os principais 
 - **Erros do codificador** (GPU reiniciada, dispositivo removido) agora encerram a live com aviso, em vez de congelar a imagem sem dizer nada.
 - **Visto uma vez, não reproduzido:** ao recomeçar depois de uma reconexão, o codificador falhou ao abrir (`MF_E_UNSUPPORTED_D3D_TYPE`) no mesmo segundo em que o Windows invalidou o microfone. O recomeço agora tenta de novo 1 s depois e, se falhar, avisa.
 
+## A própria live no card de quem transmite (05/11/2026)
+
+O card "Sua tela" mostrava "Ao vivo · sem prévia" (a live nativa não tem faixa local), depois uma imagem a cada 2 s. Agora mostra a live de verdade:
+- **Como:** o Rust entrega à página os mesmos quadros H.264 que manda pela rede (`native_live_watch`, por um `Channel` do Tauri: tempo, se é quadro-chave e os dados Annex B), e o WebCodecs (`VideoDecoder`) decodifica na placa de vídeo e desenha num `<canvas>`. Nada passa pela rede. Ao começar, o Rust força um quadro-chave, porque um decodificador só começa num. `Sender::complete` põe SPS/PPS nos quadros-chave, para a rede e para o card.
+- **Medido** (janela de teste a ~50 quadros/s, 886x592, app de dev):
+  - o card desenha o tamanho inteiro (886x592) e todos os quadros que chegam (53,2 decodificados e desenhados por segundo, com 53 codificados; fila do decodificador vazia);
+  - custo: 1,31 núcleo com o card contra 1,11 sem ele (mesma live), quase tudo no processo de GPU do WebView2 (0,20 contra 0,03); o Rust não muda.
+- **Minimizado:** com o app minimizado, o card para de decodificar (`native_live_unwatch`) e volta num quadro-chave ao restaurar. O WebView2 não marca a página como `hidden` com a janela minimizada (medido), então o card pergunta à janela do Tauri (`isMinimized`, a cada 1 s). Medido: 0 quadros desenhados minimizado, processo de GPU de 0,32 para 0,04 núcleo; de volta ao restaurar.
+- **Canal novo a cada registro:** o Tauri desregistra o callback de um `Channel` quando o Rust solta a última cópia. Reaproveitar o canal depois de um `unwatch` deixava o card parado (medido: 0 quadros depois de restaurar).
+- **A sala** continua recebendo uma imagem pequena a cada 6 s (`screen-preview`), agora só para o card "Assistir live".
+
+**Dois bugs achados nesses testes:**
+- **Janela compartilhada minimizada encerrava a live.** Minimizada, a captura informa o tamanho da barra de título (146x28); a live recriava o codificador nesse tamanho, a GPU recusava (`MF_E_UNSUPPORTED_D3D_TYPE`, 0xC00D6D76) e a live acabava. É provável que seja a falha "vista uma vez" acima. Agora tamanhos abaixo de 64 px (`MIN_SIDE`, o mesmo piso do seletor) são ignorados: o último quadro segue saindo. Medido: minimizada, 0 quadros capturados e 1/s enviado, e o card continua; restaurada, volta a ~52/s.
+- **Depois de uma live que acaba sozinha** (janela fechada, erro da GPU), a próxima era recusada pelo servidor (`duplicate-source`) e o app caía no seletor do sistema (o do Chromium): o transporte da live antiga não era fechado. Agora é. Medido: janela A fechada, live de B começou nativa, sem avisos.
+
 ## O que ainda falta para virar a live do app
 
 - **Banda estreita:**
