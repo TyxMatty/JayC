@@ -120,6 +120,13 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 
 **Instalador 0.2.6 (05/11/2026):** a 0.2.5 com o ícone da janela e da barra de tarefas no estilo e na cor escolhidos.
 
+**Instalador 0.3.0 (05/11/2026):**
+- **Live nativa no Windows:** captura, H.264 na placa de vídeo e WebRTC próprio, em ~0,3 núcleo contra ~1,5, com resolução e quadros/s que se adaptam à banda. Vem com o seletor próprio de telas e janelas, com miniaturas, e sem prévia da própria live.
+- **App sem menu nem atalhos de navegador.**
+- **Calmo em violeta:** `#AA8BFF` no escuro.
+- **Servidor:** não mudou; a live nativa usa o mesmo `createTransport`/`produce` e a porta 40000.
+- **Ainda não testado:** a live nativa com quem assiste em outro PC, e placas Intel/AMD. Se o nativo falhar ao começar, a live usa o seletor do Chromium.
+
 **Instalador 0.2.2 (04/11/2026):** idioma do app (Settings › Aparência › Idioma: Sistema, English ou Português (Brasil); o padrão segue o Windows) com tudo em PT-BR informal, inclusive o guia do servidor e o tour Welcome. Textos em inglês no código, passados por `t()` (`core/i18n.js`), com as traduções em `src/locales/pt-BR.js`; um teste confere que todo `t('…')` tem tradução. O guia tem a pastilha **Copiar** em cada comando. O instalador pergunta o idioma ao abrir (English / Português) e usa `frontend/src-tauri/windows/PortugueseBR.nsh` para os textos do Tauri.
 
 **Perda de configurações no teste do instalador (04/11/2026):** a pasta `%LOCALAPPDATA%\io.github.tyxmatty.jayc` (perfil do WebView2 do app de dev e do instalado) foi recriada vazia às 11:50, durante o teste da 0.2.1, e as configurações do usuário foram restauradas à mão. Repetindo a sequência com um arquivo-marcador (instalar 0.2.0 em silêncio, 0.2.1 por cima com interface, desinstalar em silêncio), nada foi apagado: a causa não foi achada. Antes de testar instaladores, copie essa pasta.
