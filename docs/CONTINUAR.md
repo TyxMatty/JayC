@@ -128,7 +128,9 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
   - Janela e barra de tarefas: as cores escuras do estilo (os desenhos do usuário).
   - Dentro do app: as cores do tema.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
-- **Ainda não está em nenhum instalador publicado.**
+- Publicado no instalador 0.3.1.
+
+**Instalador 0.3.1 (05/11/2026):** a 0.3.0 com o ícone do Jay-C (o lobo) no `.exe`, no instalador, na janela, na barra de tarefas e na marca do app. O servidor não mudou.
 
 **Instalador 0.3.0 (05/11/2026):**
 - **Live nativa no Windows:** captura, H.264 na placa de vídeo e WebRTC próprio, em ~0,3 núcleo contra ~1,5, com resolução e quadros/s que se adaptam à banda. Vem com o seletor próprio de telas e janelas, com miniaturas, e sem prévia da própria live.
