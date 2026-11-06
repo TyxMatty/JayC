@@ -622,7 +622,9 @@ impl Mic {
         let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
         let mut sink: Sink = match jay_a {
             Some(hello) => {
-                let jay_a = Arc::new(JayA::start(PIPE, hello, Box::new(sink), Box::new(on_status)));
+                // JAYC_JAY_A_PIPE: another pipe, so a test app and its fake don't meet the ones on the real pipe.
+                let pipe = std::env::var("JAYC_JAY_A_PIPE").unwrap_or_else(|_| PIPE.to_string());
+                let jay_a = Arc::new(JayA::start(&pipe, hello, Box::new(sink), Box::new(on_status)));
                 mic.jay_a = Some(jay_a.clone());
                 Box::new(move |chunk: &[f32]| jay_a.reserve(chunk))
             }

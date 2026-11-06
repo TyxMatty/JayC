@@ -183,7 +183,7 @@ Pedidos feitos ao `ARQUITETURA.md` do Jay-A. O Jay-A aceitou os pedidos P1–P6,
 
 Enquanto o Jay-A não está pronto, o lado do Jay-C é testado com um **Jay-A falso**:
 
-- **`cargo run --example fake_jay_a --features fake-jay-a`** (no plugin): um servidor do Jay Link que responde ao `HELLO` e manda um tom de 440 Hz em blocos de 20 ms. Opções: `--pipe <nome>`, `--stall-after <s>`, `--stall-for <s>`, `--exit-after <s>`, `--protocol <n>` e `--jitter <ms>`.
+- **`cargo run --example fake_jay_a --features fake-jay-a`** (no plugin): um servidor do Jay Link que responde ao `HELLO` e manda um tom de 440 Hz em blocos de 20 ms. Opções: `--pipe <nome>`, `--stall-after <s>`, `--stall-for <s>`, `--exit-after <s>`, `--protocol <n>` e `--jitter <ms>`. Com `--pipe`, o app de dev procura o mesmo nome se tiver `JAYC_JAY_A_PIPE=<nome>` no ambiente. Assim, um teste não cruza com outro que está no pipe de verdade.
 - **`cargo run --example jay_a_probe`:** só o cliente do Jay-C, para o chat do Jay-A testar o servidor dele. Ele conecta, faz o `HELLO` e pede o microfone por 30 s. Mostra os intervalos entre blocos (p50, p99 e máximo) e os buracos, e passa se não houver buraco maior que 60 ms.
 
 | Teste (`cargo test`) | Prova |
@@ -238,7 +238,7 @@ Três regras do seletor foram quebradas de propósito, e os testes pegaram as tr
   | gerenciador | 0 % |
 
   A reserva custa o mesmo que o microfone do Jay-C no modo Jay-C, porque é a mesma captura.
-- **Visto e não resolvido:** no gravador dentro do app (ScriptProcessor) e no bot, alguns blocos curtos durante o tom não saíram como tom puro: 4,6 % dos blocos de 10,7 ms no app e menos no bot, sempre no mesmo nível. O medidor dá 0 % com um tom sintético perfeito, e o áudio que vem do Rust é contínuo. Então isso acontece depois, no caminho worklet → faixa → gravador, que é o mesmo do microfone nativo de hoje. A causa não foi investigada. O Jay-A falso, por mandar um sinal conhecido, serve para isso.
+- **Blocos "não puros" no gravador (resolvido em [spikes/11](spikes/11-continuidade-do-mic.md)):** o gravador dentro do app (ScriptProcessor) e o bot achavam alguns blocos curtos do tom que não eram tom puro: 4,6 % dos blocos de 10,7 ms no app. Medido depois em quatro pontos, com um detector exato: em regime, o caminho até a faixa é contínuo. Quem perdia ou repetia um quantum de 128 quadros era o próprio ScriptProcessor. O defeito real era outro: depois de cada parada da thread principal, a fila do worklet ficava em ~220 ms para sempre e cortava blocos sem transição. Corrigido no `pcm-player.worklet.js`.
 - **Bug achado no Jay-A falso:** ele fechava depois do primeiro cliente, porque criava a instância nova do pipe com `FILE_FLAG_FIRST_PIPE_INSTANCE` antes de fechar a antiga. Corrigido e coberto por teste; o chat do Jay-A foi avisado, porque o servidor dele segue o mesmo modelo.
 - **Com o Jay-A de verdade (I5):** a correlação cruzada entre os blocos do Jay-A e os da reserva dá o atraso médio do link, e os intervalos entre blocos dão o jitter. É o S1 do Jay-A, que tem a meta de ≤ 5 ms no p99 sobre o microfone nativo. O eco é medido com o teste de eco do Jay-C (S2 do Jay-A).
 - **Verificar também:** se o Channel mantém a ordem entre o estado em JSON e os blocos em bytes. No Rust, o estado sai antes dos blocos (o teste do modo Jay-A pega a ordem invertida), mas a ordem na chegada ao JS não foi verificada: na I2, o volume era 1 e o gate estava desligado, e assim um bloco trocado não muda nada. Se não mantiver, um bloco na troca leva volume e gate a mais ou a menos; aí é melhor marcar a fonte em cada bloco.
