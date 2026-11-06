@@ -795,6 +795,10 @@ Section Install
     !insertmacro NSIS_HOOK_POSTINSTALL
   !endif
 
+  ; Jay-C: the .exe's icon changes between versions, and Windows kept showing the old one from its
+  ; icon cache (seen in the taskbar's right-click menu). SHCNE_ASSOCCHANGED makes it refresh.
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+
   ; Auto close this page for passive mode
   ${If} $PassiveMode = 1
     SetAutoClose true

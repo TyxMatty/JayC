@@ -137,6 +137,11 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Janela compartilhada minimizada** não encerra mais a live (o último quadro segue saindo).
 - **Compartilhar de novo depois de uma live que acabou sozinha** (janela fechada) não cai mais no seletor do sistema.
 - **Discord:** os lobos grossos em todos os estilos (`jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick`).
+- **Ícone da barra de tarefas no app instalado:** seguia o laranja do `.exe` em qualquer estilo, porque o Windows liga o `jay-c.exe` ao atalho do Menu Iniciar e usa o ícone dele.
+  - A janela agora tem um AppUserModelID próprio (`io.github.tyxmatty.jayc.window`) e propriedades de "relaunch" com um `.ico` do estilo, gravado em `%LOCALAPPDATA%\io.github.tyxmatty.jayc\taskbar-*.ico` (`src-tauri/src/taskbar_icon.rs`).
+  - Medido com um atalho temporário apontando para o app de dev (o mesmo laço do instalado): roxo no Calmo, ciano ao trocar para Neon, roxo de novo, sempre com o nome "Jay-C".
+  - O instalador agora pede ao Windows para atualizar o cache de ícones no fim (`SHChangeNotify`), contra o ícone antigo no menu do botão direito. Não testado: só roda num build de instalador, e o instalador não roda neste PC.
+  - Um app fixado na barra mostra o ícone de quando foi fixado (o Windows usa o do atalho fixado).
 
 **Instalador 0.3.4 (05/11/2026):** a 0.3.3 com o que está abaixo e o Discord Rich Presence: durante uma chamada, o perfil do Discord mostra o Jay-C (pessoas, tempo, live sem nomes, o lobo do estilo), com as opções em Settings › Perfil › Discord. Plano e medições em ARQUITETURA.md, seção 10, "Discord Rich Presence". O servidor mudou (a mensagem `screen-preview`); um servidor antigo continua funcionando, sem as prévias.
 

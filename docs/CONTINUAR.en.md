@@ -139,6 +139,11 @@ iOS (milestone 15, code only) was left for after launch.
 - **A minimized shared window** no longer ends the stream (the last frame keeps going out).
 - **Sharing again after a stream that ended by itself** (window closed) no longer falls back to the system picker.
 - **Discord:** the thick wolves in every style (`jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick`).
+- **Taskbar icon of the installed app:** it stayed the `.exe`'s orange in every style, because Windows ties `jay-c.exe` to its Start menu shortcut and uses the shortcut's icon.
+  - The window now has its own AppUserModelID (`io.github.tyxmatty.jayc.window`) and "relaunch" properties with a `.ico` of the style, written to `%LOCALAPPDATA%\io.github.tyxmatty.jayc\taskbar-*.ico` (`src-tauri/src/taskbar_icon.rs`).
+  - Measured with a temporary shortcut pointing at the dev app (the same tie as the installed one): purple in Calm, cyan after switching to Neon, purple again, always named "Jay-C".
+  - The installer now asks Windows to refresh its icon cache at the end (`SHChangeNotify`), against the old icon in the right-click menu. Not tested: it only runs in an installer build, and installers aren't run on this PC.
+  - An app pinned to the taskbar shows the icon from when it was pinned (Windows uses the pinned shortcut's).
 
 **Installer 0.3.4 (05/11/2026):** 0.3.3 with what's below and Discord Rich Presence: during a call, the Discord profile shows Jay-C (people, time, streams without names, the style's wolf), with the options in Settings › Profile › Discord. Plan and measurements in ARQUITETURA.en.md, section 10, "Discord Rich Presence". The server changed (the `screen-preview` message); an old server still works, without the previews.
 
