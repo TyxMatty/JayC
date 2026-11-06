@@ -6,7 +6,7 @@ import { t } from './i18n.js';
 import { resolveStyle } from './style.js';
 
 /** The wolf in each style's color: images of the "Jay-C" app on the Discord Developer Portal. */
-const WOLF_IMAGES = { calm: 'jayc_purple_thick', neon: 'jayc_neon_thick', soft: 'jayc_orange_thick' };
+const WOLF_IMAGES = { calm: 'discord-wolf-calm', neon: 'discord-wolf-neon', soft: 'jayc_orange_thick' };
 
 /** shortcut: the server's default room limit; a server with another MAX_PEERS_PER_ROOM shows a wrong max. */
 const ROOM_SIZE = 16;

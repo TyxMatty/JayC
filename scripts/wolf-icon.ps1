@@ -94,7 +94,7 @@ public static class WolfIcon {
       SaveScaled(icon, appIconOut, 1024, 1024 * 2 / 100);
     }
     // The same icon in Calmo and Neon (core/style.js ICON_COLORS), for Discord Rich Presence
-    // (core/discord-presence.js; uploaded to the Discord app as jayc_purple_thick, jayc_neon_thick).
+    // (core/discord-presence.js; uploaded to the Discord app as discord-wolf-calm, discord-wolf-neon).
     foreach (var c in new[] { new[] { "calm", "#0F0D16", "#AA8BFF" }, new[] { "neon", "#06060A", "#22D3EE" } }) {
       using (var icon = new Bitmap(w, h, PixelFormat.Format32bppArgb)) {
         using (var g = Graphics.FromImage(icon))

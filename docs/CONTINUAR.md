@@ -138,7 +138,7 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **A própria live no card de quem transmite**, com a qualidade e os quadros/s de verdade: o Rust entrega os quadros H.264 à página e o WebCodecs decodifica na GPU. ~0,2 núcleo a mais enquanto o card aparece; pausa com o app minimizado. Ver docs/spikes/10-live-nativa.md, "A própria live no card".
 - **Janela compartilhada minimizada** não encerra mais a live (o último quadro segue saindo).
 - **Compartilhar de novo depois de uma live que acabou sozinha** (janela fechada) não cai mais no seletor do sistema.
-- **Discord:** os lobos grossos em todos os estilos (`jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick`).
+- **Discord:** os lobos grossos em todos os estilos (`discord-wolf-calm`, `discord-wolf-neon`, `jayc_orange_thick`).
 - **Ícone da barra de tarefas no app instalado:** seguia o laranja do `.exe` em qualquer estilo, porque o Windows liga o `jay-c.exe` ao atalho do Menu Iniciar e usa o ícone dele.
   - A janela agora tem um AppUserModelID próprio (`io.github.tyxmatty.jayc.window`) e propriedades de "relaunch" com um `.ico` do estilo, gravado em `%LOCALAPPDATA%\io.github.tyxmatty.jayc\taskbar-*.ico` (`src-tauri/src/taskbar_icon.rs`).
   - Medido com um atalho temporário apontando para o app de dev (o mesmo laço do instalado): roxo no Calmo, ciano ao trocar para Neon, roxo de novo, sempre com o nome "Jay-C".

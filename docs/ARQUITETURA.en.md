@@ -426,7 +426,7 @@ Cards that explain the app step by step, for first-time users.
 During a call, the person's Discord profile shows Jay-C. Windows only: on Android, Discord has no local channel.
 
 **What shows** (the user's choices):
-- "Jay-C", with the wolf in the app style's color (Calm `jayc_purple_thick`, Neon `jayc_neon_thick`, Soft `jayc_orange_thick`; the images come from `scripts/wolf-icon.ps1`: `app-icon.png` and `discord-wolf-calm.png`/`discord-wolf-neon.png`);
+- "Jay-C", with the wolf in the app style's color (Calm `discord-wolf-calm`, Neon `discord-wolf-neon`, Soft `jayc_orange_thick`; the images come from `scripts/wolf-icon.ps1`: `app-icon.png` and `discord-wolf-calm.png`/`discord-wolf-neon.png`);
 - "In a call", how many people (e.g. 3 of 16) and the time since joining;
 - while streaming: "Streaming their screen" or "Watching a stream", with no names and a small live icon;
 - the room name only with an option, off by default;
@@ -442,7 +442,7 @@ The status is on by default, with an option to turn it off.
 | D3 | **Settings:** Settings › Profile › Discord (Windows app only): "Show on Discord" (`discordPresence`, on) and "Show the room name" (`discordShowRoom`, off; hidden while the status is off). They apply right away, during the call; turning it off and on keeps the time in the call. Changing the style changes the wolf. | ✅ |
 | D4 | Docs and release | |
 
-**Discord application:** "Jay-C" (Application ID 1568029459146346599, in `CLIENT_ID`), created by the user. Images the code uses: `jayc_purple_thick`, `jayc_neon_thick`, `jayc_orange_thick` and `live` (`src-tauri/discord-live.png`). A key the application doesn't have is dropped by Discord: the status shows, without the image.
+**Discord application:** "Jay-C" (Application ID 1568029459146346599, in `CLIENT_ID`), created by the user. Images the code uses: `discord-wolf-calm`, `discord-wolf-neon`, `jayc_orange_thick` and `live` (`src-tauri/discord-live.png`). A key the application doesn't have is dropped by Discord: the status shows, without the image.
 
 **Measured (D1):** with Discord open, a handshake with a made-up id comes back refused (`Invalid Client ID`), which proves the pipe and the message format. With the real id: `JAYC_DISCORD_ID=<id> cargo test --lib discord -- --ignored --nocapture` shows a status for 10 s, then clears it. Measured: Discord answered `name: "Jay-C"`, `type: 0` ("Playing") and the start in milliseconds as sent.
 
