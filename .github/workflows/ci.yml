@@ -1,0 +1,65 @@
+# CI: the same tests as `npm test` and `cargo test` on a developer's PC, on every push to main and
+# every pull request. Rust runs on Windows only: the plugin's audio (WASAPI, named pipes) and the
+# app's native live are Windows code.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: JS tests (server and frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  rust:
+    name: Rust tests (Windows)
+    runs-on: windows-latest
+    env:
+      # One target folder for the plugin and the app, so the second build reuses the first one's
+      # dependencies (Tauri, the WebRTC audio processing).
+      CARGO_TARGET_DIR: ${{ github.workspace }}\target
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # The plugin's build.rs compiles WebRTC's audio processing with Meson + Ninja (and MSVC,
+      # found by `meson --vsenv`).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python -m pip install meson ninja
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            plugins/tauri-plugin-system-audio -> ../../target
+            frontend/src-tauri -> ../../target
+      - run: npm ci
+      # The app embeds the built frontend (tauri.conf.json frontendDist), so it must exist to compile.
+      - run: npm run build -w frontend
+      - name: Plugin system-audio
+        working-directory: plugins/tauri-plugin-system-audio
+        run: cargo test --lib
+      - name: App
+        working-directory: frontend/src-tauri
+        run: cargo test

@@ -84,6 +84,10 @@ npm test           # tests
 - **A second participant for testing:** open `http://localhost:5173` in Chrome.
 - **A terminal opened before installing something** doesn't see the new PATH (e.g. `cargo` not found). Open a new terminal, or use `scripts\dev-debug.ps1`.
 - **Run the commands in the project folder**, not in the user folder (`npm error ENOENT ... package.json`).
+- **CI on GitHub** (`.github/workflows/ci.yml`, runs on every push to `main` and every pull request):
+  - on Ubuntu, `npm ci` and `npm test`;
+  - on Windows, `cargo test --lib` for the `system-audio` plugin and `cargo test` for the app. Before that, it installs Meson and Ninja for the APM and runs `vite build`, because the app embeds `frontend/dist`.
+  - Rust tests that need a screen, Discord or live sound are `#[ignore]` and don't run there.
 
 ## 4. Claude Code on the new PC
 
