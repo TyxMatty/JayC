@@ -134,7 +134,9 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
-**After 0.3.7 (06/11/2026), no installer yet:**
+**Installer 0.3.8 (06/11/2026):** 0.3.7 with what's below. The server changed (`viewer-bandwidth` and the 6 Mbps starting estimate); with an old server the live works as before, without the cap.
+
+**Between 0.3.7 and 0.3.8 (06/11/2026):**
 - **Native live freezing for viewers above 720p** (report: "extremely frequent freezes", video and anime, both sides, server on the user's PC). The native live has a single layer, and the sender only saw its own leg to the server: with the server on the same PC the estimate was ~12 Mbps and the live went out at 1080p60, ~7 Mbps, to everyone. Measured with a 1920×1080 high-motion window, the dev app sending, a headless Chrome watching and a 4 Mbps UDP bottleneck (200 ms queue) on the viewer only: **0 frames/s for 30 s** (~600 packets lost/s, non-stop keyframe requests) while the sender kept 7.7 Mbps. Now:
   - every 2 s the server sends the sharer the smallest bandwidth among its viewers (`viewer-bandwidth`, from mediasoup's `availableOutgoingBitrate`), and Rust caps the live at 70% of it (`native_live_viewer_kbps`), stepping down the ladder (1080p60 → 720p30…);
   - each viewer's estimate starts at 6 Mbps (was 1 Mbps): with the cap, 1 Mbps would hold a still screen at 540p, since it doesn't grow without traffic;

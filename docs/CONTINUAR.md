@@ -132,7 +132,9 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
-**Depois da 0.3.7 (06/11/2026), ainda sem instalador:**
+**Instalador 0.3.8 (06/11/2026):** a 0.3.7 com o que está abaixo. O servidor mudou (`viewer-bandwidth` e a estimativa inicial de 6 Mbps); com um servidor antigo a live funciona como antes, sem o limite.
+
+**Entre a 0.3.7 e a 0.3.8 (06/11/2026):**
 - **Live nativa travando para quem assiste acima de 720p** (relato: "travadas extremamente recorrentes", vídeo e anime, os dois lados, servidor no PC do usuário). A live nativa tem uma camada só, e quem transmite só enxergava o próprio trecho até o servidor: com o servidor no mesmo PC, a estimativa era de ~12 Mbps e a live saía em 1080p60 a ~7 Mbps para todos. Medido com uma janela de 1920×1080 em muito movimento, quem transmite no app de dev, quem assiste num Chrome sem janela e um gargalo de UDP de 4 Mbps (fila de 200 ms) só para quem assiste: **0 quadros/s durante 30 s** (~600 pacotes perdidos/s, pedidos de quadro-chave sem parar) enquanto quem transmite seguia em 7,7 Mbps. Agora:
   - o servidor manda a cada 2 s, para quem transmite, a menor banda entre quem assiste (`viewer-bandwidth`, do `availableOutgoingBitrate` do mediasoup), e o Rust limita a live a 70% dela (`native_live_viewer_kbps`), descendo a escada (1080p60 → 720p30…);
   - a estimativa para cada pessoa começa em 6 Mbps (era 1 Mbps): com o limite, 1 Mbps prenderia uma tela parada em 540p, porque ela não cresce sem tráfego;
