@@ -1826,12 +1826,8 @@ fieldset > h3 {
   display: grid;
 }
 
-/* Small cards (the strip under a live): center the avatar above the name, not behind it. */
+/* Small cards (the strip under a live): a bigger circle, centered in the card (the name stays on top). */
 @container (max-height: 140px) {
-  .tile-avatar {
-    inset: 4px 0 30px;
-  }
-
   .tile .tile-initials,
   .tile .tile-avatar img {
     width: min(56cqmin, 160px);
@@ -1864,6 +1860,7 @@ fieldset > h3 {
   align-items: center;
   gap: 5px;
   max-width: calc(100% - 16px);
+  z-index: 1; /* over the avatar where they meet (small cards) */
   padding: 3px 9px;
   border-radius: max(6px, calc(var(--radius-tile) / 2 - 2px));
   background: rgb(0 0 0 / 0.6); /* white text >= 4.5:1 even over a white video (5.7:1) */
