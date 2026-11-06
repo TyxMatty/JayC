@@ -49,3 +49,11 @@ test('reports rates, played energy and the media element per participant', async
   assert.equal(ana.receiving[1].packetsPerSec, 100);
   assert.equal('playedEnergy' in ana.receiving[1], false);
 });
+
+test('in Jay-A mode, the link state and how often Jay-C took over', async () => {
+  const call = { room: 'r', micOn: true, cameraOn: false, participants: new Map(), jayAStatus: { link: 'jay-a', version: '0.1.0' }, jayAFallbacks: 2 };
+  const report = await callDiagnostics(call, { sampleMs: 0, root: { querySelectorAll: () => [] }, devices: async () => [] });
+  assert.deepEqual(report.me.jayA, { link: 'jay-a', version: '0.1.0', fallbacks: 2 });
+  delete call.jayAStatus;
+  assert.equal((await callDiagnostics(call, { sampleMs: 0, root: { querySelectorAll: () => [] }, devices: async () => [] })).me.jayA, undefined);
+});

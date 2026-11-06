@@ -71,7 +71,7 @@ flowchart TD
 - **Por que 60 ms:** são 3 blocos, parecido com os ~60 ms que o worklet acumula antes de tocar (`pcm-player.worklet.js`). Medido na I2: o worklet não chega a secar na troca (seção 9).
 - **Por que 1 s para voltar:** um Jay-A que trava e solta não deve fazer a fonte ficar pulando de um lado para o outro.
 - **A rampa:** o primeiro bloco depois de uma troca entra com um fade-in de 120 amostras, para não estalar na emenda. Mesmo assim, o timbre muda na troca, e isso não tem como evitar.
-- **Com o Jay-A ativo, a reserva segue o microfone dele** (pelo `deviceId` do pedido P4). O microfone escolhido no Jay-C vale no modo Jay-C e enquanto o Jay-A ainda não conectou. Reabrir a reserva (por exemplo, quando o `micNeedsRestart` detecta outro microfone) não derruba o link. **Isto fica para a I3**: na I2, a reserva usa o microfone escolhido no Jay-C, e reabri-la reabre o link junto.
+- **Com o Jay-A ativo, a reserva segue o microfone dele** (pelo `deviceId` do pedido P4). O microfone escolhido no Jay-C vale no modo Jay-C e enquanto o Jay-A ainda não conectou. Reabrir a reserva (por exemplo, quando o `micNeedsRestart` detecta outro microfone) não derruba o link. Isso vale desde a I3. Ao reabrir, o plugin passa o link e o seletor do microfone antigo para o novo (`JayAStart::Keep` + `rewire`), e só a captura e o canal trocam.
 
 ## 4. Estados do link no Jay-C
 
@@ -132,11 +132,11 @@ sequenceDiagram
 
 | Onde | O que muda |
 |---|---|
-| Settings › Áudio | Entra o **Filtro do microfone**: Jay-A ou Jay-C (`micFilter`, padrão `jay-c`). Com o Jay-A, aparecem o estado, a versão do Jay-A e o botão **Abrir Jay-A** (`CONTROL show`). Os ajustes do Jay-C (volume, sensibilidade, eco, ruído e ganho) continuam abaixo, sob o título "Reserva: quando o Jay-A não responde", porque são eles que valem na reserva. |
-| Menu do microfone na chamada | A mesma escolha, para trocar de filtro sem sair da chamada. |
-| Avisos | "O Jay-A parou. Usando o filtro do Jay-C." e "Jay-A de volta." pelo evento `notice` que já existe. "Atualize o Jay-A." quando o protocolo não bate. |
+| Settings › Áudio | Entra o **Filtro do microfone**, antes dos dispositivos: Jay-C ou Jay-A (`micFilter`, padrão `jay-c`), num seletor de dois botões, com uma frase sobre cada um. Com o Jay-A aparecem:<br>• o estado: "Procurando o Jay-A…", "Jay-A ligado (versão)", "não está respondendo" ou "Atualize o Jay-A";<br>• o botão **Abrir Jay-A** (`CONTROL show`), ativo só com o Jay-A conectado;<br>• a frase de que os ajustes abaixo (volume, sensibilidade, eco, ruído e ganho) só valem enquanto o Jay-A não responde.<br>Fora da chamada, o **Testar microfone** também conecta ao Jay-A. |
+| Na chamada | Não existe um menu do microfone na chamada. As Configurações abrem durante a chamada, e a troca de filtro vale na hora, sem sair dela. |
+| Avisos | Pelo evento `notice` que já existe: "O Jay-A parou. Usando o filtro do Jay-C." só se a queda durar **2 s**, e "O Jay-A voltou." só depois de um "parou". Uma travada breve fica coberta pela reserva, sem aviso (seção 9). "Atualize o Jay-A" aparece quando o protocolo não bate. |
 | Medidor e anel de fala | Continuam funcionando, porque o nível é medido em cada bloco. Com o Jay-A ativo, o JS não aplica volume nem gate (o Jay-A já aplicou), e o gate conta como aberto quando o bloco não é silêncio. |
-| Settings › Solução de problemas | Uma linha para o Jay-A: o estado, a versão, as trocas para a reserva na chamada e o maior buraco entre blocos. |
+| Settings › Solução de problemas | O diagnóstico copiado ganha `me.jayA`: o estado do link, a versão, o microfone do Jay-A e `fallbacks` (quantas vezes a reserva assumiu na chamada, inclusive as breves). O maior buraco entre blocos ficou de fora, porque a medição do caminho worklet → faixa é de outra sessão. |
 
 ## 7. Mudanças no Jay-C
 
@@ -147,10 +147,10 @@ sequenceDiagram
 | `.../src/link/fake.rs`, `examples/fake_jay_a.rs`, `examples/jay_a_probe.rs` (novos) | O Jay-A falso, que só entra nos testes e com `--features fake-jay-a`, e o probe (seção 9). |
 | `.../src/jay_a.rs` (novo) | O modo Jay-A. Um gerenciador conecta e reconecta: na hora depois de uma queda, a cada 5 s enquanto o Jay-A não está lá e a cada 60 s se ele é incompatível. Ele manda `start-mic` e o último `call-state` a cada conexão. A saída é uma só: o seletor escolhe a fonte de cada bloco, e o estado vai antes dos blocos a que se refere. |
 | `.../src/win.rs` | O `Mic` ganha o modo Jay-A: a captura de hoje vira a reserva e entrega os blocos ao `jay_a.rs`. |
-| `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comando novo: `mic_call_state({ inCall, muted })` (I2). Vêm depois: `jay_a_show()` (I3) e `jay_a_installed()` (I4). |
-| `frontend/src/core/native-mic.js` | Repassa os estados. Aplica o `shapeMic` só aos blocos da reserva e mede o nível de todos. |
-| `frontend/src/core/call.js` | `micFilter` entra junto com as outras opções do microfone, e `setMicFilter` reabre o microfone. Ganha `jayAStatus` e o evento `jay-a-status` e passa a mandar o mudo ao plugin. Os avisos ficam para a I3. |
-| `store/settings.js`, `ui/audio-settings.js`, `ui/settings-modal.js`, `ui/audio-menu.js`, locales | A escolha do filtro, o estado e os textos, em PT e EN. |
+| `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comandos novos: `mic_call_state({ inCall, muted })` (I2) e `jay_a_show()` (I3). Vem depois: `jay_a_installed()` (I4). Ao reabrir no modo Jay-A, `start_mic` mantém o link do microfone anterior. |
+| `frontend/src/core/native-mic.js` | Repassa os estados. Aplica o `shapeMic` só aos blocos da reserva e mede o nível de todos. Também tem `jayANotices`, os avisos sem as travadas breves. |
+| `frontend/src/core/call.js` | `micFilter` entra junto com as outras opções do microfone, e `setMicFilter` reabre o microfone. Ganha `jayAStatus`, `jayAFallbacks` e o evento `jay-a-status`, manda o mudo ao plugin e dá os avisos. No modo Jay-A, abre a reserva no microfone do Jay-A (`deviceId`), também no `micNeedsRestart`. |
+| `store/settings.js`, `ui/audio-settings.js`, `ui/settings-modal.js`, `core/diagnostics.js`, locales | A escolha do filtro, o estado, o botão, o diagnóstico e os textos, em PT e EN. |
 | `docs/ARQUITETURA.md` e `.en.md` | O seletor no pipeline de áudio e a linha do Jay-A nas etapas. |
 
 O servidor e a sinalização não mudam.
@@ -244,6 +244,21 @@ Três regras do seletor foram quebradas de propósito, e os testes pegaram as tr
 - **Verificar também:** se o Channel mantém a ordem entre o estado em JSON e os blocos em bytes. No Rust, o estado sai antes dos blocos (o teste do modo Jay-A pega a ordem invertida), mas a ordem na chegada ao JS não foi verificada: na I2, o volume era 1 e o gate estava desligado, e assim um bloco trocado não muda nada. Se não mantiver, um bloco na troca leva volume e gate a mais ou a menos; aí é melhor marcar a fonte em cada bloco.
 - **Com o Jay-A de verdade (I5), também:** os outros apps continuam sem abafar com dois microfones abertos, o do Jay-A e a reserva (spike 09).
 
+**Medido na I3** (app de dev com perfil de teste, Jay-A falso no pipe de verdade):
+- **Settings › Áudio, fora da chamada:**
+  - o seletor Jay-C / Jay-A troca a frase;
+  - o **Testar microfone** mostrou "Procurando o Jay-A…" e depois "Jay-A ligado (fake)";
+  - o **Abrir Jay-A** ficou ativo só com o Jay-A conectado, e o falso recebeu `{"type":"show"}`;
+  - a auditoria de contraste não achou nada abaixo do mínimo (21 textos).
+- **Reabrir o microfone na chamada** (trocar a supressão de ruído duas vezes): o estado foi só reenviado como "jay-a". Não houve nova busca, o falso não recebeu outro `start-mic` e não apareceu aviso.
+- **A reserva segue o microfone do Jay-A:** o padrão do Windows era o "Microfone (2- ME6S)" e o falso anunciou o "Voicemeeter Out B1". A reserva abriu o B1, e o link continuou.
+- **Trocar o filtro no meio da chamada:** para Jay-C, o estado zera, sem aviso. De volta a Jay-A, "searching" e depois "jay-a" em ~1 s.
+- **Avisos:**
+  - uma travada de 300 ms do falso (`--stall-after 4 --stall-for 0.3`) deu 1,25 s de reserva, contada em `fallbacks`, sem aviso;
+  - com o falso morto, "O Jay-A parou" veio 2,0 s depois da queda, e "O Jay-A voltou" quando ele reconectou.
+- **Travadas sob carga:** com dois builds de debug compilando, o seletor caiu para a reserva 10 vezes em ~5 min, por ~1 s cada, sem o link cair (nenhum `start-mic` novo no falso). É por isso que o aviso espera 2 s. Com o Jay-A de verdade, em release, a frequência dessas travadas fica para medir na I5.
+- **Visto no PC durante os testes:** o microfone padrão do Windows mudou algumas vezes, com erros 0x88890004 (dispositivo invalidado). O app reabriu a reserva com "Microphone back" sem derrubar o link.
+
 ## 10. Etapas
 
 Cada etapa termina com algo testável.
@@ -253,7 +268,7 @@ Cada etapa termina com algo testável.
 | I0 ✅ | Este plano e os pedidos ao Jay-A | os dois documentos descrevem o mesmo Jay Link: P1–P6 aceitos (`0f51ea8` do Jay-A), P7 retirado | — |
 | I1 ✅ | `link.rs`, seletor, Jay-A falso e `jay_a_probe` | T1–T6 passam (16 testes no plugin); o probe passa contra o falso estável e reprova o travamento | não |
 | I2 ✅ | Modo Jay-A no `Mic` (reserva quente) e estados até o JS | no app, com o falso, o bot ouve o tom; ao matar o falso, ele passa a ouvir o microfone; o maior buraco e a CPU da reserva estão medidos (seção 9) | não |
-| I3 | Interface (seção 6), avisos, `jay_a_show()` e a reserva seguindo o microfone do Jay-A sem derrubar o link | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam | não |
+| I3 ✅ | Interface (seção 6), avisos, `jay_a_show()` e a reserva seguindo o microfone do Jay-A sem derrubar o link | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam (seção 9) | não |
 | I4 | Achar e iniciar o Jay-A (P5) | com um `jay-a.exe` falso no caminho, entrar na chamada o inicia uma vez e liga em até 3 s | P5 |
 | I5 | Com o Jay-A de verdade (etapa 3 dele) | atraso e jitter medidos; o eco removido como hoje; fechar o Jay-A no meio da chamada não corta a voz para o bot | etapa 3 |
 | I6 | Soundboard na barra da chamada (etapa 8 dele) | o botão lista os clipes, e um clique toca para o bot | etapa 8 |

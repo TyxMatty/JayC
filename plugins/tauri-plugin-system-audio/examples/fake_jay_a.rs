@@ -2,10 +2,11 @@
 //! microphone, sends a 440 Hz tone every 20 ms.
 //!
 //!   cargo run --example fake_jay_a --features fake-jay-a -- [--pipe NAME] [--stall-after S]
-//!       [--stall-for S] [--exit-after S] [--protocol N] [--jitter MS]
+//!       [--stall-for S] [--exit-after S] [--protocol N] [--jitter MS] [--device-id ID]
 //!
 //! --stall-after: stop sending anything S seconds after the microphone was asked for (a hung Jay-A),
 //! for --stall-for seconds or forever. --exit-after: quit S seconds after a client connected.
+//! --device-id: the microphone it says it uses (default "fake"), e.g. an id from list_mics.
 
 use std::time::Duration;
 
@@ -25,6 +26,7 @@ fn main() {
         stall_for: seconds("--stall-for"),
         exit_after: seconds("--exit-after"),
         jitter: Duration::from_millis(value("--jitter").map_or(0, |ms| ms.parse().expect("milliseconds"))),
+        device_id: value("--device-id").unwrap_or_else(|| "fake".into()),
     };
     let fake = FakeJayA::start(&pipe, options.clone()).unwrap_or_else(|e| {
         eprintln!("{e}");

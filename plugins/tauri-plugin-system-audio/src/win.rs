@@ -575,6 +575,14 @@ pub struct Mic {
     jay_a: Option<Arc<JayA>>,
 }
 
+/// How a microphone in Jay-A mode gets its link to Jay-A.
+pub enum JayAStart {
+    /// A new one, saying this HELLO.
+    New(serde_json::Value),
+    /// The previous microphone's: the link and its state carry on (docs/JAY-A.md, section 3).
+    Keep(Arc<JayA>),
+}
+
 impl Drop for Mic {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
@@ -585,11 +593,10 @@ impl Drop for Mic {
 }
 
 impl Mic {
-    /// `jay_a`: the HELLO for Jay-A, to start in Jay-A mode (docs/JAY-A.md); its states go to
-    /// `on_status`.
+    /// `jay_a`: start in Jay-A mode (docs/JAY-A.md); its states go to `on_status`.
     pub fn start(
         options: MicOptions,
-        jay_a: Option<serde_json::Value>,
+        jay_a: Option<JayAStart>,
         sink: impl FnMut(&[f32]) + Send + 'static,
         on_error: impl Fn(String) + Send + Sync + 'static,
         on_status: impl Fn(serde_json::Value) + Send + 'static,
@@ -621,8 +628,14 @@ impl Mic {
         let echo_reference = reference.is_some();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
         let mut sink: Sink = match jay_a {
-            Some(hello) => {
-                let jay_a = Arc::new(JayA::start(PIPE, hello, Box::new(sink), Box::new(on_status)));
+            Some(start) => {
+                let jay_a = match start {
+                    JayAStart::New(hello) => Arc::new(JayA::start(PIPE, hello, Box::new(sink), Box::new(on_status))),
+                    JayAStart::Keep(jay_a) => {
+                        jay_a.rewire(Box::new(sink), Box::new(on_status));
+                        jay_a
+                    }
+                };
                 mic.jay_a = Some(jay_a.clone());
                 Box::new(move |chunk: &[f32]| jay_a.reserve(chunk))
             }
@@ -653,6 +666,18 @@ impl Mic {
         if let Some(jay_a) = &self.jay_a {
             jay_a.call_state(in_call, muted);
         }
+    }
+
+    /// Jay-A mode: asks Jay-A to show its window.
+    pub fn show_jay_a(&self) {
+        if let Some(jay_a) = &self.jay_a {
+            jay_a.control(&serde_json::json!({ "type": "show" }));
+        }
+    }
+
+    /// Hands this microphone's link to Jay-A over to the one replacing it.
+    pub fn take_jay_a(&mut self) -> Option<Arc<JayA>> {
+        self.jay_a.take()
     }
 }
 

@@ -4,7 +4,12 @@
 //!
 //! The state goes to the webview as JSON, sent when it changes:
 //! `{ "link": "searching" | "jay-a" | "fallback" | "incompatible", "version": string | null,
-//!    "reason": string | null }` (`reason`: why Jay-A is incompatible).
+//!    "reason": string | null, "device": string | null, "deviceId": string | null }`
+//! (`reason`: why Jay-A is incompatible; `device`/`deviceId`: the microphone Jay-A last said it
+//! uses, which the reserve follows).
+//!
+//! Reopening the microphone (another device, other options) keeps the `JayA`: only the reserve's
+//! capture and the output channel change (`rewire`), so the link and the selector carry on.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -48,6 +53,7 @@ impl JayA {
             version: None,
             incompatible: None,
             was_linked: false,
+            state: None,
             sent: None,
         }));
         output.lock().unwrap().report(); // "searching" from the start
@@ -80,14 +86,29 @@ impl JayA {
         output.emit(chunks);
     }
 
+    /// Sends a CONTROL message to Jay-A, if it's connected (e.g. `{ "type": "show" }`).
+    pub fn control(&self, message: &Value) {
+        if let Some(link) = &*self.link.lock().unwrap() {
+            link.control(message);
+        }
+    }
+
     /// Tells Jay-A whether we're in a call and muted (for its window only), now and on every
     /// reconnection.
     pub fn call_state(&self, in_call: bool, muted: bool) {
         let message = json!({ "type": "call-state", "inCall": in_call, "muted": muted });
-        if let Some(link) = &*self.link.lock().unwrap() {
-            link.control(&message);
-        }
+        self.control(&message);
         *self.call_state.lock().unwrap() = Some(message);
+    }
+
+    /// The microphone was reopened: from now on, the output and the states go to these. The current
+    /// state is sent again, since the new channel hasn't had it.
+    pub fn rewire(&self, sink: Sink, on_status: StatusSink) {
+        let mut output = self.output.lock().unwrap();
+        output.sink = sink;
+        output.on_status = on_status;
+        output.sent = None;
+        output.report();
     }
 }
 
@@ -111,6 +132,8 @@ struct Output {
     incompatible: Option<String>,
     /// Jay-A has been the source at least once: losing it now is "fallback", not "searching".
     was_linked: bool,
+    /// Jay-A's last `state` message (its microphone and preset).
+    state: Option<Value>,
     /// The last state sent.
     sent: Option<Value>,
 }
@@ -135,7 +158,14 @@ impl Output {
             (false, None) if self.was_linked => "fallback",
             (false, None) => "searching",
         };
-        let status = json!({ "link": link, "version": self.version, "reason": self.incompatible });
+        let state = self.state.as_ref();
+        let status = json!({
+            "link": link,
+            "version": self.version,
+            "reason": self.incompatible,
+            "device": state.and_then(|s| s.get("device")),
+            "deviceId": state.and_then(|s| s.get("deviceId")),
+        });
         if self.sent.as_ref() != Some(&status) {
             (self.on_status)(status.clone());
             self.sent = Some(status);
@@ -202,7 +232,12 @@ impl Manager {
                 let chunks = output.selector.on_link(Instant::now(), chunk);
                 output.emit(chunks);
             }
-            // `state` (Jay-A's microphone and preset): the reserve doesn't follow it yet (step I3).
+            // Jay-A's microphone: the webview reopens the reserve on it (docs/JAY-A.md, section 3).
+            LinkEvent::Control(message) if message["type"] == "state" => {
+                let mut output = output.lock().unwrap();
+                output.state = Some(message);
+                output.report();
+            }
             LinkEvent::Control(message) => log::debug!("system-audio: Jay-A says {message}"),
             LinkEvent::Closed(end) => {
                 log::warn!("system-audio: the link to Jay-A closed: {end:?}");
@@ -320,6 +355,36 @@ mod tests {
         assert!(audio.len().abs_diff(fed) <= 6, "{} out vs {fed} fed", audio.len());
         let gap = audio.windows(2).map(|w| w[1].0 - w[0].0).max().unwrap();
         println!("longest wait between chunks out: {} ms", gap.as_millis());
+    }
+
+    #[test]
+    fn reopening_the_microphone_keeps_the_link() {
+        let pipe = format!("jay-a-link-test-{}-rewire", std::process::id());
+        let _fake = FakeJayA::start(&pipe, Options::default()).unwrap();
+        let began = Instant::now();
+        let (jay_a, log) = start(&pipe);
+        let reserve = Reserve::start(jay_a.clone());
+        wait_for(&log, "jay-a", began, Duration::from_secs(3));
+        reserve.stop();
+
+        // The microphone is reopened: a new channel, a new reserve.
+        let after: Log = Arc::default();
+        let (audio, states) = (after.clone(), after.clone());
+        let mut statuses = Vec::new();
+        jay_a.rewire(
+            Box::new(move |chunk: &[f32]| audio.lock().unwrap().0.push((Instant::now(), chunk[959] != 0.5))),
+            Box::new(move |status: Value| states.lock().unwrap().1.push((Instant::now(), status.to_string()))),
+        );
+        let reserve = Reserve::start(jay_a.clone());
+        std::thread::sleep(Duration::from_millis(400));
+        reserve.stop();
+
+        let (audio, states) = after.lock().unwrap().clone();
+        statuses.extend(states.iter().map(|(_, s)| serde_json::from_str::<Value>(s).unwrap()));
+        assert_eq!(statuses.len(), 1, "only the current state, sent again: {statuses:?}");
+        assert_eq!(statuses[0]["link"], "jay-a", "no new connection, no second of reserve");
+        assert_eq!((&statuses[0]["device"], &statuses[0]["deviceId"]), (&json!("Fake mic"), &json!("fake")), "Jay-A's microphone");
+        assert!(audio.len() >= 15 && audio.iter().all(|(_, tone)| *tone), "Jay-A's audio goes on: {} chunks", audio.len());
     }
 
     #[test]

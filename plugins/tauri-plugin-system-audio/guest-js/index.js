@@ -53,7 +53,8 @@ export function stopCapture() {
  * `onAudio(Float32Array)`: mono at 48 kHz, 20 ms per call.
  * With `filter: 'jay-a'`, the audio is Jay-A's while it flows and Jay-C's own otherwise
  * (docs/JAY-A.md); `onStatus` gets `{ link: 'searching' | 'jay-a' | 'fallback' | 'incompatible',
- * version, reason }` when that changes, always before the chunks it applies to.
+ * version, reason, device, deviceId }` when that changes, always before the chunks it applies to
+ * (`deviceId`: Jay-A's microphone, which the reserve should use).
  * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean, device?: string | null,
  *   filter?: 'jay-c' | 'jay-a', jayAImport?: object }} options
  * @param {{ onAudio: (samples: Float32Array) => void, onError?: (message: string) => void,
@@ -68,6 +69,11 @@ export function startMic(options, { onAudio, onError, onStatus }) {
     else if (message?.link) onStatus?.(message);
   };
   return invoke('plugin:system-audio|start_mic', { options, onAudio: channel });
+}
+
+/** Jay-A mode: asks Jay-A to show its window. */
+export function jayAShow() {
+  return invoke('plugin:system-audio|jay_a_show');
 }
 
 /** Jay-A mode: tells Jay-A whether we're in a call and muted (shown in its window). */

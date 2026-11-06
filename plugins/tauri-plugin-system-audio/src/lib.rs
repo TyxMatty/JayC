@@ -260,21 +260,28 @@ fn start_mic<R: Runtime>(
     on_audio: Channel<InvokeResponseBody>,
 ) -> Result<MicInfo, String> {
     let mut current = state.0.lock().map_err(|e| e.to_string())?;
-    current.take();
+    #[allow(unused_mut)]
+    let mut previous = current.take();
 
     #[cfg(windows)]
     {
-        let hello = (options.filter == MicFilter::JayA).then(|| {
-            let mut hello = serde_json::json!({ "app": "jay-c", "version": app.package_info().version.to_string(), "protocol": link::PROTOCOL });
-            if let Some(import) = &options.jay_a_import {
-                hello["import"] = import.clone();
+        // In Jay-A mode, a reopened microphone keeps the previous one's link (no reconnection, and
+        // no second of reserve while it would flow again).
+        let jay_a = (options.filter == MicFilter::JayA).then(|| match previous.as_mut().and_then(win::Mic::take_jay_a) {
+            Some(link) => win::JayAStart::Keep(link),
+            None => {
+                let mut hello = serde_json::json!({ "app": "jay-c", "version": app.package_info().version.to_string(), "protocol": link::PROTOCOL });
+                if let Some(import) = &options.jay_a_import {
+                    hello["import"] = import.clone();
+                }
+                win::JayAStart::New(hello)
             }
-            hello
         });
+        drop(previous); // stops the old capture before the new one opens the microphone
         let (errors, states) = (on_audio.clone(), on_audio.clone());
         let (mic, info) = win::Mic::start(
             options,
-            hello,
+            jay_a,
             move |samples: &[f32]| send_samples(&on_audio, samples),
             move |error: String| send_error(&errors, error),
             move |status| send_json(&states, status),
@@ -284,9 +291,21 @@ fn start_mic<R: Runtime>(
     }
     #[cfg(not(windows))]
     {
-        let _ = (app, options, on_audio);
+        let _ = (app, options, on_audio, previous);
         Err("unsupported".into())
     }
+}
+
+/// Jay-A mode: asks Jay-A to show its window (Settings › Audio › "Open Jay-A").
+#[tauri::command]
+fn jay_a_show(state: State<'_, MicState>) -> Result<(), String> {
+    #[cfg(windows)]
+    if let Some(mic) = &*state.0.lock().map_err(|e| e.to_string())? {
+        mic.show_jay_a();
+    }
+    #[cfg(not(windows))]
+    let _ = state;
+    Ok(())
 }
 
 /// Jay-A mode: tells Jay-A whether we're in a call and muted (shown in its window).
@@ -324,7 +343,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             stop_capture,
             start_mic,
             stop_mic,
-            mic_call_state
+            mic_call_state,
+            jay_a_show
         ])
         .setup(|app, _api| {
             app.manage(CaptureState::default());

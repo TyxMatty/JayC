@@ -13,6 +13,53 @@ export const listMics = () => systemAudio.listMics();
 /** Jay-A mode: tells Jay-A whether we're in a call and muted. Nothing happens in Jay-C's mode. */
 export const micCallState = (state) => systemAudio.micCallState(state).catch(() => {});
 
+/** Jay-A mode: asks Jay-A to show its window. */
+export const jayAShow = () => systemAudio.jayAShow().catch(() => {});
+
+/**
+ * The notice for a change of the Jay-A link (`link` of two states in a row), or null. Only real
+ * changes: not the first search, and not "fallback" when Jay-A never played.
+ * @param {string | null | undefined} before
+ * @param {string} now
+ */
+export function jayANotice(before, now) {
+  if (now === 'fallback' && before === 'jay-a') return "Jay-A stopped. Using Jay-C's filter.";
+  if (now === 'jay-a' && before === 'fallback') return 'Jay-A is back.';
+  if (now === 'incompatible' && before !== 'incompatible') return 'Update Jay-A: it speaks another version of the link.';
+  return null;
+}
+
+/**
+ * Turns the Jay-A link's states into notices, without noise: a fallback is announced only once it
+ * has lasted `delay` ms (Jay-A stalling for a moment under load is covered by the reserve, measured
+ * in docs/JAY-A.md), and the return only after an announced fallback. Returns a function to call
+ * with each state's `link` (null: Jay-A mode ended, nothing pending).
+ * @param {(message: string) => void} emit gets the English text, for t()
+ */
+export function jayANotices(emit, { delay = 2000, timers = globalThis } = {}) {
+  let link = null;
+  let timer = 0;
+  let announced = false;
+  return (next) => {
+    const message = next ? jayANotice(link, next) : null;
+    if (!next || message) timers.clearTimeout(timer);
+    link = next ?? null;
+    if (!next) announced = false;
+    if (!message) return;
+    if (next === 'fallback') {
+      timer = timers.setTimeout(() => {
+        announced = true;
+        emit(message);
+      }, delay);
+    } else if (next === 'jay-a') {
+      if (announced) emit(message);
+      announced = false;
+    } else {
+      emit(message);
+    }
+  };
+}
+
 /**
  * Whether the call's native mic should be reopened, checked every few seconds: it failed (e.g.
  * unplugged; Windows ends the capture) and a microphone is there to open, or it's running on another

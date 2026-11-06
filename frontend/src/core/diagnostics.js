@@ -39,7 +39,14 @@ export async function callDiagnostics(call, { sampleMs = 2000, root = document, 
     time: new Date().toISOString(),
     userAgent: globalThis.navigator?.userAgent,
     room: call.room,
-    me: { micOn: call.micOn, cameraOn: call.cameraOn, micDevice: call.micDevice ?? null, mediaErrors: call.mediaErrors ?? {} },
+    me: {
+      micOn: call.micOn,
+      cameraOn: call.cameraOn,
+      micDevice: call.micDevice ?? null,
+      mediaErrors: call.mediaErrors ?? {},
+      // Jay-A mode (docs/JAY-A.md): the link's state and how often Jay-C's filter took over.
+      ...(call.jayAStatus ? { jayA: { ...call.jayAStatus, fallbacks: call.jayAFallbacks ?? 0 } } : {}),
+    },
     audioOutputs: outputs,
     participants: people.map((p) => ({
       name: p.name,

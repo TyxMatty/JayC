@@ -592,6 +592,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
       key: 'audio',
       label: tabLabel(icons.mic, t('Audio')),
       panel: panel(
+        audioSettings.filterElement,
         audioSettings.element,
         h(
           'fieldset',

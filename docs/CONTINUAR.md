@@ -105,7 +105,7 @@ Abra a pasta do clone no Claude, no app desktop (aba Code) ou na CLI. O `CLAUDE.
 
 Detalhes da customização em ARQUITETURA.md, seção 10, "Customização". **Plugins ficaram para depois do release**: plugins sem isolamento no cliente estão descartados, porque alcançariam o IPC do Tauri (captura de áudio, tela e microfone).
 
-**Integração com o Jay-A** (o app de áudio da linha Jay, em outro repositório): o plano está em `docs/JAY-A.md`. A I1 e a I2 estão prontas: o cliente do pipe, o seletor, o Jay-A falso, o probe e o modo Jay-A no microfone nativo. O app troca para o filtro do Jay-C sem buraco quando o Jay-A cai, mas ainda não tem interface: a escolha é o `micFilter` nas configurações. A próxima etapa é a I3, a interface.
+**Integração com o Jay-A** (o app de áudio da linha Jay, em outro repositório): o plano está em `docs/JAY-A.md`. As etapas I1 a I3 estão prontas: o cliente do pipe, o seletor, o Jay-A falso, o probe, o modo Jay-A no microfone nativo e a interface (Settings › Áudio › Filtro do microfone, avisos, Abrir Jay-A). O app troca para o filtro do Jay-C sem buraco quando o Jay-A cai. A próxima etapa é a I4: achar o Jay-A instalado e iniciá-lo. Ela depende do instalador do Jay-A.
 
 **Próxima: o retorno do teste externo** (lista abaixo, em "Primeiro teste externo"), começando por um novo teste com os amigos usando o diagnóstico. Depois, 14.B (APK de release assinado). As partes da etapa 14 estão em ARQUITETURA.md, seção 10, "Release".
 

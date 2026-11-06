@@ -31,11 +31,14 @@ pub struct Options {
     pub exit_after: Option<Duration>,
     /// Each chunk early or late by up to this much.
     pub jitter: Duration,
+    /// The microphone it says it uses (`deviceId` in its `state`), e.g. a real endpoint id from
+    /// `list_mics`, to see Jay-C's reserve follow it.
+    pub device_id: String,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { protocol: PROTOCOL, stall_after: None, stall_for: None, exit_after: None, jitter: Duration::ZERO }
+        Options { protocol: PROTOCOL, stall_after: None, stall_for: None, exit_after: None, jitter: Duration::ZERO, device_id: "fake".into() }
     }
 }
 
@@ -174,7 +177,7 @@ fn serve(pipe: &mut Pipe, options: &Options, stop: &AtomicBool) -> bool {
                         HELLO,
                         &json!({ "app": "jay-a", "version": "fake", "protocol": options.protocol, "sampleRate": 48000, "channels": 1, "frameMs": 20 }),
                     );
-                    bytes.extend(json_frame(CONTROL, &json!({ "type": "state", "device": "Fake mic", "deviceId": "fake", "preset": "fake" })));
+                    bytes.extend(json_frame(CONTROL, &json!({ "type": "state", "device": "Fake mic", "deviceId": options.device_id, "preset": "fake" })));
                     bytes
                 }
                 Frame::Control(message) => {

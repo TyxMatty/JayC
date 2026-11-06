@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
     "start_mic",
     "stop_mic",
     "mic_call_state",
+    "jay_a_show",
 ];
 
 fn main() {

@@ -13,7 +13,7 @@ import {
   screenCodec,
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
-import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart, micCallState } from './native-mic.js';
+import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart, micCallState, jayANotices } from './native-mic.js';
 import { startNativeLive, stopNativeLive } from './native-live.js';
 import { capturePreview } from './screen-preview.js';
 import { bufferDelayMs, catchUp } from './catch-up.js';
@@ -90,9 +90,11 @@ export class Call extends EventTarget {
   micGateOpen = false;
   /** Native mic: whose processing the call hears, 'jay-c' or 'jay-a' (docs/JAY-A.md). */
   micFilter = 'jay-c';
-  /** With 'jay-a': `{ link: 'searching' | 'jay-a' | 'fallback' | 'incompatible', version, reason }`,
-   * also sent as a 'jay-a-status' event; null otherwise. */
+  /** With 'jay-a': `{ link: 'searching' | 'jay-a' | 'fallback' | 'incompatible', version, reason,
+   * device, deviceId }`, also sent as a 'jay-a-status' event; null otherwise. */
   jayAStatus = null;
+  /** Times Jay-A stopped and Jay-C's filter took over in this call (for the diagnostics). */
+  jayAFallbacks = 0;
   /** Our profile picture (data URL) or null; others see it while our camera is off. */
   avatar = null;
   /** Our profile color ({ from, to?, angle? }) or null = picked from the name (core/profile-color.js). */
@@ -145,6 +147,10 @@ export class Call extends EventTarget {
   #micRestart = Promise.resolve();
   /** The native mic's capture ended with an error (e.g. unplugged); the watch below reopens it. */
   #micFailed = false;
+  /** The device id the native mic was last opened with (null = the Windows default). */
+  #openedMic = null;
+  /** Notices for the Jay-A link, minus brief stalls (core/native-mic.js). */
+  #jayANotices = jayANotices((message) => this.#emit('notice', { message: t(message) }));
   /** Every few seconds: reopen the native mic when it failed or another one should be used. */
   #micWatch = null;
   #ended = false;
@@ -317,6 +323,24 @@ export class Call extends EventTarget {
   async setMicDevice(id) {
     this.micDeviceId = id;
     if (this.#nativeMic && this.local.audio) await this.#restartNativeMic();
+  }
+
+  /** The microphone to open: in Jay-A mode, Jay-A's own once it said which, so the reserve is the
+   * same microphone (docs/JAY-A.md, section 3); else the one chosen in Jay-C. */
+  get #micToOpen() {
+    return (this.micFilter === 'jay-a' && this.jayAStatus?.deviceId) || this.micDeviceId;
+  }
+
+  #onJayAStatus(status) {
+    const before = this.jayAStatus?.link;
+    this.jayAStatus = status;
+    if (before === 'jay-a' && status.link === 'fallback') this.jayAFallbacks++;
+    this.#jayANotices(status.link);
+    this.#emit('jay-a-status', status);
+    // Jay-A switched microphones: reopen the reserve on it (the link to Jay-A carries on).
+    if (status.deviceId && status.deviceId !== this.#openedMic && this.#nativeMic && this.local.audio) {
+      this.#restartNativeMic().catch((error) => console.warn('[call] reserve on Jay-A\'s mic', error));
+    }
   }
 
   /** Native mic: 'jay-c' or 'jay-a' (docs/JAY-A.md). Reopens the mic, swapped in with replaceTrack. */
@@ -975,16 +999,14 @@ export class Call extends EventTarget {
   }
 
   async #openNativeMic() {
+    this.#openedMic = this.#micToOpen;
     const mic = await startNativeMic({
       ...this.micProcessing,
-      device: this.micDeviceId,
+      device: this.#openedMic,
       filter: this.micFilter,
       // Jay-A adopts these the first time it connects (docs/JAY-A.md).
       jayAImport: { micDevice: this.micDeviceId, micGain: this.micShape.gain, micGate: this.micShape.gateDb, micProcessing: this.micProcessing },
-      onStatus: (status) => {
-        this.jayAStatus = status;
-        this.#emit('jay-a-status', status);
-      },
+      onStatus: (status) => this.#onJayAStatus(status),
       shape: this.micShape,
       onLevel: (db, open) => {
         this.micLevel = db;
@@ -999,6 +1021,7 @@ export class Call extends EventTarget {
     this.#nativeMic = mic;
     if (this.micFilter !== 'jay-a' && this.jayAStatus) {
       this.jayAStatus = null;
+      this.#jayANotices(null);
       this.#emit('jay-a-status', null);
     }
     micCallState({ inCall: true, muted: this.#micMuted });
@@ -1010,7 +1033,7 @@ export class Call extends EventTarget {
     this.#micWatch ??= setInterval(async () => {
       if (!this.#nativeMic || this.#ended) return;
       const mics = await listMics().catch(() => []);
-      if (!micNeedsRestart({ failed: this.#micFailed, preferredId: this.micDeviceId, current: this.#nativeMic.device, mics })) return;
+      if (!micNeedsRestart({ failed: this.#micFailed, preferredId: this.#micToOpen, current: this.#nativeMic.device, mics })) return;
       const wasFailed = this.#micFailed;
       try {
         await this.#restartNativeMic();

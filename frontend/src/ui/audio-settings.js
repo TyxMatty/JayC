@@ -3,11 +3,12 @@
 // opened here (out of a call) so the level can be set before joining.
 // Microphone choice, volume and sensitivity need the native mic (Windows); speakers need
 // AudioContext.setSinkId. Each part hides itself where it can't work.
+// Also the microphone filter: Jay-C's own, or Jay-A's with Jay-C's as the reserve (docs/JAY-A.md).
 import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { MAX_MIC_GAIN } from '../core/mic-shape.js';
-import { startNativeMic } from '../core/native-mic.js';
+import { startNativeMic, jayAShow } from '../core/native-mic.js';
 import { t } from '../core/i18n.js';
 
 const GATE_MIN = -70;
@@ -15,9 +16,51 @@ const GATE_MAX = -10;
 const DEFAULT_GATE = -45;
 const meterPercent = (db) => `${Math.max(0, Math.min(100, ((db - GATE_MIN) / -GATE_MIN) * 100))}%`;
 
+const FILTERS = [
+  ['jay-c', 'Jay-C', 'Jay-C cleans the microphone itself, with the settings below.'],
+  ['jay-a', 'Jay-A', "Jay-A's filters, effects and soundboard. If Jay-A stops, Jay-C's filter takes over at once."],
+];
+
+/** What the Jay-A link is doing, for people (null: no microphone open in Jay-A mode). */
+const jayAStatusLabel = (status) =>
+  !status
+    ? t('Jay-A connects when the microphone opens (in a call or a test).')
+    : status.link === 'jay-a'
+      ? t('Jay-A is on ({version}).', { version: status.version ?? '?' })
+      : status.link === 'fallback'
+        ? t("Jay-A isn't responding: using Jay-C's filter.")
+        : status.link === 'incompatible'
+          ? t('Update Jay-A: it speaks another version of the link.')
+          : t('Looking for Jay-A…');
+
 /** @param {{ getCall: () => any }} options */
 export function createAudioSettings({ getCall }) {
   const current = settings.get();
+
+  // ----- Microphone filter (native mic only) -----
+  const filterGroup = h(
+    'div',
+    { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'mic-filter-label' },
+    FILTERS.map(([value, label]) =>
+      h('label', {}, h('input', { type: 'radio', name: 'mic-filter', value, checked: current.micFilter === value, onChange: () => settings.update({ micFilter: value }) }), label),
+    ),
+  );
+  const filterHint = h('p', { class: 'hint' });
+  const jayAStatusText = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const jayAOpen = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => jayAShow() }, t('Open Jay-A'));
+  const jayAPart = h(
+    'div',
+    { class: 'field' },
+    h('div', { class: 'audio-menu-row' }, jayAStatusText, jayAOpen),
+    h('p', { class: 'hint' }, t("With Jay-A, the settings below apply only while Jay-A isn't responding. Jay-A's own are in Jay-A.")),
+  );
+  const filterPart = h(
+    'fieldset',
+    { hidden: true },
+    h('h3', { id: 'mic-filter-label' }, t('Microphone filter')),
+    h('div', { class: 'field' }, filterGroup, filterHint),
+    jayAPart,
+  );
 
   // ----- Microphone (native) -----
   const micSelect = h('select', {
@@ -107,6 +150,9 @@ export function createAudioSettings({ getCall }) {
 
   const render = () => {
     const s = settings.get();
+    for (const input of filterGroup.querySelectorAll('input')) input.checked = input.value === s.micFilter;
+    filterHint.textContent = t(FILTERS.find(([value]) => value === s.micFilter)?.[2] ?? FILTERS[0][2]);
+    jayAPart.hidden = s.micFilter !== 'jay-a';
     gainValue.textContent = `${Math.round(s.micGain * 100)}%`;
     gateSwitch.checked = s.micGate != null;
     gateInput.disabled = s.micGate == null;
@@ -123,6 +169,7 @@ export function createAudioSettings({ getCall }) {
   let testLevel = -Infinity;
   let testOpen = false;
   let testError = '';
+  let testStatus = null;
   const testShape = { gain: current.micGain, gateDb: current.micGate };
   /** Opens the test mic. `previous` (a running test) is closed once the new one replaced it. */
   async function startTest(previous = null) {
@@ -130,9 +177,17 @@ export function createAudioSettings({ getCall }) {
     const claim = { stop() {}, close() {} }; // held while it opens: a second click doesn't open two
     test = claim;
     testError = '';
+    testStatus = null;
     try {
       // Replaces any running capture on the Rust side, so the previous one is closed, not stopped.
-      const mic = await startNativeMic({ ...s.micProcessing, device: s.micDevice, shape: testShape, onLevel: (db, open) => ((testLevel = db), (testOpen = open)) });
+      const mic = await startNativeMic({
+        ...s.micProcessing,
+        device: s.micDevice,
+        filter: s.micFilter,
+        shape: testShape,
+        onLevel: (db, open) => ((testLevel = db), (testOpen = open)),
+        onStatus: (status) => (testStatus = status),
+      });
       previous?.close();
       if (test === claim) test = mic;
       else if (test === null) mic.stop(); // stopped (or Settings closed) while it opened
@@ -149,11 +204,12 @@ export function createAudioSettings({ getCall }) {
     test = null;
     testLevel = -Infinity;
     testOpen = false;
+    testStatus = null;
   }
   settings.subscribe((next, prev) => {
     Object.assign(testShape, { gain: next.micGain, gateDb: next.micGate });
-    // Another device or processing: reopen the test mic with it.
-    if (test && (next.micDevice !== prev.micDevice || next.micProcessing !== prev.micProcessing)) startTest(test);
+    // Another device, processing or filter: reopen the test mic with it.
+    if (test && (next.micDevice !== prev.micDevice || next.micProcessing !== prev.micProcessing || next.micFilter !== prev.micFilter)) startTest(test);
   });
 
   const option = (value, label, selected) => h('option', { value, selected }, label);
@@ -209,6 +265,12 @@ export function createAudioSettings({ getCall }) {
       peak = -Infinity;
       sentLately = false;
     }
+    if (!jayAPart.hidden) {
+      const status = call ? call.jayAStatus : testStatus;
+      const label = jayAStatusLabel(status);
+      if (jayAStatusText.textContent !== label) jayAStatusText.textContent = label;
+      jayAOpen.disabled = !status?.version; // only while connected
+    }
     testButton.hidden = Boolean(call);
     testButton.textContent = test ? t('Stop test') : t('Test microphone');
     testButton.setAttribute('aria-pressed', String(Boolean(test)));
@@ -222,12 +284,15 @@ export function createAudioSettings({ getCall }) {
 
   const ready = systemAudio.isSupported().then((native) => {
     micPart.hidden = !native;
+    filterPart.hidden = !native;
   });
   outputPart.hidden = typeof AudioContext === 'undefined' || !('setSinkId' in AudioContext.prototype);
 
   render();
   return {
     element: h('fieldset', {}, h('h3', {}, t('Audio devices')), micPart, outputPart),
+    /** The microphone filter (Jay-C or Jay-A), shown before the devices. */
+    filterElement: filterPart,
     /** Settings opened: reload the device lists and start the meter. */
     open() {
       ready.then(() => !micPart.hidden && refreshMics());
