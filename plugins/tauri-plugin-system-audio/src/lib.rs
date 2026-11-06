@@ -296,6 +296,28 @@ fn start_mic<R: Runtime>(
     }
 }
 
+/// Whether Jay-A is installed for this user (`%LOCALAPPDATA%\Jay-A\jay-a.exe`).
+#[tauri::command]
+fn jay_a_installed() -> bool {
+    #[cfg(windows)]
+    {
+        jay_a::installed_exe().is_some()
+    }
+    #[cfg(not(windows))]
+    false
+}
+
+/// Opens Jay-A's releases page in the browser (a fixed address: the page can't choose another).
+#[tauri::command]
+fn jay_a_open_releases() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe").arg(jay_a::RELEASES).spawn().map(|_| ()).map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    Err("unsupported".into())
+}
+
 /// Jay-A mode: asks Jay-A to show its window (Settings › Audio › "Open Jay-A").
 #[tauri::command]
 fn jay_a_show(state: State<'_, MicState>) -> Result<(), String> {
@@ -344,7 +366,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             start_mic,
             stop_mic,
             mic_call_state,
-            jay_a_show
+            jay_a_show,
+            jay_a_installed,
+            jay_a_open_releases
         ])
         .setup(|app, _api| {
             app.manage(CaptureState::default());

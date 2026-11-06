@@ -11,7 +11,7 @@ Escrito em 2026-11-06, a partir do Jay-C 0.4.0. Nada foi implementado ainda.
 - **Settings › Áudio › Filtro do microfone:** `Jay-A` ou `Jay-C`.
 - **Com o Jay-A:** os filtros, o soundboard e os efeitos de voz são ajustados no Jay-A, pelo botão **Abrir Jay-A**. O Jay-C mostra o estado: "Jay-A ligado", "Procurando o Jay-A…" ou "O Jay-A não respondeu. Usando o filtro do Jay-C".
 - **Se o Jay-A fechar ou travar** no meio da chamada, os outros continuam ouvindo a pessoa, agora pelo filtro do Jay-C, e aparece um aviso. Quando o Jay-A volta, o Jay-C volta para ele sozinho.
-- **Sem o Jay-A instalado,** a opção aparece como "Jay-A (não instalado)", com o link da página de releases.
+- **Sem o Jay-A instalado,** a opção aparece como "Jay-A (não instalado)", e o botão **Baixar o Jay-A** abre a página de releases do Jay-A no navegador.
 - **No Android,** nada muda: o Jay-A é só para Windows.
 
 ## 2. Visão geral
@@ -94,7 +94,11 @@ stateDiagram-v2
 ```
 
 - Em todos os estados, exceto **Jay-A ligado**, o som que sai é o da reserva.
-- **Iniciar o Jay-A:** se o pipe não existe e o Jay-A está instalado (P5), o Jay-C o inicia com `--background`, **uma vez por chamada**. Um Jay-A que cai sempre ao abrir não é relançado em loop; nesse caso, o Jay-C só continua tentando conectar.
+- **Iniciar o Jay-A:** se o pipe não existe e o Jay-A está instalado (P5, `%LOCALAPPDATA%\Jay-A\jay-a.exe`), o Jay-C o inicia com `--background`, **uma vez por chamada**, e tenta conectar a cada 200 ms durante 3 s. Depois disso, volta à tentativa de 5 em 5 s.
+  - Um Jay-A que cai sempre ao abrir não é relançado em loop; nesse caso, o Jay-C só continua tentando conectar.
+  - "Uma vez por chamada" vale enquanto existir o mesmo `JayA`: reabrir o microfone o mantém. Trocar o filtro para Jay-C e voltar, ou abrir o **Testar microfone** fora da chamada, cria outro.
+  - **Para testar sem instalar nada:** nas builds de debug, a variável `JAYC_JAY_A_EXE` aponta para outro executável (por exemplo, o `fake_jay_a.exe`), antes do `%LOCALAPPDATA%`.
+  - **Pendente para a I6 (soundboard):** o Jay-A iniciado pelo Jay-C é filho do `jay-c.exe`. Para a live "tela inteira menos o Jay-C", um processo filho pode contar como "o próprio Jay-C", e um Jay-A aberto pelo usuário não conta. Os sons do Jay-A nos fones (o monitor do soundboard, o "ouvir meu microfone") dobrariam na live. Decidir se o `jay-a.exe` sai sempre do som da live.
 
 ## 5. Uma chamada com o Jay-A
 
@@ -147,7 +151,7 @@ sequenceDiagram
 | `.../src/link/fake.rs`, `examples/fake_jay_a.rs`, `examples/jay_a_probe.rs` (novos) | O Jay-A falso, que só entra nos testes e com `--features fake-jay-a`, e o probe (seção 9). |
 | `.../src/jay_a.rs` (novo) | O modo Jay-A. Um gerenciador conecta e reconecta: na hora depois de uma queda, a cada 5 s enquanto o Jay-A não está lá e a cada 60 s se ele é incompatível. Ele manda `start-mic` e o último `call-state` a cada conexão. A saída é uma só: o seletor escolhe a fonte de cada bloco, e o estado vai antes dos blocos a que se refere. |
 | `.../src/win.rs` | O `Mic` ganha o modo Jay-A: a captura de hoje vira a reserva e entrega os blocos ao `jay_a.rs`. |
-| `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comandos novos: `mic_call_state({ inCall, muted })` (I2) e `jay_a_show()` (I3). Vem depois: `jay_a_installed()` (I4). Ao reabrir no modo Jay-A, `start_mic` mantém o link do microfone anterior. |
+| `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comandos novos: `mic_call_state({ inCall, muted })` (I2), `jay_a_show()` (I3), `jay_a_installed()` e `jay_a_open_releases()` (I4). O último abre só a página de releases do Jay-A, um endereço fixo, pelo `explorer.exe`: o app não tem outro jeito de abrir links. Ao reabrir no modo Jay-A, `start_mic` mantém o link do microfone anterior. |
 | `frontend/src/core/native-mic.js` | Repassa os estados. Aplica o `shapeMic` só aos blocos da reserva e mede o nível de todos. Também tem `jayANotices`, os avisos sem as travadas breves. |
 | `frontend/src/core/call.js` | `micFilter` entra junto com as outras opções do microfone, e `setMicFilter` reabre o microfone. Ganha `jayAStatus`, `jayAFallbacks` e o evento `jay-a-status`, manda o mudo ao plugin e dá os avisos. No modo Jay-A, abre a reserva no microfone do Jay-A (`deviceId`), também no `micNeedsRestart`. |
 | `store/settings.js`, `ui/audio-settings.js`, `ui/settings-modal.js`, `core/diagnostics.js`, locales | A escolha do filtro, o estado, o botão, o diagnóstico e os textos, em PT e EN. |
@@ -259,6 +263,20 @@ Três regras do seletor foram quebradas de propósito, e os testes pegaram as tr
 - **Travadas sob carga:** com dois builds de debug compilando, o seletor caiu para a reserva 10 vezes em ~5 min, por ~1 s cada, sem o link cair (nenhum `start-mic` novo no falso). É por isso que o aviso espera 2 s. Com o Jay-A de verdade, em release, a frequência dessas travadas fica para medir na I5.
 - **Visto no PC durante os testes:** o microfone padrão do Windows mudou algumas vezes, com erros 0x88890004 (dispositivo invalidado). O app reabriu a reserva com "Microphone back" sem derrubar o link.
 
+**Medido na I4** (app de dev com `JAYC_JAY_A_EXE` apontando para o Jay-A falso, que não estava rodando):
+- **Settings › Áudio:** com o "Jay-A instalado", o botão diz "Jay-A". Com o executável renomeado por um instante, ele virou "Jay-A (não instalado)", e apareceu a linha "O Jay-A não está instalado neste PC." com **Baixar o Jay-A**. O contraste passou (22 textos). O botão não foi clicado no teste, porque abriria o navegador na tela do usuário.
+- **Entrar na chamada no modo Jay-A** (relógio de parede):
+
+  | Momento | Depois de entrar |
+  |---|---|
+  | o app abre o `fake_jay_a.exe --background`, como filho do `jay-c.exe` | 119 ms |
+  | link conectado | 341 ms depois de abrir o falso |
+  | o Jay-A assume | 1,24 s depois de abrir o falso |
+
+  A meta era ligar em até 3 s.
+- **Uma vez por chamada:** com o Jay-A morto no meio da chamada, o app ficou na reserva, com o aviso "O Jay-A parou", e em 12 s não abriu o Jay-A de novo.
+- **Teste do plugin** (`starts_jay_a_once_and_links_within_3_s`): um Jay-A que leva 400 ms para abrir o pipe assume em ~1,65 s, e depois da queda não é aberto de novo. Sem a regra "uma vez", o teste falha: foram 4 aberturas.
+
 ## 10. Etapas
 
 Cada etapa termina com algo testável.
@@ -269,7 +287,7 @@ Cada etapa termina com algo testável.
 | I1 ✅ | `link.rs`, seletor, Jay-A falso e `jay_a_probe` | T1–T6 passam (16 testes no plugin); o probe passa contra o falso estável e reprova o travamento | não |
 | I2 ✅ | Modo Jay-A no `Mic` (reserva quente) e estados até o JS | no app, com o falso, o bot ouve o tom; ao matar o falso, ele passa a ouvir o microfone; o maior buraco e a CPU da reserva estão medidos (seção 9) | não |
 | I3 ✅ | Interface (seção 6), avisos, `jay_a_show()` e a reserva seguindo o microfone do Jay-A sem derrubar o link | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam (seção 9) | não |
-| I4 | Achar e iniciar o Jay-A (P5) | com um `jay-a.exe` falso no caminho, entrar na chamada o inicia uma vez e liga em até 3 s | P5 |
+| I4 ✅ | Achar e iniciar o Jay-A (P5) | com um `jay-a.exe` falso no caminho, entrar na chamada o inicia uma vez e liga em até 3 s (seção 9) | P5 |
 | I5 | Com o Jay-A de verdade (etapa 3 dele) | atraso e jitter medidos; o eco removido como hoje; fechar o Jay-A no meio da chamada não corta a voz para o bot | etapa 3 |
 | I6 | Soundboard na barra da chamada (etapa 8 dele) | o botão lista os clipes, e um clique toca para o bot | etapa 8 |
 | I7 | Release do Jay-C com a integração | o instalador funciona com e sem o Jay-A instalado | etapa 9 |

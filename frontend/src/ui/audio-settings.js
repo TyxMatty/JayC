@@ -38,12 +38,21 @@ export function createAudioSettings({ getCall }) {
   const current = settings.get();
 
   // ----- Microphone filter (native mic only) -----
+  const filterLabels = FILTERS.map(([, label]) => h('span', {}, label));
   const filterGroup = h(
     'div',
     { class: 'segmented', role: 'radiogroup', 'aria-labelledby': 'mic-filter-label' },
-    FILTERS.map(([value, label]) =>
-      h('label', {}, h('input', { type: 'radio', name: 'mic-filter', value, checked: current.micFilter === value, onChange: () => settings.update({ micFilter: value }) }), label),
+    FILTERS.map(([value], i) =>
+      h('label', {}, h('input', { type: 'radio', name: 'mic-filter', value, checked: current.micFilter === value, onChange: () => settings.update({ micFilter: value }) }), filterLabels[i]),
     ),
+  );
+  /** Whether Jay-A is installed (checked when Settings opens); null = not known yet. */
+  let jayAInstalled = null;
+  const jayAMissing = h(
+    'div',
+    { class: 'audio-menu-row', hidden: true },
+    h('p', { class: 'hint' }, t("Jay-A isn't installed on this PC.")),
+    h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => systemAudio.jayAOpenReleases().catch(() => {}) }, t('Get Jay-A')),
   );
   const filterHint = h('p', { class: 'hint' });
   const jayAStatusText = h('p', { class: 'hint', 'aria-live': 'polite' });
@@ -51,6 +60,7 @@ export function createAudioSettings({ getCall }) {
   const jayAPart = h(
     'div',
     { class: 'field' },
+    jayAMissing,
     h('div', { class: 'audio-menu-row' }, jayAStatusText, jayAOpen),
     h('p', { class: 'hint' }, t("With Jay-A, the settings below apply only while Jay-A isn't responding. Jay-A's own are in Jay-A.")),
   );
@@ -153,6 +163,8 @@ export function createAudioSettings({ getCall }) {
     for (const input of filterGroup.querySelectorAll('input')) input.checked = input.value === s.micFilter;
     filterHint.textContent = t(FILTERS.find(([value]) => value === s.micFilter)?.[2] ?? FILTERS[0][2]);
     jayAPart.hidden = s.micFilter !== 'jay-a';
+    jayAMissing.hidden = jayAInstalled !== false;
+    filterLabels[1].textContent = jayAInstalled === false ? t('Jay-A (not installed)') : 'Jay-A';
     gainValue.textContent = `${Math.round(s.micGain * 100)}%`;
     gateSwitch.checked = s.micGate != null;
     gateInput.disabled = s.micGate == null;
@@ -295,6 +307,10 @@ export function createAudioSettings({ getCall }) {
     filterElement: filterPart,
     /** Settings opened: reload the device lists and start the meter. */
     open() {
+      systemAudio.jayAInstalled().then((installed) => {
+        jayAInstalled = installed;
+        render();
+      });
       ready.then(() => !micPart.hidden && refreshMics());
       if (!outputPart.hidden) refreshOutputs();
       cancelAnimationFrame(frame);

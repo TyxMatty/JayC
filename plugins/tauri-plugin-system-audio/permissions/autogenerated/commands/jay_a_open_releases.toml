@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-jay-a-open-releases"
+description = "Enables the jay_a_open_releases command without any pre-configured scope."
+commands.allow = ["jay_a_open_releases"]
+
+[[permission]]
+identifier = "deny-jay-a-open-releases"
+description = "Denies the jay_a_open_releases command without any pre-configured scope."
+commands.deny = ["jay_a_open_releases"]

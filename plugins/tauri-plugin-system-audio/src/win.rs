@@ -630,7 +630,9 @@ impl Mic {
         let mut sink: Sink = match jay_a {
             Some(start) => {
                 let jay_a = match start {
-                    JayAStart::New(hello) => Arc::new(JayA::start(PIPE, hello, Box::new(sink), Box::new(on_status))),
+                    JayAStart::New(hello) => {
+                        Arc::new(JayA::start(PIPE, hello, crate::jay_a::launcher(), Box::new(sink), Box::new(on_status)))
+                    }
                     JayAStart::Keep(jay_a) => {
                         jay_a.rewire(Box::new(sink), Box::new(on_status));
                         jay_a

@@ -107,7 +107,7 @@ Open the clone's folder in Claude, in the desktop app (Code tab) or the CLI. `CL
 
 Customization details in ARQUITETURA, section 10, "Customization". **Plugins were left for after the release**: plugins without isolation on the client are ruled out, because they would reach Tauri's IPC (audio, screen and microphone capture).
 
-**Jay-A integration** (the Jay line's audio app, in another repository): the plan is in `docs/JAY-A.md` (Portuguese). Milestones I1 to I3 are done: the pipe client, the selector, the fake Jay-A, the probe, the Jay-A mode of the native microphone and the interface (Settings › Audio › Microphone filter, notices, Open Jay-A). The app switches to Jay-C's own filter without a gap when Jay-A goes down. The next milestone is I4: finding the installed Jay-A and starting it. It depends on Jay-A's installer.
+**Jay-A integration** (the Jay line's audio app, in another repository): the plan is in `docs/JAY-A.md` (Portuguese). Milestones I1 to I4 are done: the pipe client, the selector, the fake Jay-A, the probe, the Jay-A mode of the native microphone, the interface (Settings › Audio › Microphone filter, notices, Open Jay-A, "not installed") and starting the installed Jay-A automatically. The app switches to Jay-C's own filter without a gap when Jay-A goes down. The next milestone is I5, the test with the real Jay-A. It waits for Jay-A's step 3 (the Jay Link server).
 
 **Next: the external test feedback** (list below, under "First external test"), starting with a new test with the friends using the diagnostics. Then 14.B (signed release APK). The parts of milestone 14 are in ARQUITETURA, section 10, "Release".
 

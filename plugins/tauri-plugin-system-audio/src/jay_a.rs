@@ -10,7 +10,12 @@
 //!
 //! Reopening the microphone (another device, other options) keeps the `JayA`: only the reserve's
 //! capture and the output channel change (`rewire`), so the link and the selector carry on.
+//!
+//! When Jay-A isn't running but is installed, it is started once (`jay-a.exe --background`, only
+//! its tray icon) and reached for every 200 ms for up to 3 s. Once per `JayA`, which lives as long
+//! as the call's microphone: a Jay-A that crashes isn't restarted in a loop.
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::JoinHandle;
@@ -28,6 +33,44 @@ const RETRY: Duration = Duration::from_secs(5);
 const RETRY: Duration = Duration::from_millis(300);
 /// Between attempts while Jay-A speaks another protocol (it has to be updated first).
 const RETRY_INCOMPATIBLE: Duration = Duration::from_secs(60);
+/// After starting Jay-A: how long to keep reaching for it quickly, and how often.
+const LAUNCH_WAIT: Duration = Duration::from_secs(3);
+const LAUNCH_POLL: Duration = Duration::from_millis(200);
+/// Jay-A's releases, where "Get Jay-A" leads.
+pub const RELEASES: &str = "https://github.com/TyxMatty/Jay-A/releases";
+
+/// Starts Jay-A if it is installed; true = started.
+pub type Launcher = Box<dyn Fn() -> bool + Send>;
+
+/// Where Jay-A's installer puts it (per user, like Jay-C): `%LOCALAPPDATA%\Jay-A\jay-a.exe`.
+/// Debug builds look at `JAYC_JAY_A_EXE` first, to test with a fake Jay-A without installing one.
+pub fn installed_exe() -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    if let Some(path) = std::env::var_os("JAYC_JAY_A_EXE") {
+        return Some(PathBuf::from(path)).filter(|p| p.is_file());
+    }
+    let path = PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Jay-A").join("jay-a.exe");
+    path.is_file().then_some(path)
+}
+
+/// Starts the installed Jay-A in the background (its tray icon only). Jay-A is a single instance:
+/// if it was already starting, the second one just exits.
+pub fn launcher() -> Launcher {
+    Box::new(|| {
+        let Some(exe) = installed_exe() else { return false };
+        let started = std::process::Command::new(&exe)
+            .arg("--background")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+        match started {
+            Ok(_) => log::info!("system-audio: started {}", exe.display()),
+            Err(ref e) => log::warn!("system-audio: couldn't start {}: {e}", exe.display()),
+        }
+        started.is_ok()
+    })
+}
 
 pub type Sink = Box<dyn FnMut(&[f32]) + Send>;
 pub type StatusSink = Box<dyn Fn(Value) + Send>;
@@ -45,7 +88,7 @@ pub struct JayA {
 impl JayA {
     /// Starts reaching for Jay-A on `\\.\pipe\<pipe>`, retrying while it isn't there. Until its
     /// audio flows (and whenever it stops), `sink` gets the reserve's chunks, given to `reserve`.
-    pub fn start(pipe: &str, hello: Value, sink: Sink, on_status: StatusSink) -> JayA {
+    pub fn start(pipe: &str, hello: Value, launch: Launcher, sink: Sink, on_status: StatusSink) -> JayA {
         let output = Arc::new(Mutex::new(Output {
             selector: Selector::default(),
             sink,
@@ -65,6 +108,7 @@ impl JayA {
             let manager = Manager {
                 pipe: pipe.to_string(),
                 hello,
+                launch,
                 output: output.clone(),
                 link: link.clone(),
                 call_state: call_state.clone(),
@@ -177,6 +221,7 @@ impl Output {
 struct Manager {
     pipe: String,
     hello: Value,
+    launch: Launcher,
     output: Arc<Mutex<Output>>,
     link: Arc<Mutex<Option<Link>>>,
     call_state: Arc<Mutex<Option<Value>>>,
@@ -188,6 +233,7 @@ impl Manager {
     /// `woken`: a message when the link closed or when stopping.
     fn run(self, woken: &mpsc::Receiver<()>) {
         let mut delay = Duration::ZERO;
+        let mut launched: Option<Instant> = None;
         while !self.stop.load(Ordering::SeqCst) {
             if !delay.is_zero() {
                 let _ = woken.recv_timeout(delay);
@@ -213,6 +259,12 @@ impl Manager {
                     output.incompatible = Some(reason);
                     output.report();
                     RETRY_INCOMPATIBLE
+                }
+                Err(LinkEnd::NotRunning) => {
+                    if launched.is_none() && (self.launch)() {
+                        launched = Some(Instant::now());
+                    }
+                    if launched.is_some_and(|at| at.elapsed() < LAUNCH_WAIT) { LAUNCH_POLL } else { RETRY }
                 }
                 Err(end) => {
                     log::debug!("system-audio: no Jay-A: {end:?}");
@@ -270,11 +322,16 @@ mod tests {
     type Log = Arc<Mutex<(Vec<(Instant, bool)>, Vec<(Instant, String)>)>>;
 
     fn start(pipe: &str) -> (Arc<JayA>, Log) {
+        start_with(pipe, Box::new(|| false))
+    }
+
+    fn start_with(pipe: &str, launch: Launcher) -> (Arc<JayA>, Log) {
         let log: Log = Arc::default();
         let (audio, states) = (log.clone(), log.clone());
         let jay_a = JayA::start(
             pipe,
             json!({ "app": "jay-c", "version": "test", "protocol": 1 }),
+            launch,
             Box::new(move |chunk: &[f32]| audio.lock().unwrap().0.push((Instant::now(), chunk[959] != 0.5))),
             Box::new(move |status: Value| states.lock().unwrap().1.push((Instant::now(), status["link"].as_str().unwrap().to_string()))),
         );
@@ -355,6 +412,38 @@ mod tests {
         assert!(audio.len().abs_diff(fed) <= 6, "{} out vs {fed} fed", audio.len());
         let gap = audio.windows(2).map(|w| w[1].0 - w[0].0).max().unwrap();
         println!("longest wait between chunks out: {} ms", gap.as_millis());
+    }
+
+    #[test]
+    fn starts_jay_a_once_and_links_within_3_s() {
+        let pipe = format!("jay-a-link-test-{}-launch", std::process::id());
+        let launches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let running: Arc<Mutex<Option<FakeJayA>>> = Arc::default();
+        let launcher: Launcher = {
+            let (launches, running, pipe) = (launches.clone(), running.clone(), pipe.clone());
+            Box::new(move || {
+                launches.fetch_add(1, Ordering::SeqCst);
+                let (running, pipe) = (running.clone(), pipe.clone());
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(400)); // Jay-A takes a moment to open its pipe
+                    *running.lock().unwrap() = Some(FakeJayA::start(&pipe, Options::default()).unwrap());
+                });
+                true
+            })
+        };
+        let began = Instant::now();
+        let (jay_a, log) = start_with(&pipe, launcher);
+        let reserve = Reserve::start(jay_a.clone());
+        let linked = wait_for(&log, "jay-a", began, Duration::from_secs(3));
+        println!("Jay-A started and took over {} ms after the microphone opened", (linked - began).as_millis());
+
+        // Jay-A crashes: the reserve takes over, and Jay-A isn't started again.
+        running.lock().unwrap().take();
+        wait_for(&log, "fallback", linked, Duration::from_secs(1));
+        std::thread::sleep(RETRY * 3);
+        reserve.stop();
+        assert_eq!(launches.load(Ordering::SeqCst), 1, "started once");
+        assert!(running.lock().unwrap().is_none());
     }
 
     #[test]

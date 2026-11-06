@@ -9,6 +9,8 @@ const COMMANDS: &[&str] = &[
     "stop_mic",
     "mic_call_state",
     "jay_a_show",
+    "jay_a_installed",
+    "jay_a_open_releases",
 ];
 
 fn main() {

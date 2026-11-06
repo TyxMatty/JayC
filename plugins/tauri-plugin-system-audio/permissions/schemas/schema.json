@@ -307,6 +307,30 @@
           "markdownDescription": "Denies the is_supported command without any pre-configured scope."
         },
         {
+          "description": "Enables the jay_a_installed command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jay-a-installed",
+          "markdownDescription": "Enables the jay_a_installed command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jay_a_installed command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jay-a-installed",
+          "markdownDescription": "Denies the jay_a_installed command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the jay_a_open_releases command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-jay-a-open-releases",
+          "markdownDescription": "Enables the jay_a_open_releases command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the jay_a_open_releases command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-jay-a-open-releases",
+          "markdownDescription": "Denies the jay_a_open_releases command without any pre-configured scope."
+        },
+        {
           "description": "Enables the jay_a_show command without any pre-configured scope.",
           "type": "string",
           "const": "allow-jay-a-show",
@@ -415,10 +439,10 @@
           "markdownDescription": "Denies the window_process command without any pre-configured scope."
         },
         {
-          "description": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`\n- `allow-mic-call-state`\n- `allow-jay-a-show`",
+          "description": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`\n- `allow-mic-call-state`\n- `allow-jay-a-show`\n- `allow-jay-a-installed`\n- `allow-jay-a-open-releases`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`\n- `allow-mic-call-state`\n- `allow-jay-a-show`"
+          "markdownDescription": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`\n- `allow-mic-call-state`\n- `allow-jay-a-show`\n- `allow-jay-a-installed`\n- `allow-jay-a-open-releases`"
         }
       ]
     }

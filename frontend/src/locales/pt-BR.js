@@ -333,4 +333,7 @@ export default {
   "Looking for Jay-A…": "Procurando o Jay-A…",
   "Jay-A stopped. Using Jay-C's filter.": "O Jay-A parou. Usando o filtro do Jay-C.",
   "Jay-A is back.": "O Jay-A voltou.",
+  "Jay-A (not installed)": "Jay-A (não instalado)",
+  "Jay-A isn't installed on this PC.": "O Jay-A não está instalado neste PC.",
+  "Get Jay-A": "Baixar o Jay-A",
 };

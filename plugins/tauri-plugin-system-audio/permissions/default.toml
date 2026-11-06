@@ -11,4 +11,6 @@ permissions = [
   "allow-stop-mic",
   "allow-mic-call-state",
   "allow-jay-a-show",
+  "allow-jay-a-installed",
+  "allow-jay-a-open-releases",
 ]

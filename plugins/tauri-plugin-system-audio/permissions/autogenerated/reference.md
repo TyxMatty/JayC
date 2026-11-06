@@ -14,6 +14,8 @@ Lets the app capture audio natively: other apps' sound for screen sharing, and t
 - `allow-stop-mic`
 - `allow-mic-call-state`
 - `allow-jay-a-show`
+- `allow-jay-a-installed`
+- `allow-jay-a-open-releases`
 
 ## Permission Table
 
@@ -46,6 +48,58 @@ Enables the is_supported command without any pre-configured scope.
 <td>
 
 Denies the is_supported command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:allow-jay-a-installed`
+
+</td>
+<td>
+
+Enables the jay_a_installed command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:deny-jay-a-installed`
+
+</td>
+<td>
+
+Denies the jay_a_installed command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:allow-jay-a-open-releases`
+
+</td>
+<td>
+
+Enables the jay_a_open_releases command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:deny-jay-a-open-releases`
+
+</td>
+<td>
+
+Denies the jay_a_open_releases command without any pre-configured scope.
 
 </td>
 </tr>

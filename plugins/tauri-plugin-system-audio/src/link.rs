@@ -65,8 +65,10 @@ pub enum LinkEvent {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LinkEnd {
-    /// Nothing to talk to: Jay-A isn't running, is busy with another client, or the pipe isn't
-    /// Jay-A's (another Windows user's).
+    /// No pipe: Jay-A isn't running.
+    NotRunning,
+    /// The pipe can't be used: Jay-A is busy with another client, or the pipe isn't Jay-A's
+    /// (another Windows user's).
     Unavailable(String),
     /// Jay-A speaks another protocol version (or refused ours).
     Incompatible(String),
@@ -393,13 +395,13 @@ fn open(name: &str) -> Result<Pipe, LinkEnd> {
         )
     }
     .map_err(|e| {
-        LinkEnd::Unavailable(if e.code() == ERROR_FILE_NOT_FOUND.to_hresult() {
-            "Jay-A isn't running".into()
+        if e.code() == ERROR_FILE_NOT_FOUND.to_hresult() {
+            LinkEnd::NotRunning
         } else if e.code() == ERROR_PIPE_BUSY.to_hresult() {
-            "Jay-A is busy with another client".into()
+            LinkEnd::Unavailable("Jay-A is busy with another client".into())
         } else {
-            e.message()
-        })
+            LinkEnd::Unavailable(e.message())
+        }
     })?;
     let pipe = Pipe::new(handle).map_err(LinkEnd::Unavailable)?;
     // Pipe names are global to the PC: another Windows user could create this one before Jay-A
@@ -540,9 +542,9 @@ mod tests {
     }
 
     #[test]
-    fn nothing_listening_is_unavailable() {
+    fn nothing_listening_is_not_running() {
         let result = Link::connect(&test_pipe("nobody"), &hello(), |_| {});
-        assert!(matches!(result, Err(LinkEnd::Unavailable(ref m)) if m == "Jay-A isn't running"), "{:?}", result.err());
+        assert!(matches!(result, Err(LinkEnd::NotRunning)), "{:?}", result.err());
     }
 
     #[test]

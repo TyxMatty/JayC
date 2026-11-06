@@ -71,6 +71,16 @@ export function startMic(options, { onAudio, onError, onStatus }) {
   return invoke('plugin:system-audio|start_mic', { options, onAudio: channel });
 }
 
+/** Whether Jay-A is installed for this user (Windows). */
+export async function jayAInstalled() {
+  return inTauri() ? invoke('plugin:system-audio|jay_a_installed').catch(() => false) : false;
+}
+
+/** Opens Jay-A's releases page in the browser. */
+export function jayAOpenReleases() {
+  return invoke('plugin:system-audio|jay_a_open_releases');
+}
+
 /** Jay-A mode: asks Jay-A to show its window. */
 export function jayAShow() {
   return invoke('plugin:system-audio|jay_a_show');
