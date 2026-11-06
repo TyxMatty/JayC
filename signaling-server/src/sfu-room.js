@@ -29,6 +29,8 @@ export class SfuRoom {
   /** @type {Map<string, { peer: object, transports: Map, producers: Map, consumers: Map }>} */
   #members = new Map();
   #bandwidthTimer;
+  /** A round of reportViewerBandwidth is running (a stalled worker must not stack them up). */
+  #reporting = false;
 
   constructor({ router, webRtcServer }) {
     this.router = router;
@@ -241,18 +243,30 @@ export class SfuRoom {
    * on 4 Mbps, who then got no picture at all (measured).
    */
   async reportViewerBandwidth() {
-    for (const [ownerId, owner] of this.#members) {
-      for (const producer of owner.producers.values()) {
-        if (producer.appData.source !== 'screen') continue;
-        let kbps = null;
-        for (const [id, member] of this.#members) {
-          if (id === ownerId || ![...member.consumers.values()].some((c) => c.producerId === producer.id && !c.paused)) continue;
-          const transport = [...member.transports.values()].find((t) => t.appData.direction === 'recv');
-          const [stats] = (await transport?.getStats()) ?? [];
-          if (stats?.availableOutgoingBitrate) kbps = Math.min(kbps ?? Infinity, Math.round(stats.availableOutgoingBitrate / 1000));
-        }
-        owner.peer.send({ type: 'viewer-bandwidth', producerId: producer.id, kbps });
+    if (this.#reporting) return;
+    this.#reporting = true;
+    try {
+      const screens = [...this.#members.values()].flatMap((owner) =>
+        [...owner.producers.values()].filter((p) => p.appData.source === 'screen').map((producer) => ({ owner, producer })),
+      );
+      const watches = (member, producer) => [...member.consumers.values()].some((c) => c.producerId === producer.id && !c.paused);
+      const viewers = [...this.#members.values()].filter((member) => screens.some(({ producer }) => watches(member, producer)));
+      // Each viewer's estimate once per round, all at once (kbps; undefined while mediasoup has none).
+      const estimates = new Map(
+        await Promise.all(
+          viewers.map(async (member) => {
+            const transport = [...member.transports.values()].find((t) => t.appData.direction === 'recv');
+            const [stats] = (await transport?.getStats().catch(() => null)) ?? [];
+            return [member, stats?.availableOutgoingBitrate && Math.round(stats.availableOutgoingBitrate / 1000)];
+          }),
+        ),
+      );
+      for (const { owner, producer } of screens) {
+        const known = viewers.filter((member) => watches(member, producer) && estimates.get(member)).map((member) => estimates.get(member));
+        owner.peer.send({ type: 'viewer-bandwidth', producerId: producer.id, kbps: known.length ? Math.min(...known) : null });
       }
+    } finally {
+      this.#reporting = false;
     }
   }
 

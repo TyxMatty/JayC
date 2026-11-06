@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cueNotes } from '../src/core/sounds.js';
+import { cueAllowed, cueNotes } from '../src/core/sounds.js';
 
 const freqs = (name, random = () => 0.5) => cueNotes(name, random).map((n) => Math.round(n.freq));
 
@@ -19,4 +19,13 @@ test('notes are a step apart, and repeats vary at most 2% in pitch', () => {
   const low = cueNotes('chat', () => 0)[0].freq;
   const high = cueNotes('chat', () => 1)[0].freq;
   assert.ok(Math.abs(low / 987.77 - 0.98) < 1e-9 && Math.abs(high / 987.77 - 1.02) < 1e-9);
+});
+
+test('cues follow the setting, and deafen quiets only the ones about others', () => {
+  const play = (enabled, deafened, others) => cueAllowed({ enabled, deafened, others });
+  assert.equal(play(true, false, false), true, 'our own action');
+  assert.equal(play(true, false, true), true, 'someone else, not deafened');
+  assert.equal(play(true, true, false), true, 'our own action while deafened (e.g. undeafen)');
+  assert.equal(play(true, true, true), false, 'someone else while deafened');
+  assert.equal(play(false, false, false), false, 'alert sounds off');
 });

@@ -14,7 +14,7 @@ function fakeContext() {
     destination: { name: 'out' },
     created: 0,
     createMediaStreamSource(stream) { this.created++; return { ...node(), stream }; },
-    createGain() { return { ...node(), gain: { value: 1 } }; },
+    createGain() { return { ...node(), gain: { value: 1, setTargetAtTime(target) { this.value = target; } } }; },
     level: 0.1,
     createAnalyser() {
       const ctx = this;
@@ -82,6 +82,8 @@ test('deafen silences every voice and stream, before or after they start, and co
   assert.equal(voice.gain.value, 1.5, "her own volume isn't touched");
   mixer.setDeafened(false);
   assert.equal(bus.gain.value, 1);
+  mixer.setDeafened(true); // and once already playing
+  assert.equal(bus.gain.value, 0);
 });
 
 test('alert cues go straight to the speakers, so deafen leaves them alone', () => {

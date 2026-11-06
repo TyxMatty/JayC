@@ -105,8 +105,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
     setDeafened(on) {
       deafened = Boolean(on);
       if (!voices) return;
-      if (voices.gain.setTargetAtTime) voices.gain.setTargetAtTime(deafened ? 0 : 1, context.currentTime, 0.015);
-      else voices.gain.value = deafened ? 0 : 1;
+      voices.gain.setTargetAtTime(deafened ? 0 : 1, context.currentTime, 0.015);
     },
     /** Plays everything on another output device ('' = the default). */
     setSink(id) {

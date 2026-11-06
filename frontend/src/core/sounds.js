@@ -2,6 +2,12 @@
 // for "on" / someone arriving, falling for "off" / someone leaving. They play on the mixer's alert
 // bus (core/playback.js), so they follow the output device and deafen doesn't silence them.
 
+/**
+ * Whether a cue plays: alert sounds are on in Settings, and while deafened only the cues of our own
+ * actions do (`others`: someone else joined, left, started a stream or wrote).
+ */
+export const cueAllowed = ({ enabled, deafened, others }) => Boolean(enabled) && !(others && deafened);
+
 /** Each cue's notes (Hz), a step apart. */
 const CUES = {
   'mic-on': [659.25, 880], // E5 A5

@@ -15,13 +15,14 @@ use std::sync::Mutex;
 use tauri::Manager;
 use windows::core::PWSTR;
 use windows::core::BOOL;
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, PROPERTYKEY, WPARAM};
+use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM, PROPERTYKEY, WPARAM};
 use windows::Win32::Storage::EnhancedStorage::{
     PKEY_AppUserModel_ID, PKEY_AppUserModel_RelaunchCommand, PKEY_AppUserModel_RelaunchDisplayNameResource,
     PKEY_AppUserModel_RelaunchIconResource,
 };
 use windows::Win32::System::Com::CoTaskMemAlloc;
 use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
+use windows::Win32::System::Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
 use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PROPVARIANT};
 use windows::Win32::System::Variant::VT_LPWSTR;
 use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreForWindow};
@@ -135,15 +136,40 @@ fn descendants(root: u32) -> Vec<u32> {
         }
         let _ = CloseHandle(snapshot);
     }
-    let mut found = vec![root];
+    tree(&parents, root, |pid| unsafe { started(pid) })
+}
+
+/// The processes below `root`, from `(pid, parent pid)` pairs. Windows reuses process ids, and a
+/// process keeps its parent's id after the parent exits: one whose parent died long ago can name an
+/// id that is now ours. So a child counts only if it started after its parent (`started`; unknown =
+/// not ours), or a stranger's window would join our taskbar button.
+fn tree(parents: &[(u32, u32)], root: u32, started: impl Fn(u32) -> Option<u64>) -> Vec<u32> {
+    let mut found = vec![(root, started(root))];
     let mut i = 0;
     while i < found.len() {
-        let parent = found[i];
-        found.extend(parents.iter().filter(|(pid, ppid)| *ppid == parent && *pid != parent && !found.contains(pid)).map(|(pid, _)| *pid).collect::<Vec<_>>());
+        if let (parent, Some(parent_start)) = found[i] {
+            for &(pid, ppid) in parents {
+                if ppid != parent || pid == parent || found.iter().any(|&(f, _)| f == pid) {
+                    continue;
+                }
+                let start = started(pid);
+                if start.is_some_and(|s| s >= parent_start) {
+                    found.push((pid, start));
+                }
+            }
+        }
         i += 1;
     }
-    found.remove(0);
-    found
+    found.into_iter().skip(1).map(|(pid, _)| pid).collect()
+}
+
+/// When process `pid` started (FILETIME ticks), if we may ask.
+unsafe fn started(pid: u32) -> Option<u64> {
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+    let (mut created, mut exited, mut kernel, mut user) = (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
+    let ok = unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) }.is_ok();
+    let _ = unsafe { CloseHandle(process) };
+    ok.then(|| (created.dwHighDateTime as u64) << 32 | created.dwLowDateTime as u64)
 }
 
 /// The relaunch properties, and the app ID cleared (set again by `set_app_id`).
@@ -215,7 +241,32 @@ fn ico(rgba: &[u8], size: u32) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::ico;
+    use super::{descendants, ico, tree};
+
+    #[test]
+    fn finds_a_real_child_process() {
+        let mut child = std::process::Command::new("cmd").args(["/c", "ping -n 3 127.0.0.1 >nul"]).spawn().unwrap();
+        let found = descendants(std::process::id());
+        let _ = child.kill();
+        assert!(found.contains(&child.id()), "{found:?} lacks {}", child.id());
+    }
+
+    #[test]
+    fn a_child_counts_only_if_it_started_after_its_parent() {
+        // (pid, parent pid); start times below. 400 names us as parent but is older than us: its
+        // real parent had our id before. 600's start time can't be read.
+        let parents = [(200, 100), (300, 200), (400, 100), (500, 400), (600, 100), (700, 999)];
+        let started = |pid| match pid {
+            100 => Some(50),
+            200 => Some(60),
+            300 => Some(70),
+            400 => Some(10),
+            500 => Some(20),
+            700 => Some(80),
+            _ => None,
+        };
+        assert_eq!(tree(&parents, 100, started), vec![200, 300]);
+    }
 
     #[test]
     fn ico_layout() {

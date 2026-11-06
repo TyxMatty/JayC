@@ -9,6 +9,7 @@ import { createControlBar } from './control-bar.js';
 import { createAudioMenu } from './audio-menu.js';
 import { createChatPanel } from './chat-panel.js';
 import { createMixer } from '../core/playback.js';
+import { cueAllowed } from '../core/sounds.js';
 import { createSpeakingDetector } from '../core/speaking.js';
 import { profileBackground } from '../core/profile-color.js';
 import { watchNativeLive } from '../core/native-live.js';
@@ -239,7 +240,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const mixer = createMixer();
   // Alert cues (core/sounds.js), if on in Settings: ours always, the others' not while deafened.
   const cue = (name, { others = false } = {}) => {
-    if (settings.get().alertSounds && !(others && call.deafened)) mixer.cue(name);
+    if (cueAllowed({ enabled: settings.get().alertSounds, deafened: call.deafened, others })) mixer.cue(name);
   };
   mixer.setSink(settings.get().outputDevice);
   const unsubscribeOutput = settings.subscribe((next, prev) => {
