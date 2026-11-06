@@ -456,6 +456,59 @@ describe('SFU requests', () => {
     b.client.close();
   });
 
+  test("ids from another person or another room are refused, and nothing crosses rooms", async () => {
+    const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+    const a = await joined(port, 'authz', 'Alice');
+    const b = await joined(port, 'authz', 'Bob');
+    const e = await joined(port, 'authz-other', 'Eve');
+    const caps = b.msg.routerRtpCapabilities;
+    const sendA = (await a.client.request('createTransport', { direction: 'send' })).data;
+    await b.client.request('createTransport', { direction: 'recv' });
+    await e.client.request('createTransport', { direction: 'recv' });
+    const { id: producerId } = (
+      await a.client.request('produce', { transportId: sendA.id, kind: 'audio', source: 'mic', rtpParameters: opusRtpParameters })
+    ).data;
+    const { id: consumerId } = (await b.client.request('consume', { producerId, rtpCapabilities: caps })).data;
+    const error = async (client, type, data) => (await client.request(type, data)).error;
+
+    // Bob, in the same room, can't drive Alice's producer or use her transport.
+    for (const type of ['pauseProducer', 'resumeProducer', 'closeProducer']) {
+      assert.equal(await error(b.client, type, { producerId }), 'unknown-producer', type);
+    }
+    assert.equal(await error(b.client, 'produce', { transportId: sendA.id, kind: 'audio', source: 'mic', rtpParameters: opusRtpParameters }), 'unknown-transport');
+    assert.equal(await error(b.client, 'connectTransport', { transportId: sendA.id, dtlsParameters: { role: 'client', fingerprints: [] } }), 'unknown-transport');
+    assert.equal(await error(b.client, 'restartIce', { transportId: sendA.id }), 'unknown-transport');
+    // Alice can't drive Bob's consumer.
+    for (const type of ['resumeConsumer', 'pauseConsumer', 'closeConsumer']) {
+      assert.equal(await error(a.client, type, { consumerId }), 'unknown-consumer', type);
+    }
+    assert.equal(await error(a.client, 'setPreferredLayers', { consumerId, spatialLayer: 0 }), 'unknown-consumer');
+    // Eve, in another room, can't reach any of it with the ids.
+    assert.equal(await error(e.client, 'consume', { producerId, rtpCapabilities: caps }), 'unknown-producer');
+    assert.equal(await error(e.client, 'resumeConsumer', { consumerId }), 'unknown-consumer');
+    assert.equal(await error(e.client, 'closeTransport', { transportId: sendA.id }), 'unknown-transport');
+
+    // Chat, profile and previews reach Bob, never Eve.
+    a.client.send({ type: 'chat', text: 'room only' });
+    a.client.send({ type: 'profile', avatar: jpeg });
+    a.client.send({ type: 'screen-preview', image: jpeg });
+    await b.client.next('chat');
+    await b.client.next('peer-updated');
+    await b.client.next('screen-preview');
+    const leaked = await Promise.race([
+      e.client.waitFor((m) => ['chat', 'peer-updated', 'screen-preview', 'new-producer', 'peer-joined'].includes(m.type)),
+      new Promise((resolve) => setTimeout(() => resolve(null), 400)),
+    ]);
+    assert.equal(leaked, null, 'nothing from the other room');
+
+    // A preview sent outside any room goes nowhere.
+    const outsider = connect(port);
+    await outsider.open();
+    outsider.send({ type: 'screen-preview', image: jpeg });
+    assert.deepEqual(await outsider.next('error'), { type: 'error', code: 'not-in-room', ref: 'screen-preview' });
+    for (const client of [a.client, b.client, e.client, outsider]) client.close();
+  });
+
   test('leaving closes your producers for everyone consuming them', async () => {
     const a = await joined(port, 'sfu-leave', 'Alice');
     const b = await joined(port, 'sfu-leave', 'Bob');
