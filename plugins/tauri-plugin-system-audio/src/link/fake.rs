@@ -96,7 +96,9 @@ fn serve_all(mut pipe: Pipe, name: &str, options: &Options, stop: &AtomicBool) {
         if !accept(&mut pipe, stop) || serve(&mut pipe, options, stop) || stop.load(Ordering::SeqCst) {
             return;
         }
-        // A fresh instance for the next client (the old one closes as it is replaced).
+        // A fresh instance for the next client. The old one must be closed first: with
+        // FILE_FLAG_FIRST_PIPE_INSTANCE, creating the new one while it exists fails.
+        drop(pipe);
         pipe = match listen(name) {
             Ok(next) => next,
             Err(_) => return,
@@ -176,6 +178,7 @@ fn serve(pipe: &mut Pipe, options: &Options, stop: &AtomicBool) -> bool {
                     bytes
                 }
                 Frame::Control(message) => {
+                    println!("fake Jay-A got {message}"); // what Jay-C sends, for the example's log
                     match message["type"].as_str() {
                         Some("start-mic") if mic_since.is_none() => {
                             mic_since = Some(Instant::now());

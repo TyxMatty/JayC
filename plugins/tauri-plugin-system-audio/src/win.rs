@@ -19,6 +19,8 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId};
 
 use crate::apm::Apm;
+use crate::jay_a::JayA;
+use crate::link::PIPE;
 use crate::{AudioApp, CHANNELS, CHUNK_FRAMES, CaptureInfo, CaptureTarget, MicDevice, MicInfo, MicOptions, SAMPLE_RATE, WindowProcess};
 
 const CHUNK_SAMPLES: usize = CHUNK_FRAMES * CHANNELS as usize;
@@ -569,6 +571,8 @@ fn run_stream(pid: u32, include_tree: bool, mut role: Role, stop: &AtomicBool, r
 pub struct Mic {
     stop: Arc<AtomicBool>,
     threads: Vec<JoinHandle<()>>,
+    /// Jay-A mode: Jay-A's audio while it flows, this capture (the reserve) otherwise.
+    jay_a: Option<Arc<JayA>>,
 }
 
 impl Drop for Mic {
@@ -581,14 +585,18 @@ impl Drop for Mic {
 }
 
 impl Mic {
+    /// `jay_a`: the HELLO for Jay-A, to start in Jay-A mode (docs/JAY-A.md); its states go to
+    /// `on_status`.
     pub fn start(
         options: MicOptions,
+        jay_a: Option<serde_json::Value>,
         sink: impl FnMut(&[f32]) + Send + 'static,
         on_error: impl Fn(String) + Send + Sync + 'static,
+        on_status: impl Fn(serde_json::Value) + Send + 'static,
     ) -> Result<(Mic, MicInfo), String> {
         let stop = Arc::new(AtomicBool::new(false));
         let on_error: ErrorSink = Arc::new(on_error);
-        let mut mic = Mic { stop: stop.clone(), threads: Vec::new() };
+        let mut mic = Mic { stop: stop.clone(), threads: Vec::new(), jay_a: None };
 
         // Echo reference: our own WebView2 process tree (all of the app's sound).
         let mut reference = None;
@@ -612,7 +620,14 @@ impl Mic {
 
         let echo_reference = reference.is_some();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<String, String>>();
-        let mut sink: Sink = Box::new(sink);
+        let mut sink: Sink = match jay_a {
+            Some(hello) => {
+                let jay_a = Arc::new(JayA::start(PIPE, hello, Box::new(sink), Box::new(on_status)));
+                mic.jay_a = Some(jay_a.clone());
+                Box::new(move |chunk: &[f32]| jay_a.reserve(chunk))
+            }
+            None => Box::new(sink),
+        };
         let thread_stop = stop.clone();
         mic.threads.push(
             std::thread::Builder::new()
@@ -631,6 +646,13 @@ impl Mic {
 
         let info = MicInfo { sample_rate: SAMPLE_RATE, channels: 1, chunk_frames: CHUNK_FRAMES, device, echo_reference };
         Ok((mic, info))
+    }
+
+    /// Jay-A mode: tells Jay-A whether we're in a call and muted.
+    pub fn call_state(&self, in_call: bool, muted: bool) {
+        if let Some(jay_a) = &self.jay_a {
+            jay_a.call_state(in_call, muted);
+        }
     }
 }
 

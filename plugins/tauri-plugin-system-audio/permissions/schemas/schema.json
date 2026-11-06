@@ -331,6 +331,18 @@
           "markdownDescription": "Denies the list_mics command without any pre-configured scope."
         },
         {
+          "description": "Enables the mic_call_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-mic-call-state",
+          "markdownDescription": "Enables the mic_call_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the mic_call_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-mic-call-state",
+          "markdownDescription": "Denies the mic_call_state command without any pre-configured scope."
+        },
+        {
           "description": "Enables the start_capture command without any pre-configured scope.",
           "type": "string",
           "const": "allow-start-capture",
@@ -391,10 +403,10 @@
           "markdownDescription": "Denies the window_process command without any pre-configured scope."
         },
         {
-          "description": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`",
+          "description": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`\n- `allow-mic-call-state`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`"
+          "markdownDescription": "Lets the app capture audio natively: other apps' sound for screen sharing, and the call microphone.\n#### This default permission set includes:\n\n- `allow-is-supported`\n- `allow-list-audio-apps`\n- `allow-list-mics`\n- `allow-window-process`\n- `allow-start-capture`\n- `allow-stop-capture`\n- `allow-start-mic`\n- `allow-stop-mic`\n- `allow-mic-call-state`"
         }
       ]
     }

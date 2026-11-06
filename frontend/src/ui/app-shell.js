@@ -109,6 +109,7 @@ export function mountApp(root) {
       micProcessing: prefs.micProcessing,
       micDeviceId: prefs.micDevice,
       micShape: { gain: prefs.micGain, gateDb: prefs.micGate },
+      micFilter: prefs.micFilter,
     });
     if (import.meta.env.DEV) window.__jaycCall = call; // for debugging from devtools
     // Discord status (Settings › Profile), until the call ends; turning it off and on keeps the time.
@@ -137,6 +138,9 @@ export function mountApp(root) {
           call.setMicDevice(next.micDevice).catch((error) => console.warn('[app] mic device', error));
         }
         if (next.micGain !== prev.micGain || next.micGate !== prev.micGate) call.setMicShape({ gain: next.micGain, gateDb: next.micGate });
+        if (next.micFilter !== prev.micFilter) {
+          call.setMicFilter(next.micFilter).catch((error) => console.warn('[app] mic filter', error));
+        }
         if (next.excludedApps !== prev.excludedApps) {
           call.setExcludedApps(next.excludedApps).catch((error) => console.warn('[app] excluded apps', error));
         }

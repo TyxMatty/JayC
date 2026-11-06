@@ -13,7 +13,7 @@ import {
   screenCodec,
 } from './media.js';
 import { startScreenAudio } from './screen-audio.js';
-import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart } from './native-mic.js';
+import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart, micCallState } from './native-mic.js';
 import { startNativeLive, stopNativeLive } from './native-live.js';
 import { capturePreview } from './screen-preview.js';
 import { bufferDelayMs, catchUp } from './catch-up.js';
@@ -88,6 +88,11 @@ export class Call extends EventTarget {
   micLevel = -Infinity;
   /** Native mic: whether the sensitivity gate is letting the voice through (for the meter). */
   micGateOpen = false;
+  /** Native mic: whose processing the call hears, 'jay-c' or 'jay-a' (docs/JAY-A.md). */
+  micFilter = 'jay-c';
+  /** With 'jay-a': `{ link: 'searching' | 'jay-a' | 'fallback' | 'incompatible', version, reason }`,
+   * also sent as a 'jay-a-status' event; null otherwise. */
+  jayAStatus = null;
   /** Our profile picture (data URL) or null; others see it while our camera is off. */
   avatar = null;
   /** Our profile color ({ from, to?, angle? }) or null = picked from the name (core/profile-color.js). */
@@ -168,12 +173,13 @@ export class Call extends EventTarget {
   }
 
   /** Opens local media, joins the room and starts sending/receiving through the SFU. */
-  async join({ url, room, name, avatar = null, color = null, micProcessing = DEFAULT_MIC_PROCESSING, micDeviceId = null, micShape = null }) {
+  async join({ url, room, name, avatar = null, color = null, micProcessing = DEFAULT_MIC_PROCESSING, micDeviceId = null, micShape = null, micFilter = 'jay-c' }) {
     this.room = room;
     this.avatar = avatar;
     this.color = color;
     this.micProcessing = { ...micProcessing };
     this.micDeviceId = micDeviceId;
+    this.micFilter = micFilter;
     if (micShape) Object.assign(this.micShape, micShape);
     const native = await nativeMicSupported();
     // The camera starts off: it opens on the first toggleCamera().
@@ -269,6 +275,7 @@ export class Call extends EventTarget {
       this.#micMuted = !this.#micMuted;
       await this.#setProducerPaused('mic', this.#micMuted);
     }
+    if (this.#nativeMic) micCallState({ inCall: true, muted: this.#micMuted });
     this.#syncLocalStream();
   }
 
@@ -309,6 +316,12 @@ export class Call extends EventTarget {
   /** Native mic: switches to another microphone (null = the Windows default). */
   async setMicDevice(id) {
     this.micDeviceId = id;
+    if (this.#nativeMic && this.local.audio) await this.#restartNativeMic();
+  }
+
+  /** Native mic: 'jay-c' or 'jay-a' (docs/JAY-A.md). Reopens the mic, swapped in with replaceTrack. */
+  async setMicFilter(filter) {
+    this.micFilter = filter;
     if (this.#nativeMic && this.local.audio) await this.#restartNativeMic();
   }
 
@@ -965,6 +978,13 @@ export class Call extends EventTarget {
     const mic = await startNativeMic({
       ...this.micProcessing,
       device: this.micDeviceId,
+      filter: this.micFilter,
+      // Jay-A adopts these the first time it connects (docs/JAY-A.md).
+      jayAImport: { micDevice: this.micDeviceId, micGain: this.micShape.gain, micGate: this.micShape.gateDb, micProcessing: this.micProcessing },
+      onStatus: (status) => {
+        this.jayAStatus = status;
+        this.#emit('jay-a-status', status);
+      },
       shape: this.micShape,
       onLevel: (db, open) => {
         this.micLevel = db;
@@ -977,6 +997,11 @@ export class Call extends EventTarget {
       },
     });
     this.#nativeMic = mic;
+    if (this.micFilter !== 'jay-a' && this.jayAStatus) {
+      this.jayAStatus = null;
+      this.#emit('jay-a-status', null);
+    }
+    micCallState({ inCall: true, muted: this.#micMuted });
     this.#watchNativeMic();
     return mic.track;
   }

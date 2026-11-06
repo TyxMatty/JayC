@@ -40,6 +40,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
    * threshold in dBFS, or null = always send. Native mic only. */
   micGain: 1,
   micGate: null,
+  /** Whose processing the call hears (Windows): 'jay-c' (its own) or 'jay-a' (Jay-A's, with
+   * Jay-C's own as the reserve; docs/JAY-A.md). */
+  micFilter: 'jay-c',
   /** Speakers for the call's sound: a deviceId from enumerateDevices, or '' = the default. */
   outputDevice: '',
   /** The "Welcome!" tour (core/welcome.js) already opened by itself once; Settings › Help reopens it. */

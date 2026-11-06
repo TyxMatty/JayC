@@ -51,17 +51,28 @@ export function stopCapture() {
 /**
  * Starts the native call microphone (cleaned by WebRTC audio processing). Audio arrives in
  * `onAudio(Float32Array)`: mono at 48 kHz, 20 ms per call.
- * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean, device?: string | null }} options
- * @param {{ onAudio: (samples: Float32Array) => void, onError?: (message: string) => void }} handlers
+ * With `filter: 'jay-a'`, the audio is Jay-A's while it flows and Jay-C's own otherwise
+ * (docs/JAY-A.md); `onStatus` gets `{ link: 'searching' | 'jay-a' | 'fallback' | 'incompatible',
+ * version, reason }` when that changes, always before the chunks it applies to.
+ * @param {{ echoCancellation?: boolean, noiseSuppression?: boolean, autoGainControl?: boolean, device?: string | null,
+ *   filter?: 'jay-c' | 'jay-a', jayAImport?: object }} options
+ * @param {{ onAudio: (samples: Float32Array) => void, onError?: (message: string) => void,
+ *   onStatus?: (status: { link: string, version: string | null, reason: string | null }) => void }} handlers
  * @returns {Promise<{ sampleRate: number, channels: number, chunkFrames: number, device: string, echoReference: boolean }>}
  */
-export function startMic(options, { onAudio, onError }) {
+export function startMic(options, { onAudio, onError, onStatus }) {
   const channel = new Channel();
   channel.onmessage = (message) => {
     if (message instanceof ArrayBuffer) onAudio(new Float32Array(message));
     else if (message?.error) onError?.(message.error);
+    else if (message?.link) onStatus?.(message);
   };
   return invoke('plugin:system-audio|start_mic', { options, onAudio: channel });
+}
+
+/** Jay-A mode: tells Jay-A whether we're in a call and muted (shown in its window). */
+export function micCallState({ inCall, muted }) {
+  return invoke('plugin:system-audio|mic_call_state', { inCall, muted });
 }
 
 export function stopMic() {

@@ -14,7 +14,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{
-    Manager, Runtime, State,
+    AppHandle, Manager, Runtime, State,
     ipc::{Channel, InvokeResponseBody},
     plugin::{Builder, TauriPlugin},
 };
@@ -22,9 +22,10 @@ use tauri::{
 #[cfg(windows)]
 mod apm;
 #[cfg(windows)]
+mod jay_a;
+#[cfg(windows)]
 pub mod link;
 #[cfg(windows)]
-#[cfg_attr(not(test), allow(dead_code))] // shortcut: unused until the Jay-A mode of Mic (step I2, docs/JAY-A.md)
 mod selector;
 #[cfg(windows)]
 mod win;
@@ -109,6 +110,24 @@ pub struct MicOptions {
     /// Capture endpoint id from `list_mics`; none (or one no longer present) = the Windows default.
     #[serde(default)]
     pub device: Option<String>,
+    /// Whose processing the call hears (docs/JAY-A.md).
+    #[serde(default)]
+    pub filter: MicFilter,
+    /// Jay-A mode: the person's Jay-C mic settings, sent in HELLO as `import` (Jay-A adopts them
+    /// the first time it connects).
+    #[serde(default)]
+    pub jay_a_import: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MicFilter {
+    /// Jay-C's own: WebRTC's audio processing on the native capture.
+    #[default]
+    JayC,
+    /// Jay-A's audio over the Jay Link while it flows, Jay-C's own (still running) otherwise.
+    /// States arrive on the audio channel as JSON `{ "link": ... }` (see jay_a.rs).
+    JayA,
 }
 
 /// A microphone the user can pick.
@@ -151,6 +170,11 @@ fn send_samples(channel: &Channel<InvokeResponseBody>, samples: &[f32]) {
         bytes.extend_from_slice(&s.to_le_bytes());
     }
     let _ = channel.send(InvokeResponseBody::Raw(bytes));
+}
+
+#[cfg(windows)]
+fn send_json(channel: &Channel<InvokeResponseBody>, value: serde_json::Value) {
+    let _ = channel.send(InvokeResponseBody::Json(value.to_string()));
 }
 
 #[cfg(windows)]
@@ -229,7 +253,8 @@ fn start_capture(
 }
 
 #[tauri::command]
-fn start_mic(
+fn start_mic<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, MicState>,
     options: MicOptions,
     on_audio: Channel<InvokeResponseBody>,
@@ -239,20 +264,41 @@ fn start_mic(
 
     #[cfg(windows)]
     {
-        let errors = on_audio.clone();
+        let hello = (options.filter == MicFilter::JayA).then(|| {
+            let mut hello = serde_json::json!({ "app": "jay-c", "version": app.package_info().version.to_string(), "protocol": link::PROTOCOL });
+            if let Some(import) = &options.jay_a_import {
+                hello["import"] = import.clone();
+            }
+            hello
+        });
+        let (errors, states) = (on_audio.clone(), on_audio.clone());
         let (mic, info) = win::Mic::start(
             options,
+            hello,
             move |samples: &[f32]| send_samples(&on_audio, samples),
             move |error: String| send_error(&errors, error),
+            move |status| send_json(&states, status),
         )?;
         *current = Some(mic);
         Ok(info)
     }
     #[cfg(not(windows))]
     {
-        let _ = (options, on_audio);
+        let _ = (app, options, on_audio);
         Err("unsupported".into())
     }
+}
+
+/// Jay-A mode: tells Jay-A whether we're in a call and muted (shown in its window).
+#[tauri::command]
+fn mic_call_state(state: State<'_, MicState>, in_call: bool, muted: bool) -> Result<(), String> {
+    #[cfg(windows)]
+    if let Some(mic) = &*state.0.lock().map_err(|e| e.to_string())? {
+        mic.call_state(in_call, muted);
+    }
+    #[cfg(not(windows))]
+    let _ = (state, in_call, muted);
+    Ok(())
 }
 
 #[tauri::command]
@@ -277,7 +323,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             start_capture,
             stop_capture,
             start_mic,
-            stop_mic
+            stop_mic,
+            mic_call_state
         ])
         .setup(|app, _api| {
             app.manage(CaptureState::default());

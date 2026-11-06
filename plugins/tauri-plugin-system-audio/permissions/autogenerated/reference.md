@@ -12,6 +12,7 @@ Lets the app capture audio natively: other apps' sound for screen sharing, and t
 - `allow-stop-capture`
 - `allow-start-mic`
 - `allow-stop-mic`
+- `allow-mic-call-state`
 
 ## Permission Table
 
@@ -96,6 +97,32 @@ Enables the list_mics command without any pre-configured scope.
 <td>
 
 Denies the list_mics command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:allow-mic-call-state`
+
+</td>
+<td>
+
+Enables the mic_call_state command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`system-audio:deny-mic-call-state`
+
+</td>
+<td>
+
+Denies the mic_call_state command without any pre-configured scope.
 
 </td>
 </tr>

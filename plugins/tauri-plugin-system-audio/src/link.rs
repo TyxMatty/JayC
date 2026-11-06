@@ -590,6 +590,17 @@ mod tests {
     }
 
     #[test]
+    fn the_fake_serves_the_next_client_after_one_leaves() {
+        let pipe = test_pipe("again");
+        let _fake = FakeJayA::start(&pipe, Options::default()).unwrap();
+        for _ in 0..3 {
+            let (link, _) = connect(&pipe);
+            drop(link);
+            std::thread::sleep(Duration::from_millis(100)); // the fake notices and listens again
+        }
+    }
+
+    #[test]
     fn t5_another_protocol_is_incompatible() {
         let pipe = test_pipe("protocol");
         let _fake = FakeJayA::start(&pipe, Options { protocol: 2, ..Options::default() }).unwrap();

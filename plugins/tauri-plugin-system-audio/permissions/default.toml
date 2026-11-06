@@ -9,4 +9,5 @@ permissions = [
   "allow-stop-capture",
   "allow-start-mic",
   "allow-stop-mic",
+  "allow-mic-call-state",
 ]

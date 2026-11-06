@@ -67,11 +67,11 @@ flowchart TD
 ```
 
 - **Quem vigia é a reserva:** o bloco dela chega a cada 20 ms, então ela percebe o travamento do Jay-A sem precisar de um timer próprio.
-- **Nada se perde na espera:** enquanto o Jay-A toca, a reserva guarda os seus últimos 4 blocos. Na troca, ela manda de uma vez os que chegaram depois do último bloco do Jay-A, junto com o atual. O alinhamento fino entre as duas fontes depende do atraso do Jay-A e vai ser medido na I5.
-- **Por que 60 ms:** são 3 blocos, parecido com os ~60 ms que o worklet acumula antes de tocar (`pcm-player.worklet.js`). Na I2, medir se o outro lado ouve algum estalo nessa espera.
+- **Nada se perde na espera:** enquanto o Jay-A toca, a reserva guarda os seus últimos 4 blocos. Na troca, ela manda de uma vez os que chegaram depois do último bloco do Jay-A, junto com o atual. O alinhamento fino entre as duas fontes depende do atraso do Jay-A, que vai ser medido na I5. O Jay-A promete no máximo 5 ms de atraso na cadeia de filtros (até 40 ms com a supressão forte, etapa 7 dele).
+- **Por que 60 ms:** são 3 blocos, parecido com os ~60 ms que o worklet acumula antes de tocar (`pcm-player.worklet.js`). Medido na I2: o worklet não chega a secar na troca (seção 9).
 - **Por que 1 s para voltar:** um Jay-A que trava e solta não deve fazer a fonte ficar pulando de um lado para o outro.
 - **A rampa:** o primeiro bloco depois de uma troca entra com um fade-in de 120 amostras, para não estalar na emenda. Mesmo assim, o timbre muda na troca, e isso não tem como evitar.
-- **Com o Jay-A ativo, a reserva segue o microfone dele** (pelo `deviceId` do pedido P4). O microfone escolhido no Jay-C vale no modo Jay-C e enquanto o Jay-A ainda não conectou. Reabrir a reserva (por exemplo, quando o `micNeedsRestart` detecta outro microfone) não derruba o link.
+- **Com o Jay-A ativo, a reserva segue o microfone dele** (pelo `deviceId` do pedido P4). O microfone escolhido no Jay-C vale no modo Jay-C e enquanto o Jay-A ainda não conectou. Reabrir a reserva (por exemplo, quando o `micNeedsRestart` detecta outro microfone) não derruba o link. **Isto fica para a I3**: na I2, a reserva usa o microfone escolhido no Jay-C, e reabri-la reabre o link junto.
 
 ## 4. Estados do link no Jay-C
 
@@ -145,10 +145,11 @@ sequenceDiagram
 | `plugins/tauri-plugin-system-audio/src/link.rs` (novo) | Cliente do Jay Link. Abre o pipe e fala em quadros de opcode + tamanho (o mesmo formato do `src-tauri/src/discord.rs`): `HELLO`, `CONTROL`, `AUDIO`, `PING`/`PONG`. Uma thread de leitura entrega os blocos ao seletor. Não usa dependência nova. |
 | `.../src/selector.rs` (novo) | O seletor da seção 3, como uma struct sem WASAPI: recebe os blocos e a hora. Assim, os testes rodam com tempos falsos. |
 | `.../src/link/fake.rs`, `examples/fake_jay_a.rs`, `examples/jay_a_probe.rs` (novos) | O Jay-A falso, que só entra nos testes e com `--features fake-jay-a`, e o probe (seção 9). |
-| `.../src/win.rs` | O `Mic` ganha o modo Jay-A, que junta a reserva (o `run_mic` de hoje), o link e o seletor. |
-| `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comandos novos: `mic_call_state({ inCall, muted })`, `jay_a_show()` e `jay_a_installed()`. |
+| `.../src/jay_a.rs` (novo) | O modo Jay-A. Um gerenciador conecta e reconecta: na hora depois de uma queda, a cada 5 s enquanto o Jay-A não está lá e a cada 60 s se ele é incompatível. Ele manda `start-mic` e o último `call-state` a cada conexão. A saída é uma só: o seletor escolhe a fonte de cada bloco, e o estado vai antes dos blocos a que se refere. |
+| `.../src/win.rs` | O `Mic` ganha o modo Jay-A: a captura de hoje vira a reserva e entrega os blocos ao `jay_a.rs`. |
+| `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comando novo: `mic_call_state({ inCall, muted })` (I2). Vêm depois: `jay_a_show()` (I3) e `jay_a_installed()` (I4). |
 | `frontend/src/core/native-mic.js` | Repassa os estados. Aplica o `shapeMic` só aos blocos da reserva e mede o nível de todos. |
-| `frontend/src/core/call.js` | `micFilter` entra junto com as outras opções do microfone. Ganha o evento `jay-a-status`, os avisos, e passa a mandar o mudo ao plugin. |
+| `frontend/src/core/call.js` | `micFilter` entra junto com as outras opções do microfone, e `setMicFilter` reabre o microfone. Ganha `jayAStatus` e o evento `jay-a-status` e passa a mandar o mudo ao plugin. Os avisos ficam para a I3. |
 | `store/settings.js`, `ui/audio-settings.js`, `ui/settings-modal.js`, `ui/audio-menu.js`, locales | A escolha do filtro, o estado e os textos, em PT e EN. |
 | `docs/ARQUITETURA.md` e `.en.md` | O seletor no pipeline de áudio e a linha do Jay-A nas etapas. |
 
@@ -218,9 +219,30 @@ Três regras do seletor foram quebradas de propósito, e os testes pegaram as tr
 - **Mensagens de controle esperam até 50 ms** na fila do link, que olha a fila entre uma leitura e outra. Por isso o primeiro bloco chegou de 0,3 a 63 ms depois do `start-mic`.
 
 **Testes no app:**
-- **Com o falso (I2):** um bot numa página separada (como no CLAUDE.md) ouve a chamada enquanto o falso manda o tom. Ao matar o falso, o bot passa a ouvir o microfone. O maior buraco é medido no `inbound-rtp` do bot. A CPU da reserva também é medida, e confirma-se que os outros apps continuam sem abafar com dois microfones abertos (spike 09).
+- **Com o falso (I2):** um bot numa página separada (como no CLAUDE.md) ouve a chamada enquanto o falso manda o tom. Ao matar o falso, o bot passa a ouvir o microfone.
+
+**Medido na I2** (app de dev com perfil de teste, servidor na 3001, bot ensurdecido no painel do navegador, falso no pipe de verdade `jay-a-link`, build de debug):
+- **Estados:** "searching" ao entrar. O falso foi aberto depois, e o app conectou na tentativa seguinte (de 5 em 5 s); 1 s depois, "jay-a".
+- **O tom chega ao bot:** a −13,1 a −13,4 dBFS, o mesmo nível que sai do falso.
+- **Matar o processo do falso:** o link percebeu, e 15 ms depois o bloco seguinte da reserva assumiu ("fallback"). O bot parou de ouvir o tom ~250 ms depois, o atraso normal da rede e do buffer, e passou a ouvir o microfone (o Voicemeeter Out B2, em silêncio).
+- **Sem buraco na troca:** os blocos chegaram ao worklet com no máximo 34 ms de intervalo em volta da troca. Os blocos da espera saíram junto com o atual. Simulado sobre os horários de chegada, o buffer do worklet nunca secou.
+- **Áudio contínuo vindo do Rust:** em 750 blocos (15 s) com o Jay-A ativo, nenhum salto entre amostras, nem dentro dos blocos nem nas emendas.
+- **Mudo:** o falso recebeu `start-mic`, o `call-state` guardado e um `call-state` a cada troca de mudo.
+- **CPU** (% de um núcleo, debug, 20 s com o Jay-A ativo):
+
+  | Thread | CPU |
+  |---|---|
+  | reserva: microfone + APM | 1,8 % |
+  | referência de eco | 1,0 % |
+  | link | 1,1 % |
+  | gerenciador | 0 % |
+
+  A reserva custa o mesmo que o microfone do Jay-C no modo Jay-C, porque é a mesma captura.
+- **Visto e não resolvido:** no gravador dentro do app (ScriptProcessor) e no bot, alguns blocos curtos durante o tom não saíram como tom puro: 4,6 % dos blocos de 10,7 ms no app e menos no bot, sempre no mesmo nível. O medidor dá 0 % com um tom sintético perfeito, e o áudio que vem do Rust é contínuo. Então isso acontece depois, no caminho worklet → faixa → gravador, que é o mesmo do microfone nativo de hoje. A causa não foi investigada. O Jay-A falso, por mandar um sinal conhecido, serve para isso.
+- **Bug achado no Jay-A falso:** ele fechava depois do primeiro cliente, porque criava a instância nova do pipe com `FILE_FLAG_FIRST_PIPE_INSTANCE` antes de fechar a antiga. Corrigido e coberto por teste; o chat do Jay-A foi avisado, porque o servidor dele segue o mesmo modelo.
 - **Com o Jay-A de verdade (I5):** a correlação cruzada entre os blocos do Jay-A e os da reserva dá o atraso médio do link, e os intervalos entre blocos dão o jitter. É o S1 do Jay-A, que tem a meta de ≤ 5 ms no p99 sobre o microfone nativo. O eco é medido com o teste de eco do Jay-C (S2 do Jay-A).
-- **Verificar também:** se o Channel mantém a ordem entre o estado em JSON e os blocos em bytes. Se não mantiver, um bloco na troca leva volume e gate a mais ou a menos; aí é melhor marcar a fonte em cada bloco.
+- **Verificar também:** se o Channel mantém a ordem entre o estado em JSON e os blocos em bytes. No Rust, o estado sai antes dos blocos (o teste do modo Jay-A pega a ordem invertida), mas a ordem na chegada ao JS não foi verificada: na I2, o volume era 1 e o gate estava desligado, e assim um bloco trocado não muda nada. Se não mantiver, um bloco na troca leva volume e gate a mais ou a menos; aí é melhor marcar a fonte em cada bloco.
+- **Com o Jay-A de verdade (I5), também:** os outros apps continuam sem abafar com dois microfones abertos, o do Jay-A e a reserva (spike 09).
 
 ## 10. Etapas
 
@@ -230,8 +252,8 @@ Cada etapa termina com algo testável.
 |---|---|---|---|
 | I0 ✅ | Este plano e os pedidos ao Jay-A | os dois documentos descrevem o mesmo Jay Link: P1–P6 aceitos (`0f51ea8` do Jay-A), P7 retirado | — |
 | I1 ✅ | `link.rs`, seletor, Jay-A falso e `jay_a_probe` | T1–T6 passam (16 testes no plugin); o probe passa contra o falso estável e reprova o travamento | não |
-| I2 | Modo Jay-A no `Mic` (reserva quente) e estados até o JS | no app, com o falso, o bot ouve o tom; ao matar o falso, ele passa a ouvir o microfone; o maior buraco e a CPU da reserva estão medidos | não |
-| I3 | Interface (seção 6) | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam | não |
+| I2 ✅ | Modo Jay-A no `Mic` (reserva quente) e estados até o JS | no app, com o falso, o bot ouve o tom; ao matar o falso, ele passa a ouvir o microfone; o maior buraco e a CPU da reserva estão medidos (seção 9) | não |
+| I3 | Interface (seção 6), avisos, `jay_a_show()` e a reserva seguindo o microfone do Jay-A sem derrubar o link | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam | não |
 | I4 | Achar e iniciar o Jay-A (P5) | com um `jay-a.exe` falso no caminho, entrar na chamada o inicia uma vez e liga em até 3 s | P5 |
 | I5 | Com o Jay-A de verdade (etapa 3 dele) | atraso e jitter medidos; o eco removido como hoje; fechar o Jay-A no meio da chamada não corta a voz para o bot | etapa 3 |
 | I6 | Soundboard na barra da chamada (etapa 8 dele) | o botão lista os clipes, e um clique toca para o bot | etapa 8 |

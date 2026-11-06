@@ -7,6 +7,7 @@ const COMMANDS: &[&str] = &[
     "stop_capture",
     "start_mic",
     "stop_mic",
+    "mic_call_state",
 ];
 
 fn main() {
