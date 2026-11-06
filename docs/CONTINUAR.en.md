@@ -134,6 +134,8 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**Installer 0.3.6 (05/11/2026):** only the Discord image names fix: Calm and Neon use `discord-wolf-calm` and `discord-wolf-neon`, as they were saved in the application (0.3.5 looked for names that don't exist and showed those styles without an image). The server hasn't changed.
+
 **Installer 0.3.5 (05/11/2026):** 0.3.4 with what's below. The server hasn't changed.
 
 **Between 0.3.4 and 0.3.5 (05/11/2026):**
