@@ -134,7 +134,9 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
-**After 0.3.4 (05/11/2026), no installer yet:**
+**Installer 0.3.5 (05/11/2026):** 0.3.4 with what's below. The server hasn't changed.
+
+**Between 0.3.4 and 0.3.5 (05/11/2026):**
 - **Your own stream on your tile**, at its real quality and frame rate: Rust hands the H.264 frames to the page and WebCodecs decodes them on the GPU. ~0.2 core more while the tile shows; paused while the app is minimized. See docs/spikes/10-live-nativa.md (in Portuguese).
 - **A minimized shared window** no longer ends the stream (the last frame keeps going out).
 - **Sharing again after a stream that ended by itself** (window closed) no longer falls back to the system picker.

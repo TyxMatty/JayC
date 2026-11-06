@@ -132,7 +132,9 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
-**Depois da 0.3.4 (05/11/2026), ainda sem instalador:**
+**Instalador 0.3.5 (05/11/2026):** a 0.3.4 com o que está abaixo. O servidor não mudou.
+
+**Entre a 0.3.4 e a 0.3.5 (05/11/2026):**
 - **A própria live no card de quem transmite**, com a qualidade e os quadros/s de verdade: o Rust entrega os quadros H.264 à página e o WebCodecs decodifica na GPU. ~0,2 núcleo a mais enquanto o card aparece; pausa com o app minimizado. Ver docs/spikes/10-live-nativa.md, "A própria live no card".
 - **Janela compartilhada minimizada** não encerra mais a live (o último quadro segue saindo).
 - **Compartilhar de novo depois de uma live que acabou sozinha** (janela fechada) não cai mais no seletor do sistema.
