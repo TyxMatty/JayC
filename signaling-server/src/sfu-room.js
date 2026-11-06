@@ -28,10 +28,13 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 export class SfuRoom {
   /** @type {Map<string, { peer: object, transports: Map, producers: Map, consumers: Map }>} */
   #members = new Map();
+  #bandwidthTimer;
 
   constructor({ router, webRtcServer }) {
     this.router = router;
     this.webRtcServer = webRtcServer;
+    this.#bandwidthTimer = setInterval(() => this.reportViewerBandwidth().catch(() => {}), 2000);
+    this.#bandwidthTimer.unref?.();
   }
 
   get rtpCapabilities() {
@@ -79,7 +82,10 @@ export class SfuRoom {
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
-      initialAvailableOutgoingBitrate: 1_000_000,
+      // Where the estimate towards a viewer starts. It only goes down when they congest, and a
+      // native live is capped to it (reportViewerBandwidth): at 1 Mbps a still screen (little traffic,
+      // so the estimate never grows) would stay at 540p.
+      initialAvailableOutgoingBitrate: 6_000_000,
       appData: { direction },
     });
     member.transports.set(transport.id, transport);
@@ -228,7 +234,30 @@ export class SfuRoom {
     });
   }
 
+  /**
+   * Tells each screen sharer the smallest bandwidth (kbps, null = nobody watching) among the people
+   * watching it, as mediasoup estimates it towards each of them. A native live has one layer and
+   * its sender only sees its own link to us: without this it sent 1080p60 at ~7 Mbps to a viewer
+   * on 4 Mbps, who then got no picture at all (measured).
+   */
+  async reportViewerBandwidth() {
+    for (const [ownerId, owner] of this.#members) {
+      for (const producer of owner.producers.values()) {
+        if (producer.appData.source !== 'screen') continue;
+        let kbps = null;
+        for (const [id, member] of this.#members) {
+          if (id === ownerId || ![...member.consumers.values()].some((c) => c.producerId === producer.id && !c.paused)) continue;
+          const transport = [...member.transports.values()].find((t) => t.appData.direction === 'recv');
+          const [stats] = (await transport?.getStats()) ?? [];
+          if (stats?.availableOutgoingBitrate) kbps = Math.min(kbps ?? Infinity, Math.round(stats.availableOutgoingBitrate / 1000));
+        }
+        owner.peer.send({ type: 'viewer-bandwidth', producerId: producer.id, kbps });
+      }
+    }
+  }
+
   close() {
+    clearInterval(this.#bandwidthTimer);
     this.router.close();
   }
 

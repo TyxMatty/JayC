@@ -134,6 +134,15 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**After 0.3.7 (06/11/2026), no installer yet:**
+- **Native live freezing for viewers above 720p** (report: "extremely frequent freezes", video and anime, both sides, server on the user's PC). The native live has a single layer, and the sender only saw its own leg to the server: with the server on the same PC the estimate was ~12 Mbps and the live went out at 1080p60, ~7 Mbps, to everyone. Measured with a 1920×1080 high-motion window, the dev app sending, a headless Chrome watching and a 4 Mbps UDP bottleneck (200 ms queue) on the viewer only: **0 frames/s for 30 s** (~600 packets lost/s, non-stop keyframe requests) while the sender kept 7.7 Mbps. Now:
+  - every 2 s the server sends the sharer the smallest bandwidth among its viewers (`viewer-bandwidth`, from mediasoup's `availableOutgoingBitrate`), and Rust caps the live at 70% of it (`native_live_viewer_kbps`), stepping down the ladder (1080p60 → 720p30…);
+  - each viewer's estimate starts at 6 Mbps (was 1 Mbps): with the cap, 1 Mbps would hold a still screen at 540p, since it doesn't grow without traffic;
+  - each step down doubles the wait before climbing again (3 s → 6 → 12, up to 30 s): at 85% and 3 s the live climbed back to 1080p60 and its keyframe flooded the link (2 to 7 s without picture).
+  - Measured, 4 Mbps: steady picture at 8 s, then 55 s at 720p30 with no loss and no freezes (gaps < 0.2 s). Fast link: 1080p60 at 55 frames/s and ~7 Mbps for 60 s, no loss, as before.
+  - **Limits:** a viewer on a slow link still stutters for the first ~8 s (the live goes out at 1080p60 until the server notices); the slowest viewer pulls the live down for everyone; and the bottleneck was simulated, not measured on a real internet link.
+- **Also measured, no change:** the late-audio renewal (0.3.7) doesn't freeze the video (4 forced renewals every 15 s: no gap above 200 ms, same video delay). Capture and encoder hold 1080p60 high motion on this PC (56–58 frames/s).
+
 **Installer 0.3.7 (05/11/2026):** 0.3.6 with what's below. The server changed (`closeConsumer`); an old server still works.
 
 **Between 0.3.6 and 0.3.7 (05/11/2026):**

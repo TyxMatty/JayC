@@ -132,6 +132,15 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Depois da 0.3.7 (06/11/2026), ainda sem instalador:**
+- **Live nativa travando para quem assiste acima de 720p** (relato: "travadas extremamente recorrentes", vídeo e anime, os dois lados, servidor no PC do usuário). A live nativa tem uma camada só, e quem transmite só enxergava o próprio trecho até o servidor: com o servidor no mesmo PC, a estimativa era de ~12 Mbps e a live saía em 1080p60 a ~7 Mbps para todos. Medido com uma janela de 1920×1080 em muito movimento, quem transmite no app de dev, quem assiste num Chrome sem janela e um gargalo de UDP de 4 Mbps (fila de 200 ms) só para quem assiste: **0 quadros/s durante 30 s** (~600 pacotes perdidos/s, pedidos de quadro-chave sem parar) enquanto quem transmite seguia em 7,7 Mbps. Agora:
+  - o servidor manda a cada 2 s, para quem transmite, a menor banda entre quem assiste (`viewer-bandwidth`, do `availableOutgoingBitrate` do mediasoup), e o Rust limita a live a 70% dela (`native_live_viewer_kbps`), descendo a escada (1080p60 → 720p30…);
+  - a estimativa para cada pessoa começa em 6 Mbps (era 1 Mbps): com o limite, 1 Mbps prenderia uma tela parada em 540p, porque ela não cresce sem tráfego;
+  - cada descida da escada dobra a espera para subir de novo (3 s → 6 → 12, até 30 s): com 85% e 3 s, a live subia a 1080p60 de novo e o quadro-chave inundava a conexão (2 a 7 s sem imagem).
+  - Medido, 4 Mbps: imagem firme aos 8 s, depois 55 s em 720p30 sem perdas e sem travar (pausas < 0,2 s). Conexão boa: 1080p60 a 55 quadros/s e ~7 Mbps por 60 s, sem perdas, como antes.
+  - **Limites:** os primeiros ~8 s de quem assiste numa conexão lenta ainda engasgam (a live sai em 1080p60 até o servidor perceber); quem assiste mais devagar puxa a live de todos para baixo; e o gargalo foi simulado, não medido numa internet de verdade.
+- **Medido também, sem mudança:** a renovação do áudio atrasado (0.3.7) não trava o vídeo (4 renovações forçadas a cada 15 s: nenhuma pausa acima de 200 ms, atraso do vídeo igual). A captura e o codificador seguram 1080p60 em muito movimento neste PC (56–58 quadros/s).
+
 **Instalador 0.3.7 (05/11/2026):** a 0.3.6 com o que está abaixo. O servidor mudou (`closeConsumer`); um servidor antigo continua funcionando.
 
 **Entre a 0.3.6 e a 0.3.7 (05/11/2026):**

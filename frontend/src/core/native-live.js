@@ -214,7 +214,14 @@ export async function startNativeLive({ source, request, quality, onEnded }) {
       mode: source.kind === 'window' ? 'window' : 'screen',
       rtpParameters: nativeRtpParameters(local),
     });
-    return { id, close, stats: () => stats, setQuality: (next) => invoke('native_live_set_quality', { quality: nativeQuality(next) }) };
+    return {
+      id,
+      close,
+      stats: () => stats,
+      setQuality: (next) => invoke('native_live_set_quality', { quality: nativeQuality(next) }),
+      /** The bandwidth of the slowest viewer (kbps), or null: the live stays under it. */
+      setViewerKbps: (kbps) => invoke('native_live_viewer_kbps', { kbps }).catch(() => {}),
+    };
   } catch (error) {
     await close();
     throw error;

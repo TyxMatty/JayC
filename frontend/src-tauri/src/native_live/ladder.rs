@@ -1,6 +1,8 @@
 //! Quality ladder: resolution and frame rate that fit the bandwidth budget. Steps down at once when
 //! the budget no longer covers the current step; steps up one at a time, only after the budget has
-//! covered the next step with headroom for a while (so a noisy estimate doesn't flip-flop).
+//! covered the next step with headroom for a while (so a noisy estimate doesn't flip-flop). Each
+//! step down doubles that wait: a step up that didn't hold is a few seconds without picture for
+//! the viewers (measured: 2 s at 1080p60 on a 4 Mbps viewer), so it isn't retried every 3 s.
 
 use std::time::{Duration, Instant};
 
@@ -22,16 +24,18 @@ pub const TIERS: [Tier; 4] = [
 
 const UP_HEADROOM: f64 = 1.3;
 const UP_AFTER: Duration = Duration::from_secs(3);
+const UP_AFTER_MAX: Duration = Duration::from_secs(30);
 
 pub struct Ladder {
     pub tier: usize,
     up_since: Option<Instant>,
+    up_after: Duration,
 }
 
 impl Ladder {
     /// Starts on the best step `budget_kbps` covers.
     pub fn new(budget_kbps: u32) -> Self {
-        Self { tier: (0..TIERS.len()).find(|&t| budget_kbps >= TIERS[t].min_kbps).unwrap(), up_since: None }
+        Self { tier: (0..TIERS.len()).find(|&t| budget_kbps >= TIERS[t].min_kbps).unwrap(), up_since: None, up_after: UP_AFTER }
     }
 
     /// `budget_kbps`: what the encoder may spend now. Returns the new step when it changes.
@@ -39,6 +43,7 @@ impl Ladder {
         if budget_kbps < TIERS[self.tier].min_kbps {
             self.tier = (self.tier..TIERS.len()).find(|&t| budget_kbps >= TIERS[t].min_kbps).unwrap();
             self.up_since = None;
+            self.up_after = (self.up_after * 2).min(UP_AFTER_MAX);
             return Some(self.tier);
         }
         if self.tier == 0 || (budget_kbps as f64) < TIERS[self.tier - 1].min_kbps as f64 * UP_HEADROOM {
@@ -46,7 +51,7 @@ impl Ladder {
             return None;
         }
         let since = *self.up_since.get_or_insert(now);
-        if now - since < UP_AFTER {
+        if now - since < self.up_after {
             return None;
         }
         self.tier -= 1;
@@ -103,6 +108,22 @@ mod tests {
         assert_eq!(l.update(5000, s(9)), None); // the wait restarts after each step
         assert_eq!(l.update(5000, s(10)), Some(1));
         assert_eq!(l.update(3000, s(14)), None); // 3000 < 2500 * 1.3: stays at 720p
+    }
+
+    #[test]
+    fn each_step_down_doubles_the_wait_before_climbing_again() {
+        let t0 = Instant::now();
+        let s = |n: u64| t0 + Duration::from_secs(n);
+        let mut l = Ladder::new(2000); // 720p
+        assert_eq!(l.update(900, s(0)), Some(2)); // down: the wait is now 6 s
+        assert_eq!(l.update(5000, s(1)), None);
+        assert_eq!(l.update(5000, s(4)), None); // 3 s isn't enough any more
+        assert_eq!(l.update(5000, s(7)), Some(1));
+        assert_eq!(l.update(2000, s(8)), None);
+        assert_eq!(l.update(900, s(8)), Some(2)); // down again: 12 s
+        assert_eq!(l.update(5000, s(9)), None);
+        assert_eq!(l.update(5000, s(20)), None);
+        assert_eq!(l.update(5000, s(21)), Some(1));
     }
 
     #[test]

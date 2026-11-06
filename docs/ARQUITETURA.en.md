@@ -154,6 +154,7 @@ Server → client:
 | `screen-preview` | `id`, `image` | a picture of someone's stream (`null` = stopped). The "Watch stream" card on their tile shows it |
 | `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | someone started publishing a track |
 | `producer-state` | `peerId`, `producerId`, `paused` | only for consumers: muted or turned the camera off, or back on |
+| `viewer-bandwidth` | `producerId`, `kbps` (`null` = nobody watching) | every 2 s, to whoever shares a screen: the smallest bandwidth among the viewers, as mediasoup estimates it towards each. The native live (a single layer) stays under it |
 | `producer-closed` | `peerId`, `producerId` | only for consumers |
 | `error` | `code` (`room-full`, `bad-message`, `rate-limited`, `internal`), optional `ref` | |
 

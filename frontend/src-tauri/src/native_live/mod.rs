@@ -12,7 +12,7 @@ mod ladder;
 mod sources;
 mod webrtc;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -37,6 +37,10 @@ use sources::{Kind, SourceId};
 
 /// The encoder spends this share of the bandwidth estimate (the rest: RTX, RTCP, headroom).
 const BUDGET_SHARE: f64 = 0.85;
+/// Share of the slowest viewer's bandwidth (as the server estimates it) the video may use. Lower
+/// than BUDGET_SHARE: that estimate runs above a link that isn't losing yet, and at 85% the live
+/// stepped up to 1080p60 on a 4 Mbps viewer and its keyframe flooded the link (7 s without picture).
+const VIEWER_SHARE: f64 = 0.7;
 /// Forced keyframes at most this often: under congestion every PLI's keyframe makes it worse.
 const KEYFRAME_GAP: Duration = Duration::from_secs(1);
 const START_KBPS: u32 = 1500;
@@ -61,6 +65,8 @@ struct Taps {
     watcher: Arc<Mutex<Option<Channel<InvokeResponseBody>>>>,
     /// A new watcher's decoder needs a keyframe to start.
     keyframe: Arc<AtomicBool>,
+    /// The slowest viewer's bandwidth (kbps) as the server sees it; 0 = no limit.
+    viewer_kbps: Arc<AtomicU32>,
 }
 
 impl Taps {
@@ -237,6 +243,15 @@ pub fn native_live_unwatch() {
     }
 }
 
+/// The server's estimate of the slowest viewer's bandwidth (kbps), or None when nobody watches.
+/// The live has one layer, so it has to fit the slowest viewer.
+#[tauri::command]
+pub fn native_live_viewer_kbps(kbps: Option<u32>) {
+    if let Some(r) = RUNNING.lock().unwrap().as_ref() {
+        r.taps.viewer_kbps.store(kbps.unwrap_or(0), Ordering::Relaxed);
+    }
+}
+
 /// Settings changed during the share: the new top of the ladder applies right away.
 #[tauri::command]
 pub fn native_live_set_quality(quality: Quality) {
@@ -352,6 +367,7 @@ unsafe fn run(
         let mut ever_connected = false;
         let mut estimate_budget = budget;
         let mut limit: Option<u32> = None;
+        let mut last_viewers = 0;
         let target = |budget: u32, tier: usize, q: &Quality, capture: (u32, u32)| budget.min(step(tier, q, capture).3);
         let mut window_checked = start;
         let (mut captured, mut encoded, mut bytes, mut stats_at) = (0u32, 0u32, 0u64, start);
@@ -458,12 +474,16 @@ unsafe fn run(
             if let Some(loss) = signals.loss {
                 limit = loss_limit(limit, target(budget, ladder.tier, &quality, capture), estimate_budget, loss);
             }
-            budget = limit.map_or(estimate_budget, |l| l.min(estimate_budget));
+            let viewers = taps.viewer_kbps.load(Ordering::Relaxed);
+            let viewers_changed = viewers != last_viewers;
+            last_viewers = viewers;
+            let viewer_budget = if viewers > 0 { (viewers as f64 * VIEWER_SHARE) as u32 } else { u32::MAX };
+            budget = limit.map_or(estimate_budget, |l| l.min(estimate_budget)).min(viewer_budget);
             if let Some(tier) = ladder.update(budget, now).or(quality_changed.then_some(ladder.tier)) {
                 // New size or fps: a new encoder, whose first frame is a keyframe at the new size.
                 enc = make(tier, &quality, budget, capture)?;
                 (last_forced, keyframe_pending, refresh_now) = (Some(now), false, true);
-            } else if signals.estimate.is_some() || signals.loss.is_some() {
+            } else if signals.estimate.is_some() || signals.loss.is_some() || viewers_changed {
                 enc.set_bitrate(target(budget, ladder.tier, &quality, capture));
             }
             // A keyframe asked for too soon after the last one waits its turn instead of being dropped.

@@ -207,6 +207,7 @@ export class SignalingClient extends EventTarget {
       case 'new-producer':
       case 'producer-closed':
       case 'producer-state':
+      case 'viewer-bandwidth':
       case 'chat':
         this.#emit(msg.type, msg);
     }

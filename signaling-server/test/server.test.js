@@ -434,6 +434,28 @@ describe('SFU requests', () => {
     for (const x of [a, b, c]) x.client.close();
   });
 
+  test('a screen sharer hears the bandwidth of the people watching it', async () => {
+    const vp8 = {
+      codecs: [{ mimeType: 'video/VP8', payloadType: 101, clockRate: 90000, parameters: {}, rtcpFeedback: [] }],
+      headerExtensions: [],
+      encodings: [{ ssrc: 33333333 }],
+      rtcp: { cname: 'test' },
+    };
+    const a = await joined(port, 'sfu-bw', 'Alice');
+    const b = await joined(port, 'sfu-bw', 'Bob');
+    const sendT = (await a.client.request('createTransport', { direction: 'send' })).data;
+    await b.client.request('createTransport', { direction: 'recv' });
+    const { id: producerId } = (
+      await a.client.request('produce', { transportId: sendT.id, kind: 'video', source: 'screen', mode: 'screen', rtpParameters: vp8 })
+    ).data;
+    // Nobody watching yet: no limit. (The number itself needs a connected viewer: mediasoup has no
+    // estimate before that; measured with real clients, see docs/CONTINUAR.md.)
+    const nobody = await a.client.next('viewer-bandwidth');
+    assert.deepEqual([nobody.producerId, nobody.kbps], [producerId, null]);
+    a.client.close();
+    b.client.close();
+  });
+
   test('leaving closes your producers for everyone consuming them', async () => {
     const a = await joined(port, 'sfu-leave', 'Alice');
     const b = await joined(port, 'sfu-leave', 'Bob');

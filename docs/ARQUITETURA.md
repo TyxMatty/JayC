@@ -152,6 +152,7 @@ Servidor → cliente:
 | `screen-preview` | `id`, `image` | uma imagem da live de alguém (`null` = parou). O card "Assistir live" do card da pessoa mostra a imagem |
 | `new-producer` | `peerId`, `producerId`, `kind`, `source`, `paused` | alguém começou a publicar uma faixa |
 | `producer-state` | `peerId`, `producerId`, `paused` | só para quem consome: mutou ou desligou a câmera, ou voltou |
+| `viewer-bandwidth` | `producerId`, `kbps` (`null` = ninguém assiste) | a cada 2 s, para quem transmite a tela: a menor banda entre quem assiste, como o mediasoup estima para cada um. A live nativa (uma camada só) fica abaixo dela |
 | `producer-closed` | `peerId`, `producerId` | só para quem consome |
 | `error` | `code` (`room-full`, `bad-message`, `rate-limited`, `internal`), `ref` opcional | |
 

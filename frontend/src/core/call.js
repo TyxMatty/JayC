@@ -222,6 +222,8 @@ export class Call extends EventTarget {
     });
     signaling.addEventListener('producer-closed', (e) => this.#onProducerClosed(e.detail));
     signaling.addEventListener('producer-state', (e) => this.#onProducerState(e.detail));
+    // Our native live has one layer: keep it within what the people watching can receive.
+    signaling.addEventListener('viewer-bandwidth', (e) => e.detail.producerId === this.#nativeLive?.id && this.#nativeLive.setViewerKbps(e.detail.kbps));
     signaling.addEventListener('rejoined', (e) => this.#setup(e.detail).catch((err) => console.warn('[call] rejoin failed', err)));
 
     let joined;
