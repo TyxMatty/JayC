@@ -12,6 +12,9 @@ export const MAX_VOLUME = 2;
 /** @param {() => AudioContext} [makeContext] */
 export function createMixer(makeContext = () => new AudioContext()) {
   let context = null;
+  /** Every voice and stream goes through this bus: deafen silences it (sounds of our own don't). */
+  let voices = null;
+  let deafened = false;
   /** Output device (a deviceId from enumerateDevices; '' = the default). */
   let sinkId = '';
   const applySink = () => context?.setSinkId?.(sinkId).catch((error) => console.warn('[playback] output device', error));
@@ -38,6 +41,9 @@ export function createMixer(makeContext = () => new AudioContext()) {
       if (!track) return;
       if (!context) {
         context = makeContext();
+        voices = context.createGain();
+        voices.gain.value = deafened ? 0 : 1;
+        voices.connect(context.destination);
         if (sinkId) applySink();
       }
       context.resume?.().catch(() => {});
@@ -47,7 +53,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
       const analyser = context.createAnalyser();
       analyser.fftSize = 1024;
       source.connect(analyser);
-      if (!listenOnly) source.connect(gain).connect(context.destination);
+      if (!listenOnly) source.connect(gain).connect(voices);
       playing.set(key, { track, source, gain, analyser, samples: new Float32Array(analyser.fftSize) });
       apply(key);
     },
@@ -77,6 +83,13 @@ export function createMixer(makeContext = () => new AudioContext()) {
       apply(key);
       return next;
     },
+    /** Deafen: nothing received plays (a ~15 ms fade, so it doesn't click). */
+    setDeafened(on) {
+      deafened = Boolean(on);
+      if (!voices) return;
+      if (voices.gain.setTargetAtTime) voices.gain.setTargetAtTime(deafened ? 0 : 1, context.currentTime, 0.015);
+      else voices.gain.value = deafened ? 0 : 1;
+    },
     /** Plays everything on another output device ('' = the default). */
     setSink(id) {
       if (id === sinkId) return;
@@ -87,6 +100,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
       for (const key of [...playing.keys()]) mixer.stop(key);
       context?.close().catch(() => {});
       context = null;
+      voices = null;
     },
   };
   return mixer;

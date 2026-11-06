@@ -139,6 +139,11 @@ export class Call extends EventTarget {
   #micWatch = null;
   #ended = false;
 
+  /** Deafened: nothing received plays (ui/call-view.js tells the mixer) and the mic is off. */
+  deafened = false;
+  /** Whether the mic was on when we deafened: undeafening turns it back on. */
+  #micBeforeDeafen = false;
+
   get micOn() {
     return Boolean(this.local.audio) && !this.#micMuted;
   }
@@ -220,7 +225,22 @@ export class Call extends EventTarget {
     }
   }
 
+  /** Deafen or undeafen (like Discord: the mic goes off with it, and comes back if it was on). */
+  async toggleDeafen() {
+    if (!this.deafened) {
+      this.#micBeforeDeafen = this.micOn;
+      this.deafened = true;
+      if (this.micOn) return this.toggleMic();
+    } else {
+      this.deafened = false;
+      if (this.#micBeforeDeafen && !this.micOn) return this.toggleMic();
+    }
+    this.#emit('local-updated', {});
+  }
+
   async toggleMic() {
+    // Turning the mic on while deafened undeafens too (you can't talk without hearing).
+    if (this.deafened && !this.micOn) this.deafened = false;
     if (!this.local.audio) {
       // No mic yet (denied or missing at join): try again now.
       this.local.audio = (await nativeMicSupported())

@@ -9,24 +9,32 @@
 //! sets it back a moment later.
 
 use std::hash::{Hash, Hasher};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use tauri::Manager;
 use windows::core::PWSTR;
-use windows::Win32::Foundation::{HWND, LPARAM, PROPERTYKEY, WPARAM};
+use windows::core::BOOL;
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, PROPERTYKEY, WPARAM};
 use windows::Win32::Storage::EnhancedStorage::{
     PKEY_AppUserModel_ID, PKEY_AppUserModel_RelaunchCommand, PKEY_AppUserModel_RelaunchDisplayNameResource,
     PKEY_AppUserModel_RelaunchIconResource,
 };
 use windows::Win32::System::Com::CoTaskMemAlloc;
+use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS};
 use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PROPVARIANT};
 use windows::Win32::System::Variant::VT_LPWSTR;
 use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreForWindow};
-use windows::Win32::UI::WindowsAndMessaging::{CreateIcon, DestroyIcon, SendMessageW, HICON, ICON_BIG, WM_SETICON};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateIcon, DestroyIcon, EnumWindows, GetWindowThreadProcessId, IsWindowVisible, SendMessageW, HICON, ICON_BIG, WM_SETICON,
+};
 
 /// The window's own app ID: not the Start menu shortcut's (`io.github.tyxmatty.jayc`, set by the
 /// installer), or Windows ties them again.
 const WINDOW_APP_ID: &str = "io.github.tyxmatty.jayc.window";
+
+/// The .ico of the last `set_taskbar_icon`, for windows grouped later (the PiP).
+static LAST_ICO: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 /// `rgba`: `size` x `size` pixels, 4 bytes each (straight alpha), as from a canvas.
 #[tauri::command]
@@ -62,6 +70,7 @@ pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) 
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     relaunch_with_icon(hwnd, &exe, &ico_path).map_err(|e| format!("taskbar properties: {e}"))?;
+    *LAST_ICO.lock().unwrap() = Some(ico_path);
     let raw = hwnd.0 as isize; // HWND isn't Send
     let main = window.clone();
     std::thread::spawn(move || {
@@ -73,6 +82,66 @@ pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) 
         });
     });
     Ok(())
+}
+
+/// The video PiP window is WebView2's (a child process of ours), with no app ID: since the main
+/// window has its own, the taskbar showed it as another app. Gives every visible top-level window
+/// of our child processes the main window's ID and icon, so they stack on one button. Returns how
+/// many windows it grouped (the page calls it again if the PiP window wasn't up yet).
+#[tauri::command]
+pub fn group_child_windows() -> Result<u32, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let ico = LAST_ICO.lock().unwrap().clone();
+    let children = descendants(std::process::id());
+    let mut windows: Vec<HWND> = Vec::new();
+    unsafe extern "system" fn collect(hwnd: HWND, data: LPARAM) -> BOOL {
+        let (pids, out) = unsafe { &mut *(data.0 as *mut (&Vec<u32>, &mut Vec<HWND>)) };
+        let mut pid = 0;
+        unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+        if pids.contains(&pid) && unsafe { IsWindowVisible(hwnd) }.as_bool() {
+            out.push(hwnd);
+        }
+        true.into()
+    }
+    let mut data = (&children, &mut windows);
+    unsafe {
+        let _ = EnumWindows(Some(collect), LPARAM(&mut data as *mut _ as isize));
+    }
+    for &hwnd in &windows {
+        let store: IPropertyStore = unsafe { SHGetPropertyStoreForWindow(hwnd) }.map_err(|e| e.to_string())?;
+        set_text(&store, &PKEY_AppUserModel_RelaunchCommand, &format!("\"{}\"", exe.display())).map_err(|e| e.to_string())?;
+        set_text(&store, &PKEY_AppUserModel_RelaunchDisplayNameResource, "Jay-C").map_err(|e| e.to_string())?;
+        if let Some(ico) = &ico {
+            set_text(&store, &PKEY_AppUserModel_RelaunchIconResource, &ico.display().to_string()).map_err(|e| e.to_string())?;
+        }
+        set_text(&store, &PKEY_AppUserModel_ID, WINDOW_APP_ID).map_err(|e| e.to_string())?;
+        unsafe { store.Commit() }.map_err(|e| e.to_string())?;
+    }
+    Ok(windows.len() as u32)
+}
+
+/// Every process below `root` (children, their children...), not `root` itself.
+fn descendants(root: u32) -> Vec<u32> {
+    let mut parents: Vec<(u32, u32)> = Vec::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return Vec::new() };
+        let mut entry = PROCESSENTRY32W { dwSize: size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+        let mut ok = Process32FirstW(snapshot, &mut entry).is_ok();
+        while ok {
+            parents.push((entry.th32ProcessID, entry.th32ParentProcessID));
+            ok = Process32NextW(snapshot, &mut entry).is_ok();
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    let mut found = vec![root];
+    let mut i = 0;
+    while i < found.len() {
+        let parent = found[i];
+        found.extend(parents.iter().filter(|(pid, ppid)| *ppid == parent && *pid != parent && !found.contains(pid)).map(|(pid, _)| *pid).collect::<Vec<_>>());
+        i += 1;
+    }
+    found.remove(0);
+    found
 }
 
 /// The relaunch properties, and the app ID cleared (set again by `set_app_id`).

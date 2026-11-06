@@ -3,16 +3,19 @@ import assert from 'node:assert/strict';
 import { normalizeOrder, normalizePosition, normalizeShape, moveControl, dropIndex, nearestEdge } from '../src/core/call-bar.js';
 
 test('saved order is cleaned and completed', () => {
-  assert.deepEqual(normalizeOrder(['leave', 'mic', 'mic', 'nope']), ['leave', 'mic', 'camera', 'share', 'chat', 'pip']);
-  assert.deepEqual(normalizeOrder(undefined), ['mic', 'camera', 'share', 'chat', 'pip', 'leave']);
+  assert.deepEqual(normalizeOrder(['leave', 'mic', 'mic', 'nope']), ['leave', 'mic', 'deafen', 'camera', 'share', 'chat', 'pip']);
+  assert.deepEqual(normalizeOrder(undefined), ['mic', 'deafen', 'camera', 'share', 'chat', 'pip', 'leave']);
+  // An order saved before "deafen" existed (and a custom one): it lands right after the mic.
+  assert.deepEqual(normalizeOrder(['mic', 'camera', 'share', 'chat', 'pip', 'leave']), ['mic', 'deafen', 'camera', 'share', 'chat', 'pip', 'leave']);
+  assert.deepEqual(normalizeOrder(['chat', 'leave', 'mic', 'camera']), ['chat', 'pip', 'leave', 'mic', 'deafen', 'camera', 'share']);
   assert.equal(normalizePosition('left'), 'left');
   assert.equal(normalizePosition('middle'), 'bottom');
 });
 
 test('moving a button by keyboard', () => {
-  assert.deepEqual(moveControl(undefined, 'leave', -1), ['mic', 'camera', 'share', 'chat', 'leave', 'pip']);
-  assert.deepEqual(moveControl(undefined, 'mic', -1), ['mic', 'camera', 'share', 'chat', 'pip', 'leave'], 'already first');
-  assert.deepEqual(moveControl(undefined, 'mic', 9), ['camera', 'share', 'chat', 'pip', 'leave', 'mic']);
+  assert.deepEqual(moveControl(undefined, 'leave', -1), ['mic', 'deafen', 'camera', 'share', 'chat', 'leave', 'pip']);
+  assert.deepEqual(moveControl(undefined, 'mic', -1), ['mic', 'deafen', 'camera', 'share', 'chat', 'pip', 'leave'], 'already first');
+  assert.deepEqual(moveControl(undefined, 'mic', 9), ['deafen', 'camera', 'share', 'chat', 'pip', 'leave', 'mic']);
 });
 
 test('drop index and nearest edge', () => {

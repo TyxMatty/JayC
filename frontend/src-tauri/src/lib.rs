@@ -18,6 +18,8 @@ pub fn run() {
             #[cfg(windows)]
             taskbar_icon::set_taskbar_icon,
             #[cfg(windows)]
+            taskbar_icon::group_child_windows,
+            #[cfg(windows)]
             native_live::native_live_start,
             #[cfg(windows)]
             native_live::native_live_stop,

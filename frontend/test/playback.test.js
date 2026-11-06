@@ -65,3 +65,21 @@ test('per-key volume above 100%, mute, and levels that outlive the track', () =>
   assert.equal(mixer.get('ana:voice').volume, 0.8);
   mixer.close();
 });
+
+test('deafen silences every voice and stream, before or after they start, and comes back', () => {
+  const context = fakeContext();
+  const gains = [];
+  const realGain = context.createGain.bind(context);
+  context.createGain = () => (gains.push(realGain()), gains.at(-1));
+  const mixer = createMixer(() => context);
+  mixer.setDeafened(true); // before anything plays: no context yet
+  mixer.play('ana:voice', { id: 't1' });
+  const [bus, voice] = gains;
+  assert.equal(bus.connected[0], context.destination, 'the bus goes to the speakers');
+  assert.equal(voice.connected[0], bus, 'a voice goes through the bus');
+  assert.equal(bus.gain.value, 0);
+  mixer.set('ana:voice', { volume: 1.5 });
+  assert.equal(voice.gain.value, 1.5, "her own volume isn't touched");
+  mixer.setDeafened(false);
+  assert.equal(bus.gain.value, 1);
+});

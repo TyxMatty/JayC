@@ -1,16 +1,25 @@
 // The call's control bar: which edge it sits on and the order of its buttons (Settings and drag).
 
-export const CONTROLS = ['mic', 'camera', 'share', 'chat', 'pip', 'leave'];
+export const CONTROLS = ['mic', 'deafen', 'camera', 'share', 'chat', 'pip', 'leave'];
 export const POSITIONS = ['bottom', 'right', 'top', 'left'];
 /** Button shape: 'auto' (the style's), 'round' or 'square' (<html data-call-shape>, styles/theme.css). */
 export const BUTTON_SHAPES = ['auto', 'round', 'square'];
 export const DEFAULT_CALL_BAR = Object.freeze({ position: 'bottom', order: CONTROLS, shape: 'auto' });
 
-/** Known keys once each, in the saved order; any missing ones go at the end in default order. */
+/**
+ * Known keys once each, in the saved order. A missing one (e.g. a button added in an update) goes
+ * right after its neighbor in the default order, so "deafen" lands next to "mic".
+ */
 export function normalizeOrder(order) {
   const seen = new Set();
-  const kept = (Array.isArray(order) ? order : []).filter((key) => CONTROLS.includes(key) && !seen.has(key) && seen.add(key));
-  return [...kept, ...CONTROLS.filter((key) => !seen.has(key))];
+  const list = (Array.isArray(order) ? order : []).filter((key) => CONTROLS.includes(key) && !seen.has(key) && seen.add(key));
+  CONTROLS.forEach((key, i) => {
+    if (seen.has(key)) return;
+    const before = CONTROLS.slice(0, i).findLast((k) => seen.has(k));
+    list.splice(before ? list.indexOf(before) + 1 : 0, 0, key);
+    seen.add(key);
+  });
+  return list;
 }
 
 export const normalizePosition = (position) => (POSITIONS.includes(position) ? position : 'bottom');

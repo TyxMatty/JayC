@@ -134,6 +134,10 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**After 0.3.6 (05/11/2026), no installer yet:**
+- **Deafen:** a headphones button next to the mic. It silences everything received (the mixer got a bus for voices and streams, set to zero with a ~15 ms ramp) and turns the mic off; undeafening brings the mic back as it was; turning the mic on while deafened undeafens (as in Discord). Saved bar orders get the button next to the mic (`normalizeOrder` puts a new button next to its neighbor). Measured in the dev app with a capture of its own WebView2 only: deafened -120 dB, undeafened -13 dB (a bot's 440 Hz tone), back to -120. Others don't see the headphones, only the mic off.
+- **PiP on the same taskbar stack as Jay-C:** with the window's own ID (0.3.5), the PiP window (WebView2's, a child process) showed as another app ("Microsoft Edge WebView2"). When the PiP opens, the app gives its child processes' windows the same ID and icon (`group_child_windows`). Measured: the dev app's PiP joined the Jay-C group; the installed app's (0.3.6, without the change) stayed separate.
+
 **Installer 0.3.6 (05/11/2026):** only the Discord image names fix: Calm and Neon use `discord-wolf-calm` and `discord-wolf-neon`, as they were saved in the application (0.3.5 looked for names that don't exist and showed those styles without an image). The server hasn't changed.
 
 **Installer 0.3.5 (05/11/2026):** 0.3.4 with what's below. The server hasn't changed.

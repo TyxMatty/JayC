@@ -17,7 +17,7 @@ import { createTabs } from './tabs.js';
 import { POSITIONS, normalizeOrder, normalizePosition, moveControl, normalizeShape } from '../core/call-bar.js';
 import { t } from '../core/i18n.js';
 
-const CONTROL_LABELS = { mic: 'Microphone', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
+const CONTROL_LABELS = { mic: 'Microphone', deafen: 'Call sound', camera: 'Camera', share: 'Share screen', chat: 'Chat', pip: 'Pop-out video', leave: 'Leave call' };
 
 /** [settings key, label, when to change it]. Changes apply right away, also during a call. */
 const MIC_OPTIONS = [

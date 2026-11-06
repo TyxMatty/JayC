@@ -551,6 +551,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
 
   // ----- Controls -----
   const micButton = controlButton({ label: t('Mute microphone') });
+  const deafButton = controlButton({ label: t('Deafen') });
   const camButton = controlButton({ label: t('Turn camera off') });
   const leaveButton = controlButton({ label: t('Leave call'), variant: 'danger', onClick: () => call.leave() });
   leaveButton.innerHTML = icons.phoneOff;
@@ -584,6 +585,13 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     micButton.setAttribute('aria-label', call.micOn ? t('Mute microphone') : t('Unmute microphone'));
     micButton.title = micButton.getAttribute('aria-label');
     micButton.classList.toggle('off', !call.micOn);
+
+    deafButton.innerHTML = call.deafened ? icons.headphonesOff : icons.headphones;
+    deafButton.setAttribute('aria-pressed', String(call.deafened));
+    deafButton.setAttribute('aria-label', call.deafened ? t('Undeafen') : t('Deafen'));
+    deafButton.title = deafButton.getAttribute('aria-label');
+    deafButton.classList.toggle('off', call.deafened);
+    mixer.setDeafened(call.deafened);
 
     camButton.innerHTML = call.cameraOn ? icons.video : icons.videoOff;
     camButton.setAttribute('aria-pressed', String(!call.cameraOn));
@@ -620,6 +628,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     e.preventDefault();
     openSettings?.('audio');
   });
+  deafButton.addEventListener('click', guarded(deafButton, () => call.toggleDeafen(), 'microphone'));
   camButton.addEventListener('click', guarded(camButton, () => call.toggleCamera(), 'camera'));
   call.addEventListener('local-updated', renderControls);
 
@@ -655,7 +664,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const section = h('section', { class: 'call', 'aria-label': t('Call in room {room}', { room: call.room }) });
   const controlBar = createControlBar({
     section,
-    buttons: { mic: micButton, camera: camButton, share: shareButton, chat: chat.button, pip: pipButton, leave: leaveButton },
+    buttons: { mic: micButton, deafen: deafButton, camera: camButton, share: shareButton, chat: chat.button, pip: pipButton, leave: leaveButton },
   });
 
   call.addEventListener('ended', () => {

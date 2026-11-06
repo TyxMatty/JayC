@@ -132,6 +132,10 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Depois da 0.3.6 (05/11/2026), ainda sem instalador:**
+- **Ensurdecer (deafen):** botão de fone ao lado do microfone. Silencia tudo o que chega (o mixer ganhou um canal das vozes e lives, zerado com uma rampa de ~15 ms) e desliga o microfone; desensurdecer volta o microfone como estava; ligar o microfone ensurdecido desensurdece (como no Discord). Quem já tinha uma ordem salva para a barra recebe o botão ao lado do microfone (`normalizeOrder` põe um botão novo ao lado do vizinho). Medido no app de dev pela captura só do próprio WebView2: ensurdecido -120 dB, desensurdecido -13 dB (o tom de 440 Hz de um bot), de volta a -120. Os outros não veem o fone, só o microfone desligado.
+- **PiP na mesma pilha do Jay-C:** com o ID próprio da janela (0.3.5), a janela do PiP (do WebView2, um processo filho) aparecia como outro app ("Microsoft Edge WebView2"). Ao abrir o PiP, o app dá às janelas dos processos filhos o mesmo ID e ícone (`group_child_windows`). Medido: o PiP do app de dev entrou no grupo do Jay-C; o do app instalado (0.3.6, sem a mudança) seguiu separado.
+
 **Instalador 0.3.6 (05/11/2026):** só a correção dos nomes das imagens do Discord: o Calmo e o Neon usam `discord-wolf-calm` e `discord-wolf-neon`, como ficaram na aplicação (a 0.3.5 procurava nomes que não existem e mostrava esses estilos sem imagem). O servidor não mudou.
 
 **Instalador 0.3.5 (05/11/2026):** a 0.3.4 com o que está abaixo. O servidor não mudou.

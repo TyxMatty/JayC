@@ -29,6 +29,18 @@ export function pickPipTrack(participants) {
 const ACTIONS = ['togglemicrophone', 'togglecamera', 'hangup'];
 
 /**
+ * Windows: the PiP window is WebView2's, and the taskbar showed it as another app (the main window
+ * has its own app ID, src-tauri/src/taskbar_icon.rs). Gives it the same ID, a few times in case it
+ * isn't up yet when requestPictureInPicture resolves.
+ */
+function groupWithApp() {
+  if (!('__TAURI_INTERNALS__' in window) || isAndroidApp()) return;
+  for (const delay of [0, 300, 1000]) {
+    setTimeout(() => window.__TAURI_INTERNALS__.invoke('group_child_windows').catch(() => {}), delay);
+  }
+}
+
+/**
  * A PiP window that shows one video track at a time. The track can change while it's open (e.g.
  * someone starts sharing) without a new click, because the same detached <video> stays in PiP.
  * @param {{ togglemicrophone: () => void, togglecamera: () => void, hangup: () => void, onLeave?: () => void }} handlers
@@ -65,6 +77,7 @@ export function createPip(handlers) {
       await video.play();
       setHandlers(true);
       await video.requestPictureInPicture();
+      groupWithApp();
     },
     async exit() {
       if (this.open) await document.exitPictureInPicture();
