@@ -12,7 +12,7 @@ Escolha um jeito. **O Node.js é o mais simples**, e é tudo de que você precis
 ### Opção A: Node.js (recomendado)
 
 1. Instale o **Node.js** (a versão LTS, 22 ou mais nova) pelo `nodejs.org`.
-2. Baixe o código do Jay-C em ZIP: na página dele no GitHub (`github.com/TyxMatty/JayC`), clique em **Code › Download ZIP**. Se a página não abrir pra você, peça o ZIP a quem te mandou o Jay-C. Extraia numa pasta **curta**, como `C:\jay-c`. Uma pasta muito funda (como Downloads dentro do OneDrive) quebra a extração, porque alguns caminhos ficam longos demais pro Windows.
+2. Baixe o código do Jay-C em ZIP: na página dele no GitHub (`github.com/TyxMatty/Jay-C`), clique em **Code › Download ZIP**. Se a página não abrir pra você, peça o ZIP a quem te mandou o Jay-C. Extraia numa pasta **curta**, como `C:\jay-c`. Uma pasta muito funda (como Downloads dentro do OneDrive) quebra a extração, porque alguns caminhos ficam longos demais pro Windows.
 3. Abra um terminal na pasta que tem o `package.json` e rode, uma vez:
 
 ```

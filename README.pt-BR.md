@@ -22,7 +22,7 @@ App leve e open-source de chamadas e compartilhamento de tela para desktop e mob
 
 ## Baixar
 
-O instalador para Windows está nos **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: baixe o `Jay-C_<versão>_x64-setup.exe` da versão mais recente. Ele atualiza uma versão anterior por cima e mantém as configurações. Todas as versões ficam em [releases](https://github.com/TyxMatty/JayC/releases).
+O instalador para Windows está nos **[releases](https://github.com/TyxMatty/Jay-C/releases/latest)**: baixe o `Jay-C_<versão>_x64-setup.exe` da versão mais recente. Ele atualiza uma versão anterior por cima e mantém as configurações. Todas as versões ficam em [releases](https://github.com/TyxMatty/Jay-C/releases).
 
 ## Código
 

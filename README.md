@@ -22,7 +22,7 @@ A lightweight, open-source app for calls and screen sharing on desktop and mobil
 
 ## Download
 
-The Windows installer is in the **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: download `Jay-C_<version>_x64-setup.exe` from the latest one. It updates an earlier version in place and keeps your settings. Every version is listed under [releases](https://github.com/TyxMatty/JayC/releases).
+The Windows installer is in the **[releases](https://github.com/TyxMatty/Jay-C/releases/latest)**: download `Jay-C_<version>_x64-setup.exe` from the latest one. It updates an earlier version in place and keeps your settings. Every version is listed under [releases](https://github.com/TyxMatty/Jay-C/releases).
 
 ## Code
 

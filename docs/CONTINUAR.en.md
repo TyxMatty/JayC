@@ -57,7 +57,7 @@ If the PC has MSYS2 on the PATH, that's fine: the audio build ignores its `pkg-c
 Clone **outside OneDrive**. The Rust build produces several GB and OneDrive would try to sync them.
 
 ```powershell
-git clone https://github.com/TyxMatty/JayC.git C:\dev\JayC
+git clone https://github.com/TyxMatty/Jay-C.git C:\dev\JayC
 cd C:\dev\JayC
 npm install
 ```

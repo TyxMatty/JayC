@@ -40,7 +40,7 @@
     "targets": ["nsis"],
     "publisher": "TyxMatty",
     "copyright": "© 2026 TyxMatty. MIT License.",
-    "homepage": "https://github.com/TyxMatty/JayC",
+    "homepage": "https://github.com/TyxMatty/Jay-C",
     "category": "SocialNetworking",
     "shortDescription": "Lightweight calls and screen sharing",
     "icon": [

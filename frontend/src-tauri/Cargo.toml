@@ -4,7 +4,7 @@ version = "0.4.0"
 description = "Jay-C — lightweight calls and screen sharing"
 authors = ["TyxMatty"]
 license = "MIT"
-repository = "https://github.com/TyxMatty/JayC"
+repository = "https://github.com/TyxMatty/Jay-C"
 edition = "2024"
 rust-version = "1.90"
 
