@@ -134,6 +134,11 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**Installer 0.4.0 (06/11/2026):** 0.3.9 with what's below. The server didn't change.
+
+**Between 0.3.9 and 0.4.0 (06/11/2026):**
+- **Small cards (under a stream):** the picture or initial sits in the middle of the card (it rode up before, because its area left out the name's 30 px), and the name has its own `z-index` to stay on top where the two meet. Measured at three window sizes: a 49 px circle at the exact center of 160×90 cards; where they meet, the top element is the name. The README's call image was retaken.
+
 **Installer 0.3.9 (06/11/2026):** 0.3.8 with what's below. The server changed only inside (the bandwidth report); the protocol is the same, and a 0.3.8 server works the same.
 
 **Between 0.3.8 and 0.3.9 (06/11/2026):**

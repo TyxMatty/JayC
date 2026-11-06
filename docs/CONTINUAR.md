@@ -132,6 +132,11 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Instalador 0.4.0 (06/11/2026):** a 0.3.9 com o que está abaixo. O servidor não mudou.
+
+**Entre a 0.3.9 e a 0.4.0 (06/11/2026):**
+- **Cards pequenos (debaixo de uma live):** a foto ou a inicial fica no centro do card (antes subia, porque a área dela deixava de fora os 30 px do nome), e o nome tem `z-index` próprio para ficar por cima onde os dois se encontram. Medido em três tamanhos de janela: círculo de 49 px no centro exato de cards de 160×90; no ponto de encontro, o elemento de cima é o nome. A imagem da chamada no README foi refeita.
+
 **Instalador 0.3.9 (06/11/2026):** a 0.3.8 com o que está abaixo. O servidor mudou só por dentro (o aviso de banda); o protocolo é o mesmo, e um servidor 0.3.8 funciona igual.
 
 **Entre a 0.3.8 e a 0.3.9 (06/11/2026):**
