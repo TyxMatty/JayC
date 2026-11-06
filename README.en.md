@@ -4,6 +4,22 @@
 
 A lightweight, open-source app for calls and screen sharing on desktop and mobile, with a self-hosted signaling server that runs in Docker.
 
+<p align="center"><img src="docs/images/call.png" alt="A Jay-C call: someone's stream up front, the cards of everyone in the room and the control bar" width="820"></p>
+
+- **Clear voice** that doesn't muffle your other apps.
+- **Stream a game, a window or the whole screen**, with its sound, up to 1080p60.
+- **Up to 16 people per room**, with chat and the featured video in a small always-on-top window (PiP).
+- **On your server or a friend's**, no accounts and no ads.
+
+<table>
+  <tr>
+    <td><img src="docs/images/lobby-calm.png" alt="Home screen in the Calm style, purple"></td>
+    <td><img src="docs/images/lobby-neon.png" alt="Home screen in the Neon style, cyan"></td>
+    <td><img src="docs/images/lobby-soft.png" alt="Home screen in the Soft style, orange"></td>
+  </tr>
+  <tr align="center"><td>Calm</td><td>Neon</td><td>Soft</td></tr>
+</table>
+
 ## Download
 
 The Windows installer is in the **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: download `Jay-C_<version>_x64-setup.exe` from the latest one. It updates an earlier version in place and keeps your settings. Every version is listed under [releases](https://github.com/TyxMatty/JayC/releases).

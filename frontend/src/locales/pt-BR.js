@@ -296,6 +296,7 @@ export default {
   "Read the setup guide": "Leia o guia de configuração",
   "Help": "Ajuda",
   "Troubleshooting": "Resolver problemas",
+  "About": "Sobre",
   "Settings sections": "Seções das configurações",
   "Close settings": "Fechar configurações",
   "Step {n}: {title}": "Passo {n}: {title}",

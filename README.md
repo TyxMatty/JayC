@@ -4,6 +4,22 @@
 
 App leve e open-source de chamadas e compartilhamento de tela para desktop e mobile, com servidor de sinalização self-hosted via Docker.
 
+<p align="center"><img src="docs/images/call.png" alt="Uma chamada no Jay-C: a live de uma pessoa em destaque, os cards de quem está na sala e a barra de controles" width="820"></p>
+
+- **Voz limpa**, que não abafa o som dos outros apps.
+- **Lives de um jogo, uma janela ou da tela inteira**, com o som, em até 1080p60.
+- **Até 16 pessoas por sala**, com chat e o vídeo em destaque numa janelinha por cima de tudo (PiP).
+- **No seu servidor ou no de um amigo**, sem contas e sem anúncios.
+
+<table>
+  <tr>
+    <td><img src="docs/images/lobby-calm.png" alt="Tela inicial no estilo Calmo, em roxo"></td>
+    <td><img src="docs/images/lobby-neon.png" alt="Tela inicial no estilo Neon, em ciano"></td>
+    <td><img src="docs/images/lobby-soft.png" alt="Tela inicial no estilo Suave, em laranja"></td>
+  </tr>
+  <tr align="center"><td>Calmo</td><td>Neon</td><td>Suave</td></tr>
+</table>
+
 ## Baixar
 
 O instalador para Windows está nos **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: baixe o `Jay-C_<versão>_x64-setup.exe` da versão mais recente. Ele atualiza uma versão anterior por cima e mantém as configurações. Todas as versões ficam em [releases](https://github.com/TyxMatty/JayC/releases).

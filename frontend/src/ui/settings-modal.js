@@ -676,6 +676,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
           ),
         ),
         h('fieldset', {}, h('h3', {}, t('Troubleshooting')), h('div', { class: 'field' }, diagButton, diagHint, diagText)),
+        h('fieldset', {}, h('h3', {}, t('About')), h('p', { class: 'hint' }, `Jay-C ${__APP_VERSION__}`)),
       ),
     },
   ];

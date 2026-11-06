@@ -353,10 +353,21 @@ select {
   height: 18px;
 }
 
+/* Narrow windows: just the card (the version stays in Settings › Help). */
 @media (max-width: 899px) {
-  .lobby-hero {
+  .lobby-hero,
+  .lobby-version {
     display: none;
   }
+}
+
+.lobby-version {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* On a gradient background the hero text sits on its own surface, to stay readable. */

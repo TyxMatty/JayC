@@ -194,7 +194,7 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
       feature(icons.users, t('Up to 16 people per room')),
     ),
   );
-  const element = h('main', { class: 'lobby' }, hero, form);
+  const element = h('main', { class: 'lobby' }, hero, form, h('p', { class: 'lobby-version' }, `Jay-C ${__APP_VERSION__}`));
   renderProfile();
   renderRecent();
 
