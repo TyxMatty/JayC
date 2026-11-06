@@ -311,7 +311,7 @@ export default {
   "Welcome to Jay-C!": "Boas-vindas ao Jay-C!",
   "Calls and screen sharing that stay light on your PC, on a server that you or a friend run. Here's how it works, in a few quick steps.": "Chamadas e lives que pesam pouco no seu PC, num servidor que você ou um amigo roda. Veja como funciona, em poucos passos.",
   "Connect to a server": "Conectar a um servidor",
-  "Whoever hosts the server gives you its address, like 26.36.66.63:3000. Put it in Settings › Server. The pill at the top turns green and says Online when the server is reachable.": "Quem hospeda o servidor te passa o endereço, como 26.36.66.63:3000. Coloque em Configurações › Servidor. O indicador lá em cima fica verde e mostra Online quando o servidor responde.",
+  "Whoever hosts the server gives you its address, like 192.168.0.10:3000. Put it in Settings › Server. The pill at the top turns green and says Online when the server is reachable.": "Quem hospeda o servidor te passa o endereço, como 192.168.0.10:3000. Coloque em Configurações › Servidor. O indicador lá em cima fica verde e mostra Online quando o servidor responde.",
   "Open the setup guide": "Abrir o guia do servidor",
   "Make it yours": "Deixe com a sua cara",
   "Choose the name others see, a photo and a profile color. They show on your card whenever your camera is off.": "Escolha o nome que os outros veem, uma foto e uma cor de perfil. Eles aparecem no seu quadro sempre que sua câmera está desligada.",

@@ -213,7 +213,7 @@ O servidor não mudou.
 
 **Instalador Windows:** `npm run build` gera `<target>\release\bundle\nsis\Jay-C_<versão>_x64-setup.exe`. Leva ~7–9 min, por causa do LTO.
 
-**Primeiro teste externo:** em 03/11/2026, o instalador 0.1.0 foi enviado a amigos do usuário. O servidor é hospedado pelo usuário, e eles se conectam pelo IP dele (VPN ou LAN), com as portas 3000 e 40000 liberadas. Sem assinatura de código, o SmartScreen pede "Mais informações → Executar assim mesmo". Amigos no Radmin VPN: o host é `26.36.66.63`.
+**Primeiro teste externo:** em 03/11/2026, o instalador 0.1.0 foi enviado a amigos do usuário. O servidor é hospedado pelo usuário, e eles se conectam pelo IP dele (VPN ou LAN), com as portas 3000 e 40000 liberadas. Sem assinatura de código, o SmartScreen pede "Mais informações → Executar assim mesmo". Amigos no Radmin VPN: o host é o IP do usuário na Radmin (`26.x.x.x`).
 
 **Retorno do teste externo (04/11/2026), na ordem combinada:**
 1. **Bug: quem entra numa sala com gente dentro não ouve os outros, mas é ouvido.** Valia para qualquer um que entrasse depois. A pessoa via o vídeo dos outros (a rede chega), e sair e entrar de novo resolvia para ela. **Não reproduzido neste PC**, com o som medido no alto-falante (`output_meter`) em 5 cenários: dev, release com clique real e perfil limpo, primeira entrada depois de abrir o app, bot com câmera e bot saindo e voltando. Também não reproduziu pelo IP do Radmin. Para o próximo teste foi criado **Settings › Troubleshooting › Copy call diagnostics**: mede por 2 s, para cada pessoa, pacotes/s, kbps e `playedEnergy`, além do estado do player. Quem não ouvir copia o texto e manda. Pacotes chegando com `playedEnergy` 0 = o som chega mas não toca; sem pacotes = rede ou servidor.

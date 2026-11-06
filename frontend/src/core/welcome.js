@@ -17,7 +17,7 @@ export const WELCOME_STEPS = Object.freeze([
     key: 'server',
     art: 'server',
     title: 'Connect to a server',
-    body: 'Whoever hosts the server gives you its address, like 26.36.66.63:3000. Put it in Settings › Server. The pill at the top turns green and says Online when the server is reachable.',
+    body: 'Whoever hosts the server gives you its address, like 192.168.0.10:3000. Put it in Settings › Server. The pill at the top turns green and says Online when the server is reachable.',
     action: { label: 'Open the setup guide', target: 'guide' },
   },
   {
