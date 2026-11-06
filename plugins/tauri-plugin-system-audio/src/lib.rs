@@ -22,6 +22,11 @@ use tauri::{
 #[cfg(windows)]
 mod apm;
 #[cfg(windows)]
+pub mod link;
+#[cfg(windows)]
+#[cfg_attr(not(test), allow(dead_code))] // shortcut: unused until the Jay-A mode of Mic (step I2, docs/JAY-A.md)
+mod selector;
+#[cfg(windows)]
 mod win;
 
 pub const SAMPLE_RATE: u32 = 48_000;

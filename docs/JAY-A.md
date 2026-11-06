@@ -67,6 +67,7 @@ flowchart TD
 ```
 
 - **Quem vigia é a reserva:** o bloco dela chega a cada 20 ms, então ela percebe o travamento do Jay-A sem precisar de um timer próprio.
+- **Nada se perde na espera:** enquanto o Jay-A toca, a reserva guarda os seus últimos 4 blocos. Na troca, ela manda de uma vez os que chegaram depois do último bloco do Jay-A, junto com o atual. O alinhamento fino entre as duas fontes depende do atraso do Jay-A e vai ser medido na I5.
 - **Por que 60 ms:** são 3 blocos, parecido com os ~60 ms que o worklet acumula antes de tocar (`pcm-player.worklet.js`). Na I2, medir se o outro lado ouve algum estalo nessa espera.
 - **Por que 1 s para voltar:** um Jay-A que trava e solta não deve fazer a fonte ficar pulando de um lado para o outro.
 - **A rampa:** o primeiro bloco depois de uma troca entra com um fade-in de 120 amostras, para não estalar na emenda. Mesmo assim, o timbre muda na troca, e isso não tem como evitar.
@@ -143,6 +144,7 @@ sequenceDiagram
 |---|---|
 | `plugins/tauri-plugin-system-audio/src/link.rs` (novo) | Cliente do Jay Link. Abre o pipe e fala em quadros de opcode + tamanho (o mesmo formato do `src-tauri/src/discord.rs`): `HELLO`, `CONTROL`, `AUDIO`, `PING`/`PONG`. Uma thread de leitura entrega os blocos ao seletor. Não usa dependência nova. |
 | `.../src/selector.rs` (novo) | O seletor da seção 3, como uma struct sem WASAPI: recebe os blocos e a hora. Assim, os testes rodam com tempos falsos. |
+| `.../src/link/fake.rs`, `examples/fake_jay_a.rs`, `examples/jay_a_probe.rs` (novos) | O Jay-A falso, que só entra nos testes e com `--features fake-jay-a`, e o probe (seção 9). |
 | `.../src/win.rs` | O `Mic` ganha o modo Jay-A, que junta a reserva (o `run_mic` de hoje), o link e o seletor. |
 | `.../src/lib.rs`, `guest-js/index.js` | `MicOptions.filter` (`"jay-c"` ou `"jay-a"`). Os estados vão em JSON pelo mesmo Channel: `{ "link": "searching" \| "jay-a" \| "fallback" \| "incompatible", "version"? }`. Comandos novos: `mic_call_state({ inCall, muted })`, `jay_a_show()` e `jay_a_installed()`. |
 | `frontend/src/core/native-mic.js` | Repassa os estados. Aplica o `shapeMic` só aos blocos da reserva e mede o nível de todos. |
@@ -155,6 +157,10 @@ O servidor e a sinalização não mudam.
 **Segurança no lado do Jay-C:** a segurança do pipe (DACL, `FILE_FLAG_FIRST_PIPE_INSTANCE`) é do Jay-A. O Jay-C aplica as mesmas regras na leitura:
 - fecham o link e ativam a reserva: mensagem de controle acima de 64 KB, `AUDIO` com tamanho diferente de 3 840 bytes, JSON inválido e opcode desconhecido;
 - amostras NaN ou infinitas viram 0.
+
+Antes do `HELLO`, o Jay-C confere que o servidor do pipe roda **no mesmo usuário do Windows** (`GetNamedPipeServerProcessId` e o SID do token do processo). Se não conseguir confirmar, recusa. O motivo: o nome do pipe vale para o PC inteiro, então outro usuário logado poderia criá-lo antes do Jay-A e pôr áudio na chamada.
+
+O pipe também é aberto com `SECURITY_IDENTIFICATION`, para que o dono dele possa identificar o Jay-C, mas não agir como ele.
 
 O Jay-C não confere qual executável é o servidor, pelo mesmo motivo do Jay-A: um programa malicioso do mesmo usuário já pode abrir o microfone sozinho.
 
@@ -176,19 +182,40 @@ Pedidos feitos ao `ARQUITETURA.md` do Jay-A. O Jay-A aceitou os pedidos P1–P6,
 
 Enquanto o Jay-A não está pronto, o lado do Jay-C é testado com um **Jay-A falso**:
 
-- **`cargo run --example fake_jay_a`** (no plugin): um servidor do Jay Link que responde ao `HELLO` e manda um tom de 440 Hz em blocos de 20 ms. Opções: `--stall-after <s>`, `--exit-after <s>`, `--protocol <n>` e `--jitter <ms>`.
+- **`cargo run --example fake_jay_a --features fake-jay-a`** (no plugin): um servidor do Jay Link que responde ao `HELLO` e manda um tom de 440 Hz em blocos de 20 ms. Opções: `--pipe <nome>`, `--stall-after <s>`, `--stall-for <s>`, `--exit-after <s>`, `--protocol <n>` e `--jitter <ms>`.
 - **`cargo run --example jay_a_probe`:** só o cliente do Jay-C, para o chat do Jay-A testar o servidor dele. Ele conecta, faz o `HELLO` e pede o microfone por 30 s. Mostra os intervalos entre blocos (p50, p99 e máximo) e os buracos, e passa se não houver buraco maior que 60 ms.
 
 | Teste (`cargo test`) | Prova |
 |---|---|
 | T1 | ligado, a saída é o tom do falso, não a reserva |
-| T2 | quando o falso trava, a saída passa para a reserva em ≤ 80 ms, com uma troca só e sem buraco maior que 20 ms entre blocos |
-| T3 | quando o falso fecha, a troca vem no bloco seguinte |
-| T4 | quando o falso volta, a saída volta para ele depois de ~1 s |
+| T2 | quando o falso trava, a saída passa para a reserva em ≤ 80 ms (70 ms no teste), com uma troca só, e os blocos da reserva capturados na espera saem junto, sem perder áudio. Se o pipe fecha, a troca vem no bloco seguinte da reserva. |
+| T3 | quando o falso fecha, o link percebe na hora, antes do bloco seguinte (medido: < 1 ms depois do último bloco) |
+| T4 | quando o falso volta, a saída volta para ele depois de ~1 s, mesmo que ele reconecte 15 ms depois de fechar |
 | T5 | com protocolo diferente, a saída fica na reserva, com o estado `incompatible` |
 | T6 | com jitter de ±15 ms, nenhuma troca |
 
-O seletor (T1, T2, T4 e T6) é testado com tempos falsos. Já o `link.rs` (T3, T5) é testado contra o falso de verdade, por um pipe.
+O seletor (T1, T2, T4 e T6) é testado com tempos falsos. Já o `link.rs` (T3, T5) é testado contra o falso de verdade, por um pipe. Os testes do link também cobrem:
+- os quadros cortados em qualquer ponto;
+- o que o Jay-C recusa: `AUDIO` de outro tamanho, opcode desconhecido, JSON inválido e mensagem acima de 64 KB, recusada só pelo cabeçalho;
+- NaN virando 0;
+- "Jay-A não está rodando";
+- o tom e o `state` do falso chegando.
+
+Três regras do seletor foram quebradas de propósito, e os testes pegaram as três:
+- reconexão sem esperar 1 s;
+- troca sem os blocos da espera;
+- o dobro do tempo para notar o travamento.
+
+**Medido na I1** (o probe contra o falso, build de debug):
+
+| Modo do falso | Blocos | Intervalo p50 / p99 / máximo | Resultado |
+|---|---|---|---|
+| estável, 30 s | 1 497 (~1 500) | 15,8 / 32,1 / 32,9 ms | PASS |
+| jitter de 15 ms, 10 s | 499 (~500) | 15,8 / 47,6 / 49,0 ms | PASS |
+| travamento de 200 ms, 6 s | 287 (~300) | máximo de 218 ms | FAIL, como devia |
+
+- **Intervalos de ~15,6 e ~31 ms:** vêm do relógio de 15,6 ms do Windows nas esperas do falso, e a média dá 20 ms. O Jay-A de verdade vai seguir o relógio do microfone.
+- **Mensagens de controle esperam até 50 ms** na fila do link, que olha a fila entre uma leitura e outra. Por isso o primeiro bloco chegou de 0,3 a 63 ms depois do `start-mic`.
 
 **Testes no app:**
 - **Com o falso (I2):** um bot numa página separada (como no CLAUDE.md) ouve a chamada enquanto o falso manda o tom. Ao matar o falso, o bot passa a ouvir o microfone. O maior buraco é medido no `inbound-rtp` do bot. A CPU da reserva também é medida, e confirma-se que os outros apps continuam sem abafar com dois microfones abertos (spike 09).
@@ -202,7 +229,7 @@ Cada etapa termina com algo testável.
 | # | Etapa | Pronto quando | Depende do Jay-A |
 |---|---|---|---|
 | I0 ✅ | Este plano e os pedidos ao Jay-A | os dois documentos descrevem o mesmo Jay Link: P1–P6 aceitos (`0f51ea8` do Jay-A), P7 retirado | — |
-| I1 | `link.rs`, seletor, Jay-A falso e `jay_a_probe` | T1–T6 passam | não |
+| I1 ✅ | `link.rs`, seletor, Jay-A falso e `jay_a_probe` | T1–T6 passam (16 testes no plugin); o probe passa contra o falso estável e reprova o travamento | não |
 | I2 | Modo Jay-A no `Mic` (reserva quente) e estados até o JS | no app, com o falso, o bot ouve o tom; ao matar o falso, ele passa a ouvir o microfone; o maior buraco e a CPU da reserva estão medidos | não |
 | I3 | Interface (seção 6) | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam | não |
 | I4 | Achar e iniciar o Jay-A (P5) | com um `jay-a.exe` falso no caminho, entrar na chamada o inicia uma vez e liga em até 3 s | P5 |

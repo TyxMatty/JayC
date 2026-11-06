@@ -18,9 +18,22 @@ log = "0.4"
 wasapi = "0.26"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
     "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[features]
+# link::fake, a stand-in Jay-A for the fake_jay_a example (tests always have it).
+fake-jay-a = []
+
+[[example]]
+name = "fake_jay_a"
+required-features = ["fake-jay-a"]
 
 [build-dependencies]
 tauri-plugin = { version = "2.7", features = ["build"] }

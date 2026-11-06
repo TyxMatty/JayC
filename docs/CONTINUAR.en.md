@@ -107,6 +107,8 @@ Open the clone's folder in Claude, in the desktop app (Code tab) or the CLI. `CL
 
 Customization details in ARQUITETURA, section 10, "Customization". **Plugins were left for after the release**: plugins without isolation on the client are ruled out, because they would reach Tauri's IPC (audio, screen and microphone capture).
 
+**Jay-A integration** (the Jay line's audio app, in another repository): the plan is in `docs/JAY-A.md` (Portuguese). I1 is done: the pipe client, the selector, the fake Jay-A and the probe, in the plugin only and not used by the app yet. The next milestone is I2, the Jay-A mode of the native microphone.
+
 **Next: the external test feedback** (list below, under "First external test"), starting with a new test with the friends using the diagnostics. Then 14.B (signed release APK). The parts of milestone 14 are in ARQUITETURA, section 10, "Release".
 
 iOS (milestone 15, code only) was left for after launch.
