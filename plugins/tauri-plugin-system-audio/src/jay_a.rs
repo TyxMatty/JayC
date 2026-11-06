@@ -53,6 +53,16 @@ pub fn installed_exe() -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
+/// The pipe to reach Jay-A on. Debug builds take `JAYC_JAY_A_PIPE` first, so a test app and its
+/// fake Jay-A (`fake_jay_a --pipe <name>`) don't meet the ones on the real pipe.
+pub fn pipe_name() -> String {
+    #[cfg(debug_assertions)]
+    if let Ok(pipe) = std::env::var("JAYC_JAY_A_PIPE") {
+        return pipe;
+    }
+    crate::link::PIPE.to_string()
+}
+
 /// Starts the installed Jay-A in the background (its tray icon only). Jay-A is a single instance:
 /// if it was already starting, the second one just exits.
 pub fn launcher() -> Launcher {

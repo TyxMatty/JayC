@@ -34,6 +34,14 @@ export class PcmTrackSource {
     this.node.port.postMessage(samples, [samples.buffer]);
   }
 
+  /** The player's counters, in frames: `{ drops, droppedFrames, skips, skippedFrames, underruns, silentFrames, queued }`. */
+  stats() {
+    return new Promise((resolve) => {
+      this.node.port.onmessage = ({ data }) => resolve(data);
+      this.node.port.postMessage('stats');
+    });
+  }
+
   close() {
     this.track.stop();
     this.context.close().catch(() => {});

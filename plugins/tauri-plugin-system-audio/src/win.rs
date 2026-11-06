@@ -20,7 +20,6 @@ use windows::Win32::UI::WindowsAndMessaging::{GetWindowTextLengthW, GetWindowTex
 
 use crate::apm::Apm;
 use crate::jay_a::JayA;
-use crate::link::PIPE;
 use crate::{AudioApp, CHANNELS, CHUNK_FRAMES, CaptureInfo, CaptureTarget, MicDevice, MicInfo, MicOptions, SAMPLE_RATE, WindowProcess};
 
 const CHUNK_SAMPLES: usize = CHUNK_FRAMES * CHANNELS as usize;
@@ -630,9 +629,13 @@ impl Mic {
         let mut sink: Sink = match jay_a {
             Some(start) => {
                 let jay_a = match start {
-                    JayAStart::New(hello) => {
-                        Arc::new(JayA::start(PIPE, hello, crate::jay_a::launcher(), Box::new(sink), Box::new(on_status)))
-                    }
+                    JayAStart::New(hello) => Arc::new(JayA::start(
+                        &crate::jay_a::pipe_name(),
+                        hello,
+                        crate::jay_a::launcher(),
+                        Box::new(sink),
+                        Box::new(on_status),
+                    )),
                     JayAStart::Keep(jay_a) => {
                         jay_a.rewire(Box::new(sink), Box::new(on_status));
                         jay_a
