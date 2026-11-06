@@ -7,6 +7,8 @@ mod media_permissions;
 #[cfg(windows)]
 mod native_live;
 #[cfg(windows)]
+mod pip_window;
+#[cfg(windows)]
 mod taskbar_icon;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,8 +38,19 @@ pub fn run() {
             #[cfg(windows)]
             native_live::native_live_unwatch,
             #[cfg(windows)]
-            discord::discord_presence
+            discord::discord_presence,
+            #[cfg(windows)]
+            pip_window::pip_drag,
+            #[cfg(windows)]
+            pip_window::pip_close
         ])
+        .on_window_event(|window, event| {
+            #[cfg(windows)]
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                use tauri::Manager;
+                pip_window::pip_close(window.app_handle().clone());
+            }
+        })
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -49,6 +62,15 @@ pub fn run() {
             #[cfg(windows)]
             {
                 use tauri::Manager;
+                // Windows: tauri.windows.conf.json leaves the main window to us, to catch window.open
+                // for our own PiP window (pip_window.rs).
+                if app.get_webview_window("main").is_none() {
+                    let config = app.config().app.windows.iter().find(|w| w.label == "main").cloned().expect("main window in the config");
+                    let handle = app.handle().clone();
+                    tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?
+                        .on_new_window(move |url, features| pip_window::open(&handle, url, features))
+                        .build()?;
+                }
                 if let Some(window) = app.get_webview_window("main") {
                     media_permissions::allow_for_app(&window);
                     if !cfg!(debug_assertions) {

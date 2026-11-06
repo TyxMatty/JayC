@@ -104,6 +104,7 @@ export default {
   "Turn camera off": "Desligar câmera",
   "Turn camera on": "Ligar câmera",
   "Leave call": "Sair da chamada",
+  "Close": "Fechar",
   "Guest": "Convidado",
   "Screen share settings": "Opções da live",
   "Share your screen": "Transmitir sua tela",

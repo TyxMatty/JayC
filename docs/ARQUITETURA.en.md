@@ -283,7 +283,7 @@ The screen goes as a single layer, without simulcast, in **H.264 High** (`profil
 
 | Platform | Implementation |
 |---|---|
-| Windows (WebView2/Chromium) ✅ | `video.requestPictureInPicture()` on a `<video>` outside the DOM. The window stays on top (`WS_EX_TOPMOST`, measured). The microphone, camera and hang-up buttons come from the Media Session API (`togglemicrophone`, `togglecamera`, `hangup`). **Document PiP doesn't work**: the API exists in WebView2, but `requestWindow` fails with "Internal error: no window" (3 out of 3 attempts). |
+| Windows (WebView2/Chromium) ✅ | **Own window** (0.3.7): the page's `window.open('')` becomes an always-on-top Jay-C window with no title bar (`src-tauri/src/pip_window.rs`, the main window's `on_new_window`), which the page fills with the video and its buttons. WebView2's `<video>` PiP (`requestPictureInPicture`, Media Session buttons) stays as the fallback: it showed the "tauri.localhost" origin. **Document PiP doesn't work**: the API exists in WebView2, but `requestWindow` fails with "Internal error: no window" (3 out of 3 attempts). |
 | macOS (WKWebView) | `video.requestPictureInPicture()` (Safari 13.1+) |
 | Linux (WebKitGTK) / general fallback | **Tauri mini-window**: a small `WebviewWindow` with `alwaysOnTop: true`, undecorated, showing the remote stream |
 | Android ✅ | Kotlin plugin `tauri-plugin-pip`: the **whole activity** floats, because the Android WebView has no `<video>` PiP. `setAutoEnterEnabled(true)` (API 31+) or the user-leave hint (API 26–30) enter PiP when leaving the app during a call; the "Pop out video" button calls `enter`. Manifest: `android:supportsPictureInPicture="true"` and `resizeableActivity`. |

@@ -286,6 +286,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   // Created before the tiles: rendering the people already in the room updates it.
   const pip = pipSupported()
     ? createPip({
+        icons, // our own PiP window draws the same buttons (Windows)
         togglemicrophone: () => micButton.click(),
         togglecamera: () => camButton.click(),
         hangup: () => call.leave(),

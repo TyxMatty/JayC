@@ -84,15 +84,17 @@ pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) 
     Ok(())
 }
 
-/// The video PiP window is WebView2's (a child process of ours), with no app ID: since the main
-/// window has its own, the taskbar showed it as another app. Gives every visible top-level window
-/// of our child processes the main window's ID and icon, so they stack on one button. Returns how
-/// many windows it grouped (the page calls it again if the PiP window wasn't up yet).
+/// Other windows of ours had no app ID: since the main window has its own, the taskbar showed them
+/// as another app (WebView2's video PiP, a child process; our own PiP window, pip_window.rs). Gives
+/// every visible top-level window of this process and its children the main window's ID and icon,
+/// so they stack on one button. Returns how many windows it set (the page calls it again if the
+/// PiP window wasn't up yet).
 #[tauri::command]
 pub fn group_child_windows() -> Result<u32, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let ico = LAST_ICO.lock().unwrap().clone();
-    let children = descendants(std::process::id());
+    let mut children = descendants(std::process::id());
+    children.push(std::process::id());
     let mut windows: Vec<HWND> = Vec::new();
     unsafe extern "system" fn collect(hwnd: HWND, data: LPARAM) -> BOOL {
         let (pids, out) = unsafe { &mut *(data.0 as *mut (&Vec<u32>, &mut Vec<HWND>)) };
