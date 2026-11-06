@@ -29,6 +29,7 @@ const REQUESTS = new Set([
   'consume',
   'resumeConsumer',
   'pauseConsumer',
+  'closeConsumer',
   'setPreferredLayers',
 ]);
 
@@ -176,7 +177,7 @@ export function startServer(config, { log = defaultLog } = {}) {
         iceServers: config.iceServers,
         routerRtpCapabilities: room.rtpCapabilities,
         // Messages newer clients may send only when the server lists them (an old one refuses them).
-        features: ['screen-preview'],
+        features: ['screen-preview', 'close-consumer'],
       });
       log('info', 'joined', { peer: peer.id, room: msg.room, size: result.others.length + 1 });
     }

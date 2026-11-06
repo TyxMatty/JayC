@@ -16,6 +16,7 @@ import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart } from './native-mic.js';
 import { startNativeLive, stopNativeLive } from './native-live.js';
 import { capturePreview } from './screen-preview.js';
+import { bufferDelayMs, catchUp } from './catch-up.js';
 import { t } from './i18n.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
@@ -118,6 +119,10 @@ export class Call extends EventTarget {
   /** The signaling connection: 'connecting' | 'open' | 'reconnecting' | 'closed'. */
   #signalingState = 'connecting';
   #previewTimer = null;
+  /** Every second: received audio that fell far behind gets a fresh consumer (core/catch-up.js). */
+  #audioWatch = null;
+  /** producerId -> { high, renewedAt, consumerId, stats } */
+  #audioBehind = new Map();
   /** Native screen-share sound while sharing: { track, stop(), close(), description }. */
   #screenAudio = null;
   /** Native call microphone (Windows), when used instead of getUserMedia: { track, stop() }. */
@@ -825,12 +830,47 @@ export class Call extends EventTarget {
       }
       this.#updateParticipant(participant);
       if (params.source === 'camera' || params.source === 'screen') this.#applyLayerPolicy();
+      if (params.kind === 'audio') this.#audioWatch ??= setInterval(() => this.#checkAudioDelay().catch(() => {}), 1000);
     } catch (error) {
       // The producer may have closed in the meantime.
       if (error?.code !== 'unknown-producer') console.warn('[call] consume failed', error);
     } finally {
       participant.pending.delete(producerId);
     }
+  }
+
+  async #checkAudioDelay() {
+    const now = Date.now();
+    for (const participant of this.participants.values()) {
+      for (const [producerId, entry] of participant.consumers) {
+        if (entry.consumer.kind !== 'audio' || entry.consumer.closed) continue;
+        const stats = [...(await entry.consumer.getStats()).values()].find((s) => s.type === 'inbound-rtp');
+        if (!stats) continue;
+        const last = this.#audioBehind.get(producerId) ?? { high: 0, renewedAt: 0 };
+        const same = last.consumerId === entry.consumer.id && last.stats;
+        const delay = same ? bufferDelayMs(last.stats, stats) : null;
+        const { state, renew } = catchUp(last, delay, now);
+        this.#audioBehind.set(producerId, { ...state, consumerId: entry.consumer.id, stats });
+        if (renew) {
+          console.info(`[call] ${entry.source} audio ${Math.round(delay)} ms behind: starting it again at live`);
+          this.#renewConsumer(participant, producerId).catch((error) => console.warn('[call] renew consumer', error));
+        }
+      }
+    }
+  }
+
+  /** A fresh consumer for an audio whose receive buffer fell far behind: it plays from live again. */
+  async #renewConsumer(participant, producerId) {
+    const entry = participant.consumers.get(producerId);
+    if (!entry || this.#ended) return;
+    participant.consumers.delete(producerId);
+    this.#streamFor(participant, entry.source).removeTrack(entry.consumer.track);
+    entry.consumer.close();
+    const consumerId = entry.consumer.id;
+    // An old server has no closeConsumer: pausing it at least stops the sending.
+    const request = this.#signaling.features.includes('close-consumer') ? 'closeConsumer' : 'pauseConsumer';
+    this.#signaling.request(request, { consumerId }).catch(() => {});
+    await this.#consume({ peerId: participant.id, producerId, source: entry.source });
   }
 
   #onProducerClosed({ peerId, producerId }) {
@@ -960,6 +1000,8 @@ export class Call extends EventTarget {
     this.#micWatch = null;
     clearInterval(this.#previewTimer);
     this.#previewTimer = null;
+    clearInterval(this.#audioWatch);
+    this.#audioWatch = null;
     this.#nativeLive?.close();
     this.#nativeLive = null;
     if (this.#nativeStarting) stopNativeLive().catch(() => {});

@@ -132,6 +132,7 @@ Requisições SFU, com os nomes da API do mediasoup:
 |---|---|---|
 | `createTransport` | `direction: "send" \| "recv"` | `id`, `iceParameters`, `iceCandidates` (com o endereço que este cliente usou), `dtlsParameters` |
 | `closeTransport` | `transportId` (só os seus) | — (fecha os producers dele; quem consumia recebe `producer-closed`). A live nativa usa um transporte próprio e o fecha ao parar |
+| `closeConsumer` | `consumerId` (só os seus) | — (o cliente abre um novo quando um áudio recebido ficou muito atrasado; ver `core/catch-up.js`) |
 | `connectTransport` | `transportId`, `dtlsParameters` | — |
 | `restartIce` | `transportId` | `iceParameters` |
 | `produce` | `transportId`, `kind`, `rtpParameters`, `source` (`mic` \| `camera` \| `screen` \| `screen-audio`), `paused?` | `id` |
@@ -144,7 +145,7 @@ Servidor → cliente:
 
 | type | campos | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, preview?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities`, `features` | quem já está na sala, o que cada um publica e as capacidades do router. `features`: as mensagens novas que o servidor aceita (hoje, `screen-preview`); um servidor antigo não manda o campo |
+| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, preview?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities`, `features` | quem já está na sala, o que cada um publica e as capacidades do router. `features`: as mensagens e pedidos novos que o servidor aceita (hoje, `screen-preview` e `close-consumer`); um servidor antigo não manda o campo |
 | `peer-joined` / `peer-left` | `id`, `name`, `avatar?`, `color?` (só no `peer-joined`) | |
 | `peer-updated` | `id`, `avatar`, `color` | alguém trocou ou tirou (`null`) a foto ou a cor de perfil |
 | `chat` | `id`, `name`, `text` | mensagem de alguém da sala (quebras de linha mantidas; caracteres de controle removidos) |

@@ -206,6 +206,12 @@ export class SfuRoom {
     await this.#consumer(peerId, consumerId).resume();
   }
 
+  /** Close one of your consumers: the client starts a fresh one when its audio fell far behind. */
+  async closeConsumer(peerId, { consumerId }) {
+    this.#consumer(peerId, consumerId).close();
+    this.#member(peerId).consumers.delete(consumerId);
+  }
+
   /** Stop receiving (e.g. stopped watching a stream) without closing the consumer. */
   async pauseConsumer(peerId, { consumerId }) {
     await this.#consumer(peerId, consumerId).pause();

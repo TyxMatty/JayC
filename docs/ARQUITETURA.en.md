@@ -134,6 +134,7 @@ SFU requests, named after the mediasoup API:
 |---|---|---|
 | `createTransport` | `direction: "send" \| "recv"` | `id`, `iceParameters`, `iceCandidates` (with the address this client used), `dtlsParameters` |
 | `closeTransport` | `transportId` (only your own) | — (closes its producers; their consumers get `producer-closed`). The native stream uses a transport of its own and closes it when it stops |
+| `closeConsumer` | `consumerId` (only your own) | — (the client opens a new one when a received audio fell far behind; see `core/catch-up.js`) |
 | `connectTransport` | `transportId`, `dtlsParameters` | — |
 | `restartIce` | `transportId` | `iceParameters` |
 | `produce` | `transportId`, `kind`, `rtpParameters`, `source` (`mic` \| `camera` \| `screen` \| `screen-audio`), `paused?` | `id` |
@@ -146,7 +147,7 @@ Server → client:
 
 | type | fields | |
 |---|---|---|
-| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, preview?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities`, `features` | who is already in the room, what each one publishes and the router's capabilities. `features`: the newer messages the server accepts (today, `screen-preview`); an old server doesn't send the field |
+| `joined` | `id`, `room`, `peers: [{id, name, avatar?, color?, preview?, producers: [{id, kind, source, paused}]}]`, `iceServers`, `routerRtpCapabilities`, `features` | who is already in the room, what each one publishes and the router's capabilities. `features`: the newer messages and requests the server accepts (today, `screen-preview` and `close-consumer`); an old server doesn't send the field |
 | `peer-joined` / `peer-left` | `id`, `name`, `avatar?`, `color?` (only in `peer-joined`) | |
 | `peer-updated` | `id`, `avatar`, `color` | someone changed or removed (`null`) their profile picture or color |
 | `chat` | `id`, `name`, `text` | a message from someone in the room (line breaks kept; control characters removed) |

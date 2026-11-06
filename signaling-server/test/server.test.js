@@ -226,7 +226,7 @@ describe('signaling server', () => {
   test('screen previews reach the room, and latecomers get the last one', async () => {
     const jpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
     const a = await joined(port, 'room-preview', 'Alice');
-    assert.deepEqual(a.msg.features, ['screen-preview']);
+    assert.deepEqual(a.msg.features, ['screen-preview', 'close-consumer']);
     const b = await joined(port, 'room-preview', 'Bob');
     a.client.send({ type: 'screen-preview', image: jpeg });
     assert.deepEqual(await b.client.next('screen-preview'), { type: 'screen-preview', id: a.msg.id, image: jpeg });
@@ -379,6 +379,25 @@ describe('SFU requests', () => {
     const again = (await a.client.request('createTransport', { direction: 'send' })).data;
     assert.equal((await a.client.request('produce', { transportId: again.id, kind: 'audio', source: 'mic', rtpParameters: opusRtpParameters })).ok, true);
 
+    a.client.close();
+    b.client.close();
+  });
+
+  test('closeConsumer closes only your own consumer, and a new one can replace it', async () => {
+    const a = await joined(port, 'sfu-close-consumer', 'Alice');
+    const b = await joined(port, 'sfu-close-consumer', 'Bob');
+    const caps = b.msg.routerRtpCapabilities;
+    const sendT = (await a.client.request('createTransport', { direction: 'send' })).data;
+    await b.client.request('createTransport', { direction: 'recv' });
+    const produced = await a.client.request('produce', { transportId: sendT.id, kind: 'audio', source: 'mic', rtpParameters: opusRtpParameters });
+    await b.client.next('new-producer');
+    const first = (await b.client.request('consume', { producerId: produced.data.id, rtpCapabilities: caps })).data;
+    assert.equal((await a.client.request('closeConsumer', { consumerId: first.id })).error, 'unknown-consumer'); // not Alice's
+    assert.equal((await b.client.request('closeConsumer', { consumerId: first.id })).ok, true);
+    assert.equal((await b.client.request('resumeConsumer', { consumerId: first.id })).error, 'unknown-consumer', 'gone');
+    const second = (await b.client.request('consume', { producerId: produced.data.id, rtpCapabilities: caps })).data;
+    assert.notEqual(second.id, first.id);
+    assert.equal((await b.client.request('resumeConsumer', { consumerId: second.id })).ok, true);
     a.client.close();
     b.client.close();
   });
