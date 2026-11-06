@@ -132,6 +132,18 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Instalador 0.3.9 (06/11/2026):** a 0.3.8 com o que está abaixo. O servidor mudou só por dentro (o aviso de banda); o protocolo é o mesmo, e um servidor 0.3.8 funciona igual.
+
+**Entre a 0.3.8 e a 0.3.9 (06/11/2026):**
+- **Versão no app:** "Jay-C <versão>" no canto inferior esquerdo do lobby (escondida em janelas com menos de 900 px, onde cobria o card) e numa seção "Sobre" em Configurações › Ajuda. O número vem do `package.json` do frontend (`define` do Vite), então acompanha cada release.
+- **README com imagens** (PT e EN): uma chamada com uma live em destaque, quatro pontos sobre o app e o lobby nos três estilos (`docs/images/`). Capturas só da janela do app de dev (`PrintWindow`, sem a borda invisível do Windows), com perfil de teste e participantes de mentira.
+- **Revisão de segurança** (autorização, segredos, uploads): nenhum vazamento de dados nem segredo no código ou nos 123 commits do histórico. Teste novo: ids de outra pessoa ou de outra sala são recusados e nada passa entre salas (verificado por mutação). O exemplo de endereço do tour, que era o IP real do servidor do usuário na Radmin, virou `192.168.0.10:3000`; o IP segue nos commits antigos.
+- **Revisão de código (0.3.6 → 0.3.8), itens corrigidos, cada um conferido por mutação** (quebrar a regra de propósito deixa um teste vermelho):
+  - `reportViewerBandwidth`: consulta a banda de cada pessoa uma vez por rodada, todas ao mesmo tempo, e não empilha rodadas se o processo de mídia travar; teste de unidade com um roteador falso (`signaling-server/test/sfu-room.test.js`), porque o mediasoup só estima com quem assiste conectado;
+  - ensurdecer: o teste agora passa pelo `setTargetAtTime`, o caminho do app (o `else` só para o teste saiu);
+  - sons de aviso: a regra (ligados nas Configurações; ensurdecido, só os das nossas ações) virou `cueAllowed` em `core/sounds.js`, com teste;
+  - barra de tarefas: `descendants` só conta um processo filho que começou depois do pai (o Windows reusa ids, e um processo cujo pai morreu há tempo pode apontar para um id nosso); teste com dados e outro com um processo filho de verdade.
+
 **Instalador 0.3.8 (06/11/2026):** a 0.3.7 com o que está abaixo. O servidor mudou (`viewer-bandwidth` e a estimativa inicial de 6 Mbps); com um servidor antigo a live funciona como antes, sem o limite.
 
 **Entre a 0.3.7 e a 0.3.8 (06/11/2026):**

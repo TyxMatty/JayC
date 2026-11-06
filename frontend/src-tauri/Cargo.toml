@@ -1,6 +1,6 @@
 [package]
 name = "jay-c"
-version = "0.3.8"
+version = "0.3.9"
 description = "Jay-C — lightweight calls and screen sharing"
 authors = ["TyxMatty"]
 license = "MIT"

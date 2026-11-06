@@ -1,6 +1,6 @@
 {
   "name": "signaling-server",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "private": true,
   "description": "Jay-C WebRTC signaling server (WebSocket relay for SDP and ICE)",
   "license": "MIT",

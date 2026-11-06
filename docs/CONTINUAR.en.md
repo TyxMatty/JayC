@@ -134,6 +134,18 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**Installer 0.3.9 (06/11/2026):** 0.3.8 with what's below. The server changed only inside (the bandwidth report); the protocol is the same, and a 0.3.8 server works the same.
+
+**Between 0.3.8 and 0.3.9 (06/11/2026):**
+- **Version in the app:** "Jay-C <version>" in the lobby's bottom-left corner (hidden on windows narrower than 900 px, where it covered the card) and in an "About" section in Settings › Help. The number comes from the frontend's `package.json` (Vite `define`), so it follows each release.
+- **README with images** (PT and EN): a call with a stream up front, four points about the app and the lobby in the three styles (`docs/images/`). Captures of the dev app's window only (`PrintWindow`, without Windows' invisible border), with a test profile and made-up participants.
+- **Security review** (authorization, secrets, uploads): no data leak and no secret in the code or the 123 commits of history. New test: ids from another person or another room are refused and nothing crosses rooms (verified by mutation). The tour's example address, which was the real IP of the user's server on Radmin, is now `192.168.0.10:3000`; the IP is still in old commits.
+- **Code review (0.3.6 → 0.3.8), items fixed, each checked by mutation** (breaking the rule on purpose turns a test red):
+  - `reportViewerBandwidth`: queries each viewer's bandwidth once per round, all at once, and doesn't stack rounds if the media process stalls; unit test with a fake router (`signaling-server/test/sfu-room.test.js`), since mediasoup only estimates with a connected viewer;
+  - deafen: the test now goes through `setTargetAtTime`, the app's path (the test-only `else` is gone);
+  - alert sounds: the rule (on in Settings; while deafened, only our own actions') became `cueAllowed` in `core/sounds.js`, with a test;
+  - taskbar: `descendants` only counts a child process that started after its parent (Windows reuses ids, and a process whose parent died long ago can name an id of ours); a test with data and another with a real child process.
+
 **Installer 0.3.8 (06/11/2026):** 0.3.7 with what's below. The server changed (`viewer-bandwidth` and the 6 Mbps starting estimate); with an old server the live works as before, without the cap.
 
 **Between 0.3.7 and 0.3.8 (06/11/2026):**
