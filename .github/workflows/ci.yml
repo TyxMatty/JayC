@@ -29,6 +29,23 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  docker:
+    name: Server Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The build context is the repository root: the npm workspaces share one lockfile.
+      - run: docker build -f signaling-server/Dockerfile -t jay-c-signaling .
+      - name: The image starts and answers /health
+        run: |
+          docker run -d --name server -p 3000:3000 jay-c-signaling
+          for i in $(seq 30); do
+            if curl -fsS http://localhost:3000/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs server
+          exit 1
+
   rust:
     name: Rust tests (Windows)
     runs-on: windows-latest

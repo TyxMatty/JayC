@@ -86,6 +86,9 @@ npm test           # testes
   - no Ubuntu, `npm ci` e `npm test`;
   - no Windows, `cargo test --lib` do plugin `system-audio` e `cargo test` do app. Antes disso, instala Meson e Ninja para o APM e roda o `vite build`, porque o app embute o `frontend/dist`.
   - Os testes Rust que precisam de tela, Discord ou som ao vivo são `#[ignore]` e não rodam lá.
+  - Também constrói a imagem Docker do servidor (`signaling-server/Dockerfile`, contexto na raiz) e confere que ela sobe e responde no `/health`. A imagem não é publicada: o nome no GHCR é uma decisão em aberto.
+  - O selo "CI" no topo dos READMEs mostra o resultado da última execução na `main`.
+- **Instalador no GitHub** (`.github/workflows/installer.yml`): numa tag `v*` ou à mão pela aba Actions ("Installer › Run workflow"), roda o `npm run build` numa máquina Windows limpa. O `Jay-C_<versão>_x64-setup.exe` fica como artefato da execução. A release continua manual: notas, teste do instalador num PC de teste e upload.
 
 ## 4. Claude Code no PC novo
 

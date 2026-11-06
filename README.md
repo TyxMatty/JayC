@@ -2,6 +2,8 @@
 
 **English** · [Português](README.pt-BR.md)
 
+[![CI](https://github.com/TyxMatty/Jay-C/actions/workflows/ci.yml/badge.svg)](https://github.com/TyxMatty/Jay-C/actions/workflows/ci.yml)
+
 A lightweight, open-source app for calls and screen sharing on desktop and mobile, with a self-hosted signaling server that runs in Docker.
 
 <p align="center"><img src="docs/images/call.png" alt="A Jay-C call: someone's stream up front, the cards of everyone in the room and the control bar" width="820"></p>
