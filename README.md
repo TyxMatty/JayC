@@ -1,72 +1,72 @@
 # Jay-C
 
-**Português** · [English](README.en.md)
+**English** · [Português](README.pt-BR.md)
 
-App leve e open-source de chamadas e compartilhamento de tela para desktop e mobile, com servidor de sinalização self-hosted via Docker.
+A lightweight, open-source app for calls and screen sharing on desktop and mobile, with a self-hosted signaling server that runs in Docker.
 
-<p align="center"><img src="docs/images/call.png" alt="Uma chamada no Jay-C: a live de uma pessoa em destaque, os cards de quem está na sala e a barra de controles" width="820"></p>
+<p align="center"><img src="docs/images/call.png" alt="A Jay-C call: someone's stream up front, the cards of everyone in the room and the control bar" width="820"></p>
 
-- **Voz limpa**, que não abafa o som dos outros apps.
-- **Lives de um jogo, uma janela ou da tela inteira**, com o som, em até 1080p60.
-- **Até 16 pessoas por sala**, com chat e o vídeo em destaque numa janelinha por cima de tudo (PiP).
-- **No seu servidor ou no de um amigo**, sem contas e sem anúncios.
+- **Clear voice** that doesn't muffle your other apps.
+- **Stream a game, a window or the whole screen**, with its sound, up to 1080p60.
+- **Up to 16 people per room**, with chat and the featured video in a small always-on-top window (PiP).
+- **On your server or a friend's**, no accounts and no ads.
 
 <table>
   <tr>
-    <td><img src="docs/images/lobby-calm.png" alt="Tela inicial no estilo Calmo, em roxo"></td>
-    <td><img src="docs/images/lobby-neon.png" alt="Tela inicial no estilo Neon, em ciano"></td>
-    <td><img src="docs/images/lobby-soft.png" alt="Tela inicial no estilo Suave, em laranja"></td>
+    <td><img src="docs/images/lobby-calm.png" alt="Home screen in the Calm style, purple"></td>
+    <td><img src="docs/images/lobby-neon.png" alt="Home screen in the Neon style, cyan"></td>
+    <td><img src="docs/images/lobby-soft.png" alt="Home screen in the Soft style, orange"></td>
   </tr>
-  <tr align="center"><td>Calmo</td><td>Neon</td><td>Suave</td></tr>
+  <tr align="center"><td>Calm</td><td>Neon</td><td>Soft</td></tr>
 </table>
 
-## Baixar
+## Download
 
-O instalador para Windows está nos **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: baixe o `Jay-C_<versão>_x64-setup.exe` da versão mais recente. Ele atualiza uma versão anterior por cima e mantém as configurações. Todas as versões ficam em [releases](https://github.com/TyxMatty/JayC/releases).
+The Windows installer is in the **[releases](https://github.com/TyxMatty/JayC/releases/latest)**: download `Jay-C_<version>_x64-setup.exe` from the latest one. It updates an earlier version in place and keeps your settings. Every version is listed under [releases](https://github.com/TyxMatty/JayC/releases).
 
-## Código
+## Code
 
-| Pasta | Conteúdo |
+| Folder | Contents |
 |---|---|
-| [`signaling-server/`](signaling-server/) | Servidor de sinalização (Node.js + `ws`) e SFU de mídia (mediasoup), com arquivos Docker |
-| [`frontend/`](frontend/) | App Tauri v2 + Vanilla JS (Vite) |
-| [`plugins/tauri-plugin-system-audio/`](plugins/tauri-plugin-system-audio/) | Captura de áudio por processo para as transmissões (Windows) |
-| `plugins/tauri-plugin-pip/` | Plugin de Picture-in-Picture para Android/iOS *(em construção)* |
-| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas e etapas |
-| [`docs/CONTINUAR.md`](docs/CONTINUAR.md) | Instalar num PC novo, estado atual e próximos passos |
-| [`scripts/`](scripts/) | Ferramentas de desenvolvimento: app com depuração, rodar JS no app real, tom de teste |
+| [`signaling-server/`](signaling-server/) | Signaling server (Node.js + `ws`) and media SFU (mediasoup), with Docker files |
+| [`frontend/`](frontend/) | Tauri v2 + vanilla JS app (Vite) |
+| [`plugins/tauri-plugin-system-audio/`](plugins/tauri-plugin-system-audio/) | Per-process audio capture for streams (Windows) |
+| `plugins/tauri-plugin-pip/` | Picture-in-picture plugin for Android/iOS *(work in progress)* |
+| [`docs/ARQUITETURA.en.md`](docs/ARQUITETURA.en.md) | Architecture, technical decisions and milestones |
+| [`docs/CONTINUAR.en.md`](docs/CONTINUAR.en.md) | Setting up a new PC, current state and next steps |
+| [`scripts/`](scripts/) | Development tools: the app with debugging on, running JS in the real app, a test tone |
 
-## Rodando o app
+## Running the app
 
 ```bash
 npm install
 npm run dev
 ```
 
-Esse comando abre a janela do Jay-C (Tauri) com recarregamento automático. Para abrir só a interface no navegador, sem Tauri, use `npm run web`. A primeira compilação do Rust leva alguns minutos.
+This opens the Jay-C window (Tauri) with hot reload. To open only the interface in a browser, without Tauri, use `npm run web`. The first Rust build takes a few minutes.
 
-No Windows, o build também precisa de **Python com Meson e Ninja** (`py -m pip install --user meson ninja`, com a pasta de Scripts do Python no PATH). Eles compilam o processamento de áudio do WebRTC, usado pelo microfone. O primeiro build baixa o abseil-cpp e leva alguns minutos a mais.
+On Windows the build also needs **Python with Meson and Ninja** (`py -m pip install --user meson ninja`, with Python's Scripts folder on the PATH). They build WebRTC's audio processing, used by the microphone. The first build downloads abseil-cpp and takes a few minutes more.
 
-## Rodando o servidor localmente
+## Running the server locally
 
 ```bash
 npm install
 npm run server
 ```
 
-O servidor usa a porta **3000/tcp** para a sinalização (`ws://`) e a **40000** (UDP e TCP) para a mídia. Libere as duas no firewall. O health check fica em `http://localhost:3000/health`.
+The server uses port **3000/tcp** for signaling (`ws://`) and **40000** (UDP and TCP) for media. Open both in the firewall. The health check is at `http://localhost:3000/health`.
 
-## Rodando o servidor com Docker
+## Running the server with Docker
 
-Dentro do repositório, o comando abaixo gera a imagem a partir do código-fonte:
+Inside the repository, this builds the image from source:
 
 ```bash
 docker compose -f signaling-server/docker-compose.yml up -d --build
 ```
 
-Usuários finais só precisam do `docker-compose.yml` numa pasta vazia e de `docker compose up -d`. A imagem é baixada do registry, que ainda vai ser publicado na etapa de release.
+End users only need `docker-compose.yml` in an empty folder and `docker compose up -d`. The image is pulled from the registry, which will be published in the release milestone.
 
-## Testes
+## Tests
 
 ```bash
 npm test
