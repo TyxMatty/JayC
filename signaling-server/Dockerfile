@@ -4,7 +4,9 @@
 #
 # Debian (glibc) rather than Alpine: mediasoup ships a prebuilt glibc worker binary,
 # which avoids compiling the C++ worker (python, meson, g++) inside the image.
-FROM node:24-bookworm-slim
+# Trixie, not bookworm: mediasoup picks the prebuilt by the host's kernel, and the one for
+# kernel 7 (GitHub's runners) needs glibc 2.38 / GLIBCXX_3.4.31; bookworm has 2.36.
+FROM node:24-trixie-slim
 
 ENV NODE_ENV=production \
     PORT=3000 \
