@@ -47,6 +47,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   /** Discord status during calls (Windows, core/discord-presence.js), and whether it names the room. */
   discordPresence: true,
   discordShowRoom: false,
+  /** Short sounds for mute, deafen, joins, leaves, streams and chat (core/sounds.js). */
+  alertSounds: true,
 });
 
 function load() {

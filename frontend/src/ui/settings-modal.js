@@ -611,6 +611,27 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
             ),
           ),
         ),
+        h(
+          'fieldset',
+          {},
+          h('h3', {}, t('Alert sounds')),
+          h(
+            'label',
+            { class: 'toggle-row' },
+            h('input', {
+              type: 'checkbox',
+              role: 'switch',
+              checked: current.alertSounds,
+              onChange: (e) => settings.update({ alertSounds: e.target.checked }),
+            }),
+            h(
+              'span',
+              { class: 'toggle-text' },
+              h('span', { class: 'toggle-title' }, t('Play alert sounds')),
+              h('span', { class: 'hint' }, t('Short sounds when you mute or deafen, when someone joins or leaves, starts a stream, or sends a message while the chat is closed.')),
+            ),
+          ),
+        ),
       ),
     },
     { key: 'streaming', label: tabLabel(icons.screenShare, t('Streaming')), panel: panel(streamingSection) },

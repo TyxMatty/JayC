@@ -97,6 +97,10 @@ export default {
   "Deafen": "Desligar o som da chamada",
   "Undeafen": "Ligar o som da chamada",
   "Call sound": "Som da chamada",
+  "Alert sounds": "Sons de aviso",
+  "Play alert sounds": "Tocar sons de aviso",
+  "Short sounds when you mute or deafen, when someone joins or leaves, starts a stream, or sends a message while the chat is closed.":
+    "Sons curtos quando você desliga o microfone ou o som, quando alguém entra ou sai, começa uma live ou manda mensagem com o chat fechado.",
   "Turn camera off": "Desligar câmera",
   "Turn camera on": "Ligar câmera",
   "Leave call": "Sair da chamada",

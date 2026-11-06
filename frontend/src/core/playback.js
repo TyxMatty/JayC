@@ -4,8 +4,11 @@
 // playing element (see CLAUDE.md), and a muted element is also never blocked by autoplay rules.
 
 import { levelDb } from './mic-shape.js';
+import { playCue } from './sounds.js';
 
 export const MAX_VOLUME = 2;
+/** The alert cues' bus (core/sounds.js): ~-16 dB per note, ~-11 dBFS where two notes overlap. */
+const ALERT_GAIN = 0.15;
 
 /** @typedef {{ volume: number, muted: boolean }} Level */
 
@@ -15,6 +18,8 @@ export function createMixer(makeContext = () => new AudioContext()) {
   /** Every voice and stream goes through this bus: deafen silences it (sounds of our own don't). */
   let voices = null;
   let deafened = false;
+  /** Our own alert cues: straight to the speakers, outside the voices bus. */
+  let alerts = null;
   /** Output device (a deviceId from enumerateDevices; '' = the default). */
   let sinkId = '';
   const applySink = () => context?.setSinkId?.(sinkId).catch((error) => console.warn('[playback] output device', error));
@@ -30,7 +35,27 @@ export function createMixer(makeContext = () => new AudioContext()) {
     entry.gain.gain.value = muted ? 0 : volume;
   };
 
+  /** The audio context and its buses, made on first use. */
+  const ready = () => {
+    if (!context) {
+      context = makeContext();
+      voices = context.createGain();
+      voices.gain.value = deafened ? 0 : 1;
+      voices.connect(context.destination);
+      alerts = context.createGain();
+      alerts.gain.value = ALERT_GAIN;
+      alerts.connect(context.destination);
+      if (sinkId) applySink();
+    }
+    context.resume?.().catch(() => {});
+  };
+
   const mixer = {
+    /** Plays alert cue `name` (core/sounds.js). */
+    cue(name) {
+      ready();
+      playCue(context, alerts, name);
+    },
     /**
      * Plays `track` under `key`, replacing what played there before; null stops it.
      * `listenOnly`: measure its level (levelDb) without playing it, e.g. our own mic.
@@ -39,14 +64,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
       if (playing.get(key)?.track === track) return;
       mixer.stop(key);
       if (!track) return;
-      if (!context) {
-        context = makeContext();
-        voices = context.createGain();
-        voices.gain.value = deafened ? 0 : 1;
-        voices.connect(context.destination);
-        if (sinkId) applySink();
-      }
-      context.resume?.().catch(() => {});
+      ready();
       const source = context.createMediaStreamSource(new MediaStream([track]));
       const gain = context.createGain();
       // Measured before the gain: muting someone for us still shows when they speak.
@@ -101,6 +119,7 @@ export function createMixer(makeContext = () => new AudioContext()) {
       context?.close().catch(() => {});
       context = null;
       voices = null;
+      alerts = null;
     },
   };
   return mixer;

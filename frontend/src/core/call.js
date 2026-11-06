@@ -144,6 +144,11 @@ export class Call extends EventTarget {
   /** Whether the mic was on when we deafened: undeafening turns it back on. */
   #micBeforeDeafen = false;
 
+  /** Left (or ended): nothing more happens in this call. */
+  get ended() {
+    return this.#ended;
+  }
+
   get micOn() {
     return Boolean(this.local.audio) && !this.#micMuted;
   }

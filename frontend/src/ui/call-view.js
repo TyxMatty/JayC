@@ -237,6 +237,10 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
   const toast = h('div', { class: 'call-toast', role: 'status', 'aria-live': 'polite', hidden: true });
   // Each voice and stream sound has its own volume and mute, just for us (right-click a tile).
   const mixer = createMixer();
+  // Alert cues (core/sounds.js), if on in Settings: ours always, the others' not while deafened.
+  const cue = (name, { others = false } = {}) => {
+    if (settings.get().alertSounds && !(others && call.deafened)) mixer.cue(name);
+  };
   mixer.setSink(settings.get().outputDevice);
   const unsubscribeOutput = settings.subscribe((next, prev) => {
     if (next.outputDevice !== prev.outputDevice) mixer.setSink(next.outputDevice);
@@ -410,6 +414,7 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     if (participant.media.screen && !sharing.has(participant.id)) {
       sharing.add(participant.id);
       showToast(t('{name} started a stream.', { name: participant.name }));
+      cue('stream', { others: true });
     } else if (!participant.media.screen) {
       sharing.delete(participant.id);
     }
@@ -478,7 +483,10 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
       );
       tiles.set(participant.id, tile);
       cameras.insertBefore(tile.el, localTile.el);
-      if (announce) showToast(t('{name} joined.', { name: participant.name }));
+      if (announce) {
+        showToast(t('{name} joined.', { name: participant.name }));
+        cue('join', { others: true });
+      }
       layout();
     }
     tile.setName(participant.name);
@@ -536,10 +544,12 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     tile.el.remove();
     tiles.delete(participant.id);
     showToast(t('{name} left.', { name: participant.name }));
+    if (!call.ended) cue('leave', { others: true }); // not for everyone at once when we leave
     layout();
   });
   // People already in the room when we joined (their events fired before this view existed).
   for (const participant of call.participants.values()) renderParticipant(participant, { announce: false });
+  cue('join'); // we're in
 
   call.addEventListener('notice', (e) => showToast(e.detail.message));
 
@@ -558,7 +568,10 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
 
   const chat = createChatPanel({
     send: (text) => call.sendChat(text, displayName),
-    onIncoming: ({ name, text }) => showToast(`${name || t('Guest')}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}`),
+    onIncoming: ({ name, text }) => {
+      showToast(`${name || t('Guest')}: ${text.length > 80 ? `${text.slice(0, 80)}…` : text}`);
+      cue('chat', { others: true });
+    },
   });
   // Each message with the sender's picture and profile color, as on their tile.
   call.addEventListener('chat', (e) => {
@@ -579,7 +592,13 @@ export function createCallView(call, { displayName, onLeft, openSettings }) {
     ? h('button', { type: 'button', class: 'control-btn', popovertarget: 'share-panel', html: icons.screenShare })
     : null;
 
+  // What the mic and deafen showed last, to cue only on a change (the first render is silent).
+  let shownAudio = null;
   const renderControls = () => {
+    if (shownAudio && call.deafened !== shownAudio.deafened) cue(call.deafened ? 'deafen' : 'undeafen');
+    else if (shownAudio && call.micOn !== shownAudio.micOn) cue(call.micOn ? 'mic-on' : 'mic-off');
+    shownAudio = { deafened: call.deafened, micOn: call.micOn };
+
     micButton.innerHTML = call.micOn ? icons.mic : icons.micOff;
     micButton.setAttribute('aria-pressed', String(!call.micOn));
     micButton.setAttribute('aria-label', call.micOn ? t('Mute microphone') : t('Unmute microphone'));

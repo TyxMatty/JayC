@@ -74,7 +74,7 @@ test('deafen silences every voice and stream, before or after they start, and co
   const mixer = createMixer(() => context);
   mixer.setDeafened(true); // before anything plays: no context yet
   mixer.play('ana:voice', { id: 't1' });
-  const [bus, voice] = gains;
+  const [bus, , voice] = gains; // the second is the alert bus
   assert.equal(bus.connected[0], context.destination, 'the bus goes to the speakers');
   assert.equal(voice.connected[0], bus, 'a voice goes through the bus');
   assert.equal(bus.gain.value, 0);
@@ -82,4 +82,28 @@ test('deafen silences every voice and stream, before or after they start, and co
   assert.equal(voice.gain.value, 1.5, "her own volume isn't touched");
   mixer.setDeafened(false);
   assert.equal(bus.gain.value, 1);
+});
+
+test('alert cues go straight to the speakers, so deafen leaves them alone', () => {
+  const context = fakeContext();
+  const gains = [];
+  const realGain = context.createGain.bind(context);
+  const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
+  context.createGain = () => (gains.push({ ...realGain(), gain: param() }), gains.at(-1));
+  const oscillators = [];
+  context.currentTime = 0;
+  context.createOscillator = () => {
+    const osc = { connected: [], connect(n) { this.connected.push(n); return n; }, frequency: { value: 0 }, start() {}, stop() {} };
+    oscillators.push(osc);
+    return osc;
+  };
+  const mixer = createMixer(() => context);
+  mixer.setDeafened(true);
+  mixer.cue('mic-off');
+  const [voices, alerts] = gains;
+  assert.equal(alerts.connected[0], context.destination);
+  assert.equal(oscillators.length, 2, 'two notes');
+  for (const osc of oscillators) assert.equal(osc.connected[0].connected[0], alerts, 'note -> envelope -> alert bus');
+  assert.equal(voices.gain.value, 0, 'deafened voices');
+  assert.ok(alerts.gain.value > 0.1 && alerts.gain.value < 0.2, 'the alert bus sits well below the voices');
 });
