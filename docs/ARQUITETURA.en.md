@@ -482,3 +482,7 @@ Plugins were left for after the release. Plugins without isolation on the client
 **Profile picture** (`core/avatar.js`, Settings › General):
 - **Crop and format:** the chosen image is cropped to the central square and shrunk to 128 px as WebP, lowering the quality if it goes over 32,000 characters. On WebKit, which can't encode WebP, it becomes JPEG. Measured: a 1600×900 photo came out at 1,783 characters.
 - **In the call:** the picture shows instead of the initials when the camera is off. A change during the call reaches the others through `profile`/`peer-updated`. On a reconnect, `join` carries the current picture.
+
+### Jay-A integration (user's request, after 0.4.0)
+
+Jay-A is the Jay line's audio app and lives in another repository. In a call, it can replace Jay-C's microphone filter, like Krisp in Discord. The person picks the filter, Jay-A or Jay-C, and Jay-C's filter keeps running alongside as a fallback in case Jay-A goes down. The plan, with the diagrams, what Jay-C asks of Jay-A and milestones I0–I7, is in [JAY-A.md](JAY-A.md) (Portuguese only for now).
