@@ -160,7 +160,7 @@ O Jay-C não confere qual executável é o servidor, pelo mesmo motivo do Jay-A:
 
 ## 8. O que o Jay-C pede ao Jay-A
 
-Estes pontos precisam entrar no `ARQUITETURA.md` do Jay-A:
+Pedidos feitos ao `ARQUITETURA.md` do Jay-A. O Jay-A aceitou os pedidos P1–P6, que já estão no documento dele (commit `0f51ea8` do repositório Jay-A). O P7 foi retirado.
 
 | # | Pedido | Por quê |
 |---|---|---|
@@ -170,7 +170,7 @@ Estes pontos precisam entrar no `ARQUITETURA.md` do Jay-A:
 | P4 | `CONTROL state` com o id do endpoint do microfone (`deviceId`, o mesmo id que o `list_mics` do Jay-C usa), além do nome. | Para a reserva usar o mesmo microfone que o Jay-A. |
 | P5 | Instalação por usuário em `%LOCALAPPDATA%\Jay-A\jay-a.exe` (NSIS `currentUser`, como o Jay-C) e o argumento `--background`, que abre só na bandeja, sem janela. | É onde o Jay-C procura o Jay-A, tanto para mostrar "não instalado" quanto para iniciá-lo. |
 | P6 | Os "Estados no Jay-C" da seção 6 do Jay-A passam a ser os da seção 4 deste documento. Na seção 10, `start_link_mic`/`stop_link_mic` viram `start_mic({ filter: "jay-a" })`. | É a reserva quente, que não troca de faixa. |
-| P7 | O `MAX_QUEUED_CHUNKS` citado na seção 5 do Jay-A não existe no Jay-C. O limite de fila do Jay-C é o do worklet (`pcm-player.worklet.js`): começa a tocar com ~60 ms e descarta o que passar de 250 ms. | Correção. |
+| P7 | Retirado. O pedido dizia que o `MAX_QUEUED_CHUNKS` não existia no Jay-C, mas ele existe: `plugins/tauri-plugin-system-audio/src/win.rs`, 5 blocos. É a fila das capturas por loopback, que volta a 40 ms quando passa do limite. O Jay-A usa essa fila como modelo para a fila do link. No caminho até o WebRTC, quem limita é o `pcm-player.worklet.js`. | O erro foi do Jay-C. |
 
 ## 9. Testes e medições
 
@@ -201,7 +201,7 @@ Cada etapa termina com algo testável.
 
 | # | Etapa | Pronto quando | Depende do Jay-A |
 |---|---|---|---|
-| I0 ✅ | Este plano e os pedidos P1–P7 | os dois documentos descrevem o mesmo Jay Link | — |
+| I0 ✅ | Este plano e os pedidos ao Jay-A | os dois documentos descrevem o mesmo Jay Link: P1–P6 aceitos (`0f51ea8` do Jay-A), P7 retirado | — |
 | I1 | `link.rs`, seletor, Jay-A falso e `jay_a_probe` | T1–T6 passam | não |
 | I2 | Modo Jay-A no `Mic` (reserva quente) e estados até o JS | no app, com o falso, o bot ouve o tom; ao matar o falso, ele passa a ouvir o microfone; o maior buraco e a CPU da reserva estão medidos | não |
 | I3 | Interface (seção 6) | trocar entre Jay-A e Jay-C durante a chamada funciona; `npm test` e a auditoria de contraste passam | não |
