@@ -58,6 +58,11 @@ pub struct Sender {
     dtls_up: bool,
     ice_up: bool,
     buf: Vec<u8>,
+    /// Frame bytes handed to str0m since its last stats, the bytes it reports sent in total, and
+    /// what's left in its send queue (see `queued_bytes`).
+    written: u64,
+    sent: u64,
+    queued: u64,
 }
 
 impl Sender {
@@ -71,7 +76,7 @@ impl Sender {
         let mut config = RtcConfig::new()
             .clear_codecs()
             .enable_bwe(Some(Bitrate::kbps(start_kbps)))
-            .set_stats_interval(Some(Duration::from_millis(500)));
+            .set_stats_interval(Some(Duration::from_millis(100))); // the send queue's pace (`queued_bytes`)
         config.codec_config().add_h264(PT.into(), Some(RTX_PT.into()), true, 0x640032);
         let mut rtc = config.build(Instant::now());
         rtc.add_local_candidate(Candidate::host(local, "udp")?);
@@ -91,7 +96,7 @@ impl Sender {
         rtc.bwe().set_bitrate(Bitrate::kbps(300), Bitrate::kbps(max_kbps));
 
         Ok((
-            Self { rtc, socket, local, mid, sps_pps: Vec::new(), dtls_up: false, ice_up: false, buf: vec![0; 2000] },
+            Self { rtc, socket, local, mid, sps_pps: Vec::new(), dtls_up: false, ice_up: false, buf: vec![0; 2000], written: 0, sent: 0, queued: 0 },
             Local { fingerprint, ssrc: *ssrc, rtx_ssrc: *rtx_ssrc },
         ))
     }
@@ -99,6 +104,13 @@ impl Sender {
     /// Tells the estimator how high to probe (the quality picked in Settings).
     pub fn set_max_kbps(&mut self, max_kbps: u64) {
         self.rtc.bwe().set_bitrate(Bitrate::kbps(300), Bitrate::kbps(max_kbps));
+    }
+
+    /// Frame bytes written but not sent yet, as of str0m's last stats (every 100 ms): its pacer's
+    /// queue. Kept as a running sum that never goes below 0, so the few bytes the RTP packaging
+    /// adds or the resends (str0m counts both as sent) don't pile up over a long live.
+    pub fn queued_bytes(&self) -> u64 {
+        self.queued
     }
 
     /// Runs the network side without waiting: sends what str0m has queued, reads what has arrived,
@@ -140,6 +152,9 @@ impl Sender {
                             if let Some(loss) = stats.loss {
                                 signals.loss = Some(loss);
                             }
+                            let sent = stats.bytes.saturating_sub(self.sent);
+                            self.sent = stats.bytes;
+                            self.queued = (self.queued + std::mem::take(&mut self.written)).saturating_sub(sent);
                         }
                         _ => {}
                     },
@@ -186,7 +201,9 @@ impl Sender {
         }
         // No writer once the server has closed the connection (e.g. the call ended).
         let writer = self.rtc.writer(self.mid).ok_or("lost the connection to the server")?;
+        let len = frame.len() as u64;
         writer.write(Pt::from(PT), Instant::now(), MediaTime::from_90khz(rtp_time_90k), frame)?;
+        self.written += len;
         Ok(())
     }
 }

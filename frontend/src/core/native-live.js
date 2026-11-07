@@ -124,12 +124,21 @@ export function watchNativeLive(canvas, onFrame = () => {}) {
 /** A JPEG (Blob, 384 px wide) of what the running native share sends: its last frame. */
 export const livePreview = async () => new Blob([await invoke('native_live_preview')], { type: 'image/jpeg' });
 
-/** The quality picked in Settings › Streaming, as the top of Rust's quality ladder. */
-export function nativeQuality({ resolution, fps }, screen = window.screen, ratio = window.devicePixelRatio || 1) {
+/**
+ * The quality picked in Settings › Streaming, as the top of Rust's quality ladder. `motion`: when
+ * the bandwidth falls short, give up resolution before frame rate (detail, the default, keeps the
+ * resolution so text stays readable).
+ */
+export function nativeQuality({ resolution, fps, optimizeFor }, screen = window.screen, ratio = window.devicePixelRatio || 1) {
   const screenHeight = Math.round(screen.height * ratio);
   const height = Math.min(targetHeight(resolution) ?? screenHeight, screenHeight);
   const width = Math.round((height * screen.width) / screen.height);
-  return { maxHeight: targetHeight(resolution), maxFps: fps, maxKbps: Math.round(streamBitrate(width, height, fps) / 1000) };
+  return {
+    maxHeight: targetHeight(resolution),
+    maxFps: fps,
+    maxKbps: Math.round(streamBitrate(width, height, fps) / 1000),
+    motion: optimizeFor === 'motion',
+  };
 }
 
 /** The producer as the server must see it: what str0m sends (H.264 High + RTX, TWCC, mid). */

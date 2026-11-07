@@ -226,3 +226,86 @@ Vale seguir com WebRTC nativo na porta 40000:
 - **Banda:** numa rede estreita, ela baixa resolução e quadros/s em segundos, quase sem perder pacotes, e volta sozinha.
 
 Integrada ao app em 05/11/2026 (ver "No app"), com o seletor próprio (ver "Seletor próprio"). O teste de quem assiste fica para um segundo PC.
+
+## Engasgos, texto ilegível e a escada (07/11/2026)
+
+**Relato:** "as lives continuam tendo um gargalo enorme", texto quase ilegível durante a live (print de um jogo, do lado de quem assiste) e o som um pouco atrasado. Servidor remoto, pelo Radmin VPN.
+
+**O log do app instalado** (live de um jogo numa janela de 1906×1073, 60 quadros/s escolhidos):
+- a live pulava entre 720p30 (1,2–2,5 Mbps) e 1080p60 (3,5–7,5 Mbps), voltando 1–4 s depois de cada subida;
+- três vezes, "WebRTC: lost the connection to the server" logo depois de uma troca, e a live recomeçou.
+
+### Reprodução
+
+- **Montagem:** app de dev; uma janela de teste de 1920×1080 com 60% em movimento e um HUD de texto pequeno; quem assiste num Chrome sem janela; um limitador de UDP de 4 Mbps com fila de 200 ms (`scripts/udp-shaper.mjs`).
+- **Cenário 1, upload de quem transmite em 4 Mbps:**
+  - a live repetiu o padrão do log: 720p30 → 1080p60 → 720p30, e depois ficou presa em 720p30;
+  - **em 1080p60, o atraso foi de ~0,2 s para 1,5–1,7 s**, com perdas e pausas de 1,1 e 1,4 s;
+  - **quem prendeu a live em 720p30:** o teto do espectador (70% da estimativa do mediasoup), com o espectador sem limite nenhum. O log dizia `budget 2351 (estimate 2999, viewers 2351…)`;
+  - **o texto:** em 1080p60 a ~3,5 Mbps o HUD ficou quase ilegível, pior que em 720p30 a 2,5 Mbps (3× menos bits por pixel).
+
+### As causas, medidas uma a uma
+
+1. **Quadros-chave enormes.** Medido no codificador da NVIDIA, fora do app, a 1080p30 e 3 Mbps: cada quadro-chave do GOP de 4 s tinha 300–500 KB, 57–95× um quadro comum (5,3 KB), ou 1–1,3 s do link inteiro. A cada 4 s, uma rajada que enchia a fila do roteador e derrubava a estimativa de banda.
+2. **A fila do str0m.** Ele envia a 1,1× a estimativa e só esvazia a fila à força depois de 2 s. Quando o codificador produz mais do que isso, o atraso cresce até ~2 s (os 1,5 s medidos).
+3. **A thread da live esperando CPU.** Com o PC ocupado e a thread na prioridade normal, o `sleep` de 1 ms durou até 27 ms (p99) e 97 ms (máx.). Registrada no MMCSS ("Capture"), no máximo 2 ms. Um jogo na frente piora isso.
+4. **Um codificador novo a cada degrau:** 67–290 ms com a thread parada, e um quadro-chave novo.
+
+**O codificador, medido fora do app** (NVIDIA, 1080p30, 3 Mbps; um programa à parte com uma cópia do `encoder.rs`, alimentado com uma imagem parecida com a da janela de teste):
+
+| Ajuste | Quadro-chave | Corte de cena | kbps por segundo |
+|---|---|---|---|
+| antes (GOP de 4 s, buffer padrão) | 303–503 KB | — | 1,5–5,4 Mbps |
+| sem GOP periódico | 303 KB (só o primeiro e os pedidos) | 203–440 KB | 1,6–5,0 |
+| sem GOP + buffer de 100 ms | 228 KB | 172–226 KB | 2,3–3,6 |
+| **sem GOP + buffer de 50 ms** | **96–122 KB** | **116–145 KB** | **2,1–3,1** |
+| sem GOP + buffer de 33 ms | 91–112 KB | — | o codificador travou |
+
+- O refresh gradual (`AVEncVideoGradualIntraRefresh`) não existe no codificador da NVIDIA ("Parâmetro incorreto"). O piso de QP não mudou o tamanho do quadro-chave.
+- Com buffer menor que 1,5 quadro, o codificador não chega no bitrate (15 quadros/s com 50 ms: 2,0–2,45 Mbps para 3).
+- Um codificador de 30 quadros/s alimentado com 15 entrega ~0,43× o bitrate: ele divide o bitrate pelos quadros configurados. Trocar os quadros/s sem recriar o codificador exigiria compensar isso; ficou de fora.
+- Mudar o bitrate com o codificador rodando funciona (3000 → 1500 kbps: de ~2,6 para ~1,2–1,4 Mbps).
+
+### O que mudou (`src-tauri/src/native_live`)
+
+- **Codificador:** quadro-chave só quando pedido (um PLI de quem assiste, o servidor quando alguém começa a assistir, um codificador novo). O buffer do controle de taxa fica em 50 ms do bitrate, ou 1,5 quadro se for mais, e acompanha o bitrate.
+- **Escada (`ladder.rs`):** os degraus saem da qualidade escolhida e do "Otimizar para":
+
+  | Otimizar para | Degraus (com 1080p60 escolhido) |
+  |---|---|
+  | Texto (padrão) | 1080p60 → 1080p30 → 1080p15 → 720p15 → 540p10 → 360p10 |
+  | Movimento | 1080p60 → 720p60 → 720p30 → 540p30 → 360p30 → 360p15 |
+
+  - **Mínimo de cada degrau:** 0,04 bit/pixel/quadro. Os quadros acima de 30/s contam pela metade, como no `media.js`.
+  - **Teto de cada degrau:** chega a 30% acima do mínimo do degrau de cima. Assim, antes de subir, a live já envia o que o degrau de cima precisa: a subida muda o tamanho da imagem, não o bitrate.
+  - **Descer:** depois de 2 s abaixo do mínimo, ou na hora abaixo de 80% dele.
+  - **Subir:** um degrau por vez, depois de 3 s com 30% de folga. Cada descida dobra essa espera (×4 se a subida não durou 20 s), até 2 min; um minuto sem descer a corta pela metade. No log real, o teto de 30 s ainda dava um engasgo a cada 30 s.
+- **Fila de envio:** medida como os bytes entregues ao str0m menos os que ele diz ter enviado.
+  - De 40 a 120 ms de fila, o codificador recebe menos bitrate (até a metade).
+  - Acima de 150 ms, um quadro a cada dois fica de fora; acima de 300 ms, todos. Isso vale até a fila voltar a 80 ms. Pular todos de uma vez dava uma pausa de ~230 ms a cada ~10 s.
+  - Se isso dura (cerca de 1/5 do tempo) com o orçamento dizendo que o degrau cabe, desce um degrau.
+- **Quem assiste:** o limite é 70% da mediana das 3 últimas leituras do servidor (a cada 2 s), seguindo para baixo na hora e subindo no máximo 15% por leitura. Com ninguém assistindo, a live fica em 2 Mbps, e o primeiro espectador começa daí. A estimativa do mediasoup não é a capacidade:
+  - **parada:** fica no mesmo valor enquanto a live envia menos (3954 kbps por 40 s);
+  - **acima do link:** sobe 15–30% acima do link antes de cair (4,6–5,2 Mbps num link de 4). Com 85% dela, a live perdeu até 722 pacotes em 5 s e passou 33 s de 170 em pausa;
+  - **leitura falsa:** uma vez leu 100 kbps para quem tinha acabado de entrar.
+- **A thread da live** fica registrada no MMCSS ("Capture").
+- **Para diagnóstico:**
+  - A linha de troca de degrau no log diz o que segurou o orçamento (`estimate`, `viewers`, `loss limit`) e quanto levou para criar o codificador.
+  - O `call.screenStats()` ganhou `budgetKbps`, `skippedFps`, `queueMs`, `loopMaxMs` e `frameGapMaxMs`.
+
+### Medido depois (mesma montagem, ~160 s cada)
+
+| Cenário | Antes | Depois |
+|---|---|---|
+| Upload de 4 Mbps | 720p30 ↔ 1080p60, presa em 720p30; atraso até 1,7 s; pausas de 1,1–1,4 s | 1080p30 o tempo todo (3,8 Mbps); 0 pacotes perdidos para o app; atraso mediano 167 ms, máx. 422; 4 pausas de 200–270 ms (pacotes descartados no limitador e reenviados) |
+| Quem assiste num link de 4 Mbps | 720p30 depois de ~8 s engasgando (commit `ef26b76`) | 1080p15 o tempo todo; 2 tentativas de subir que não seguraram (167 pacotes perdidos no total, pausas de até 0,44 s); atraso mediano 156 ms |
+| Sem limite | 1080p60, 37–58 quadros/s | 1080p60 em ~40 s e dali até o fim; 51 quadros/s; 0 perdas; atraso de 66 ms (máx. 84) |
+
+O texto do HUD em 1080p30 a ~3,7 Mbps ficou legível linha a linha, onde o 1080p60 a ~3,5 Mbps de antes era um borrão.
+
+**Limites:**
+- **Rede:** um limitador no mesmo PC, com fila de 200 ms. A rede real do relato (Radmin VPN) não foi medida, e o motivo das quedas da sinalização no log não foi achado.
+- **Codificador:** só a NVIDIA foi medida.
+- **Troca de degrau:** cada uma ainda cria um codificador (67–290 ms, mais um quadro-chave).
+- **Espectador num link lento:** ele ainda tenta subir de vez em quando, e a espera cresce a cada tentativa que falha.
+- **O som atrasado** é a próxima etapa.

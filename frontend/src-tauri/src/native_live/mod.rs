@@ -28,19 +28,47 @@ use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::IDXGIDevice;
 use windows::Win32::Media::MediaFoundation::{MFShutdown, MFStartup, MFSTARTUP_FULL, MF_VERSION};
+use windows::Win32::System::Threading::{AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW};
 use windows::Win32::System::WinRT::Direct3D11::{CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess};
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 
 use encoder::Encoder;
-use ladder::{loss_limit, Ladder, TIERS};
+use ladder::{loss_limit, step_size, steps, Ladder, Step};
 use sources::{Kind, SourceId};
 
 /// The encoder spends this share of the bandwidth estimate (the rest: RTX, RTCP, headroom).
 const BUDGET_SHARE: f64 = 0.85;
-/// Share of the slowest viewer's bandwidth (as the server estimates it) the video may use. Lower
-/// than BUDGET_SHARE: that estimate runs above a link that isn't losing yet, and at 85% the live
-/// stepped up to 1080p60 on a 4 Mbps viewer and its keyframe flooded the link (7 s without picture).
+/// The slowest viewer's bandwidth as the server estimates it towards them (a report every 2 s),
+/// read every VIEWER_EVERY: the live keeps under VIEWER_SHARE of the median of the last 3 reads
+/// (the higher one of 2), following it down at once and up by VIEWER_RISE per read at most. That
+/// estimate is no capacity (measured): it stays put while the live sends less (3954 kbps for 40 s),
+/// creeps 15-30% above the link before falling back (4.6-5.2 Mbps on a 4 Mbps one: at 85% that
+/// lost up to 722 packets in 5 s and froze 33 s out of 170), and once read 100 kbps for a viewer
+/// who had just joined. So 70%: on a fast link the live may stay a step lower than it could, which
+/// the detail steps take out of the frame rate, not the resolution.
 const VIEWER_SHARE: f64 = 0.7;
+const VIEWER_RISE: f64 = 0.15;
+const VIEWER_EVERY: Duration = Duration::from_secs(2);
+/// Nobody watching (or no estimate yet): no need to fill the uplink. A first viewer starts from
+/// here instead of from 1080p60 at 7.5 Mbps, which froze a 4 Mbps viewer for 8.8 s (measured).
+const IDLE_KBPS: u32 = 2000;
+/// The send queue: written to str0m, not yet out on the network. str0m sends at 1.1x its estimate
+/// and only forces the queue out past 2 s: when the encoder made more than that (1080p60 of a busy
+/// picture on a 4 Mbps uplink, measured), the delay grew to 1.5 s and the picture froze for 1.4 s.
+/// - From PUSHBACK_FROM_MS the encoder gets less bitrate, down to half at PUSHBACK_FULL_MS.
+/// - Above QUEUE_DROP_MS every other frame is left out, and above twice that all of them, until
+///   the queue is back under QUEUE_RESUME_MS. Leaving out every frame at 150 ms meant a ~230 ms
+///   hitch each time (every ~10 s with the estimate swinging around a 4 Mbps link, measured).
+const PUSHBACK_FROM_MS: u64 = 40;
+const PUSHBACK_FULL_MS: u64 = 120;
+const QUEUE_DROP_MS: u64 = 150;
+const QUEUE_RESUME_MS: u64 = 80;
+/// Skipping frames about a fifth of the time (decayed over ~3 s) while the budget says the step
+/// fits means the encoder makes more than it's asked for: one step down. Not in the first seconds
+/// of a step, while its first keyframe is still going out.
+const SKIP_DECAY: f64 = 3.0;
+const SKIP_STEP_DOWN: f64 = 0.6;
+const SKIP_SETTLE: Duration = Duration::from_secs(3);
 /// Forced keyframes at most this often: under congestion every PLI's keyframe makes it worse.
 const KEYFRAME_GAP: Duration = Duration::from_secs(1);
 const START_KBPS: u32 = 1500;
@@ -65,7 +93,8 @@ struct Taps {
     watcher: Arc<Mutex<Option<Channel<InvokeResponseBody>>>>,
     /// A new watcher's decoder needs a keyframe to start.
     keyframe: Arc<AtomicBool>,
-    /// The slowest viewer's bandwidth (kbps) as the server sees it; 0 = no limit.
+    /// The slowest viewer's bandwidth (kbps) as the server sees it; 0 = nobody watching, u32::MAX =
+    /// no report yet.
     viewer_kbps: Arc<AtomicU32>,
 }
 
@@ -91,6 +120,9 @@ pub struct Quality {
     pub max_height: Option<u32>,
     pub max_fps: u32,
     pub max_kbps: u32,
+    /// "Optimize for: motion": give up resolution before frame rate (the default is detail: text).
+    #[serde(default)]
+    pub motion: bool,
 }
 
 /// The server's `createTransport` answer, trimmed to what the sender needs.
@@ -118,8 +150,23 @@ pub struct LocalParams {
 pub enum LiveEvent {
     Connected,
     Step { width: u32, height: u32, fps: u32 },
-    /// Every 2 s: what the capture delivered and what went out (call.screenStats()).
-    Stats { captured_fps: f64, encoded_fps: f64, kbps: u32, estimate_kbps: u32, width: u32, height: u32, fps: u32 },
+    /// Every 2 s: what the capture delivered and what went out (call.screenStats()). `skipped_fps`:
+    /// frames left out while the send queue was too long (`queue_ms`); `loop_max_ms`: the longest
+    /// pass of the send loop; `frame_gap_max_ms`: the longest wait between sent frames.
+    Stats {
+        captured_fps: f64,
+        encoded_fps: f64,
+        skipped_fps: f64,
+        queue_ms: u32,
+        kbps: u32,
+        estimate_kbps: u32,
+        budget_kbps: u32,
+        width: u32,
+        height: u32,
+        fps: u32,
+        loop_max_ms: u32,
+        frame_gap_max_ms: u32,
+    },
     /// The share ended on its own (`error`), or after `native_live_stop` (no error).
     Ended { error: Option<String> },
 }
@@ -159,7 +206,7 @@ pub async fn native_live_start(source: SourceId, remote: RemoteArgs, quality: Qu
     stop_running();
     let stop = Arc::new(AtomicBool::new(false));
     let shared = Arc::new(Mutex::new(quality));
-    let taps = Taps::default();
+    let taps = Taps { viewer_kbps: Arc::new(AtomicU32::new(u32::MAX)), ..Default::default() };
     let (ready_tx, ready_rx) = mpsc::channel();
     let thread = std::thread::Builder::new()
         .name("native-live".into())
@@ -260,20 +307,9 @@ pub fn native_live_set_quality(quality: Quality) {
     }
 }
 
-/// Output size for a height: same aspect as the capture, never above it, even.
-fn step_size(capture: (u32, u32), height: u32) -> (u32, u32) {
-    let h = height.min(capture.1);
-    let w = (capture.0 as u64 * h as u64 / capture.1 as u64) as u32;
-    (w & !1, h & !1)
-}
-
-/// Size, fps and bitrate cap of a ladder step under the picked quality (the top step is the pick).
-fn step(tier: usize, q: &Quality, capture: (u32, u32)) -> (u32, u32, u32, u32) {
-    let top = q.max_height.unwrap_or(capture.1);
-    let height = if tier == 0 { top } else { TIERS[tier].height.min(top) };
-    let fps = if tier == 0 { q.max_fps } else { TIERS[tier].fps.min(q.max_fps) };
-    let (w, h) = step_size(capture, height);
-    (w, h, fps.max(1), TIERS[tier].max_kbps.min(q.max_kbps))
+/// The quality ladder for the picked quality (its top step) and capture size.
+fn ladder_steps(q: &Quality, capture: (u32, u32)) -> Vec<Step> {
+    steps(q.max_height.unwrap_or(capture.1), q.max_fps.max(1), q.max_kbps, capture, !q.motion)
 }
 
 /// Error text for a failed Windows call, naming the part that failed.
@@ -324,6 +360,14 @@ unsafe fn run(
 ) -> Result<(), String> {
     RoInitialize(RO_INIT_MULTITHREADED).map_err(err("WinRT"))?;
     MFStartup(MF_VERSION, MFSTARTUP_FULL).map_err(err("Media Foundation"))?;
+    // The loop below wakes every ~1 ms. At normal priority a busy PC kept it waiting: 1 ms sleeps
+    // took up to 27 ms (p99) and 97 ms (max) with this PC busy, measured; registered with MMCSS
+    // ("Capture"), 2 ms at most. A game in front makes it worse.
+    let mut task = 0u32;
+    let mmcss = AvSetMmThreadCharacteristicsW(windows::core::w!("Capture"), &mut task);
+    if let Err(e) = &mmcss {
+        log::warn!("native live: MMCSS: {e}");
+    }
     let result = (|| {
         let (device, winrt_device) = create_device()?;
         let item = sources::capture_item(source)?;
@@ -336,15 +380,17 @@ unsafe fn run(
 
         let mut quality = *shared.lock().unwrap();
         let mut budget = (START_KBPS as f64 * BUDGET_SHARE) as u32;
-        let mut ladder = Ladder::new(budget);
-        let make = |tier: usize, q: &Quality, budget: u32, capture: (u32, u32)| {
-            let (w, h, fps, cap) = step(tier, q, capture);
-            log::info!("native live: encoder {}x{} -> {w}x{h}@{fps}, {} kbps", capture.0, capture.1, budget.min(cap));
-            let enc = Encoder::new(&device, capture, w, h, fps, budget.min(cap)).map_err(err("H.264 encoder"))?;
-            let _ = events.send(LiveEvent::Step { width: w, height: h, fps });
+        let mut ladder = Ladder::new(ladder_steps(&quality, capture), budget, Instant::now());
+        let make = |s: Step, budget: u32, capture: (u32, u32)| {
+            let (w, h) = step_size(capture, s.height);
+            let kbps = budget.min(s.max_kbps);
+            let began = Instant::now();
+            let enc = Encoder::new(&device, capture, w, h, s.fps, kbps).map_err(err("H.264 encoder"))?;
+            log::info!("native live: encoder {}x{} -> {w}x{h}@{}, {kbps} kbps ({} ms)", capture.0, capture.1, s.fps, began.elapsed().as_millis());
+            let _ = events.send(LiveEvent::Step { width: w, height: h, fps: s.fps });
             Ok::<_, String>(enc)
         };
-        let mut enc = make(ladder.tier, &quality, budget, capture)?;
+        let mut enc = make(ladder.step(), budget, capture)?;
         log::info!("native live: {} {}x{} -> {}x{}@{}", enc.name, capture.0, capture.1, enc.width, enc.height, enc.fps);
 
         let addr = format!("{}:{}", remote.ip, remote.port).parse().map_err(|e| format!("server address: {e}"))?;
@@ -366,13 +412,29 @@ unsafe fn run(
         let mut last_forced: Option<Instant> = None;
         let mut ever_connected = false;
         let mut estimate_budget = budget;
+        // The viewers' part of the budget, their last reads (VIEWER_EVERY) and when.
+        let (mut viewer_budget, mut viewer_reads, mut viewer_read_at) = (IDLE_KBPS, Vec::new(), start);
         let mut limit: Option<u32> = None;
-        let mut last_viewers = 0;
-        let target = |budget: u32, tier: usize, q: &Quality, capture: (u32, u32)| budget.min(step(tier, q, capture).3);
+        // The encoder's bitrate: the budget under the step's cap, less while the send queue grows.
+        let target = |budget: u32, s: Step, queue_ms: u64| {
+            let room = PUSHBACK_FULL_MS - PUSHBACK_FROM_MS;
+            let pushback = 1.0 - 0.5 * queue_ms.saturating_sub(PUSHBACK_FROM_MS).min(room) as f64 / room as f64;
+            (budget.min(s.max_kbps) as f64 * pushback) as u32
+        };
+        let mut asked = budget.min(ladder.step().max_kbps); // the bitrate the encoder has now
         let mut window_checked = start;
-        let (mut captured, mut encoded, mut bytes, mut stats_at) = (0u32, 0u32, 0u64, start);
+        let (mut captured, mut encoded, mut skipped, mut bytes, mut stats_at) = (0u32, 0u32, 0u32, 0u64, start);
+        // Skipping frames while the send queue is too long (QUEUE_DROP_MS), and how much of the
+        // recent past it did (seconds, decayed over SKIP_DECAY s).
+        let (mut skipping, mut skip_score, mut queue_ms, mut stepped_at) = (false, 0.0f64, 0u64, start);
+        let (mut last_pass, mut loop_max, mut last_sent, mut frame_gap_max) = (start, Duration::ZERO, None::<Instant>, Duration::ZERO);
 
         while !stop.load(Ordering::Relaxed) {
+            let pass = Instant::now();
+            let dt = (pass - last_pass).as_secs_f64();
+            loop_max = loop_max.max(pass - last_pass);
+            last_pass = pass;
+            skip_score = skip_score * (-dt / SKIP_DECAY).exp() + if skipping { dt } else { 0.0 };
             let mut resized = false;
             while let Ok(frame) = pool.TryGetNextFrame() {
                 let content = frame.ContentSize().map_err(err("capture"))?;
@@ -393,8 +455,10 @@ unsafe fn run(
                 latest = Some(frame); // older ones are dropped, like a live does
             }
             if resized {
-                enc = make(ladder.tier, &quality, budget, capture)?;
+                ladder.set_steps(ladder_steps(&quality, capture));
+                enc = make(ladder.step(), budget, capture)?;
                 (last_forced, keyframe_pending) = (Some(Instant::now()), false);
+                asked = budget.min(ladder.step().max_kbps);
             }
             for frame in enc.poll().map_err(err("H.264 encoder"))? {
                 encoded += 1;
@@ -402,9 +466,19 @@ unsafe fn run(
                 let (data, key) = net.complete(&frame.data);
                 taps.show(&data, key, frame.time);
                 net.send_frame(data, (frame.time * 9 / 1000) as u64).map_err(|e| format!("WebRTC: {e}"))?;
+                let sent = Instant::now();
+                frame_gap_max = frame_gap_max.max(last_sent.map_or(Duration::ZERO, |t| sent - t));
+                last_sent = Some(sent);
             }
             let now = Instant::now();
-            if enc.wants_input() && now >= next_due {
+            // The send queue is too long: every frame stays out past twice the limit (below it, every
+            // other one: see where the next frame gets due).
+            let skip_all = skipping && queue_ms > 2 * QUEUE_DROP_MS;
+            if skip_all && now >= next_due && latest.take().is_some() {
+                skipped += 1;
+                next_due = (next_due + Duration::from_secs_f64(1.0 / enc.fps as f64)).max(now);
+            }
+            if !skip_all && enc.wants_input() && now >= next_due {
                 let fresh = latest.take();
                 let got_fresh = fresh.is_some();
                 let resend = !got_fresh && (refresh_now || now - last_encode >= REFRESH_EVERY);
@@ -415,7 +489,9 @@ unsafe fn run(
                     let tex = frame_texture(frame)?;
                     enc.encode(&tex, (now - start).as_nanos() as i64 / 100).map_err(err("H.264 encoder"))?;
                     (last_encode, refresh_now) = (now, false);
-                    next_due = (next_due + Duration::from_secs_f64(1.0 / enc.fps as f64)).max(now);
+                    let frames = if skipping { 2.0 } else { 1.0 }; // skipping: the next one stays out
+                    next_due = (next_due + Duration::from_secs_f64(frames / enc.fps as f64)).max(now);
+                    skipped += skipping as u32;
                 }
             }
             if let Some(frame) = last_frame.as_ref() {
@@ -432,13 +508,19 @@ unsafe fn run(
                 let _ = events.send(LiveEvent::Stats {
                     captured_fps: captured as f64 / span,
                     encoded_fps: encoded as f64 / span,
+                    skipped_fps: skipped as f64 / span,
+                    queue_ms: queue_ms as u32,
                     kbps: (bytes as f64 * 8.0 / span / 1000.0) as u32,
                     estimate_kbps: (estimate_budget as f64 / BUDGET_SHARE) as u32,
+                    budget_kbps: budget,
                     width: enc.width,
                     height: enc.height,
                     fps: enc.fps,
+                    loop_max_ms: loop_max.as_millis() as u32,
+                    frame_gap_max_ms: frame_gap_max.as_millis() as u32,
                 });
-                (captured, encoded, bytes, stats_at) = (0, 0, 0, now);
+                (captured, encoded, skipped, bytes, stats_at) = (0, 0, 0, 0, now);
+                (loop_max, frame_gap_max) = (Duration::ZERO, Duration::ZERO);
             }
             if signals.connected {
                 ever_connected = true;
@@ -467,24 +549,67 @@ unsafe fn run(
             if quality_changed {
                 quality = picked;
                 net.set_max_kbps(quality.max_kbps as u64);
+                ladder.set_steps(ladder_steps(&quality, capture));
             }
             if let Some(bps) = signals.estimate {
                 estimate_budget = ((bps / 1000) as f64 * BUDGET_SHARE) as u32;
             }
             if let Some(loss) = signals.loss {
-                limit = loss_limit(limit, target(budget, ladder.tier, &quality, capture), estimate_budget, loss);
+                limit = loss_limit(limit, budget.min(ladder.step().max_kbps), estimate_budget, loss);
             }
+            // The send queue in time at str0m's pace (1.1x the estimate), with hysteresis.
+            queue_ms = net.queued_bytes() * 8 / ((estimate_budget as f64 / BUDGET_SHARE * 1.1) as u64).max(1);
+            skipping = if skipping { queue_ms > QUEUE_RESUME_MS } else { queue_ms > QUEUE_DROP_MS };
+            // u32::MAX: no report from the server yet (an old one never sends them); 0: nobody watching.
             let viewers = taps.viewer_kbps.load(Ordering::Relaxed);
-            let viewers_changed = viewers != last_viewers;
-            last_viewers = viewers;
-            let viewer_budget = if viewers > 0 { (viewers as f64 * VIEWER_SHARE) as u32 } else { u32::MAX };
+            if viewers == 0 {
+                viewer_budget = IDLE_KBPS;
+                viewer_reads.clear();
+            } else if now - viewer_read_at >= VIEWER_EVERY {
+                viewer_read_at = now;
+                let wanted = if viewers == u32::MAX {
+                    u32::MAX
+                } else {
+                    viewer_reads.push(viewers);
+                    if viewer_reads.len() > 3 {
+                        viewer_reads.remove(0);
+                    }
+                    let mut sorted = viewer_reads.clone();
+                    sorted.sort_unstable();
+                    (sorted[sorted.len() / 2] as f64 * VIEWER_SHARE) as u32
+                };
+                viewer_budget = wanted.min((viewer_budget as f64 * (1.0 + VIEWER_RISE)) as u32);
+            }
             budget = limit.map_or(estimate_budget, |l| l.min(estimate_budget)).min(viewer_budget);
-            if let Some(tier) = ladder.update(budget, now).or(quality_changed.then_some(ladder.tier)) {
+            // Under the step's minimum, the budget steps down by itself (ladder.update).
+            let too_big = skip_score > SKIP_STEP_DOWN && budget >= ladder.step().min_kbps && now - stepped_at >= SKIP_SETTLE;
+            let changed = if too_big { ladder.too_big(now) } else { ladder.update(budget, now) };
+            if let Some(tier) = changed.or(quality_changed.then_some(ladder.tier)) {
+                // Which part held the budget, for logs from the field.
+                log::info!(
+                    "native live: step {tier}, budget {budget} kbps (estimate {estimate_budget}, viewers {}, loss limit {}){}",
+                    match viewers {
+                        u32::MAX => "?".to_string(),
+                        0 => format!("none, {viewer_budget}"),
+                        _ => viewer_budget.to_string(),
+                    },
+                    limit.map_or("-".into(), |l| l.to_string()),
+                    if too_big { ", the send queue kept growing" } else { "" }
+                );
                 // New size or fps: a new encoder, whose first frame is a keyframe at the new size.
-                enc = make(tier, &quality, budget, capture)?;
-                (last_forced, keyframe_pending, refresh_now) = (Some(now), false, true);
-            } else if signals.estimate.is_some() || signals.loss.is_some() || viewers_changed {
-                enc.set_bitrate(target(budget, ladder.tier, &quality, capture));
+                enc = make(ladder.step(), budget, capture)?;
+                (last_forced, keyframe_pending, refresh_now, skip_score, stepped_at) = (Some(now), false, true, 0.0, now);
+                asked = budget.min(ladder.step().max_kbps);
+            } else {
+                if too_big {
+                    skip_score = 0.0; // already at the bottom step
+                }
+                // A new bitrate when it moved by 5% or more (the send queue changes every 100 ms).
+                let wanted = target(budget, ladder.step(), queue_ms);
+                if wanted.abs_diff(asked) * 20 >= asked.max(1) {
+                    enc.set_bitrate(wanted);
+                    asked = wanted;
+                }
             }
             // A keyframe asked for too soon after the last one waits its turn instead of being dropped.
             keyframe_pending |= signals.keyframe || taps.keyframe.swap(false, Ordering::Relaxed);
@@ -498,6 +623,9 @@ unsafe fn run(
         Ok(())
     })();
     let _ = MFShutdown();
+    if let Ok(handle) = mmcss {
+        let _ = AvRevertMmThreadCharacteristics(handle);
+    }
     result
 }
 
@@ -506,20 +634,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn step_sizes_keep_the_aspect_and_never_upscale() {
-        assert_eq!(step_size((1920, 1080), 720), (1280, 720));
-        assert_eq!(step_size((2560, 1440), 540), (960, 540));
-        assert_eq!(step_size((1366, 768), 1080), (1366, 768));
-    }
-
-    #[test]
-    fn the_top_step_is_the_picked_quality_and_lower_steps_never_exceed_it() {
-        let q = |h: Option<u32>, fps: u32| Quality { max_height: h, max_fps: fps, max_kbps: 5000 };
+    fn the_top_step_is_the_picked_quality() {
+        let q = |h: Option<u32>, fps: u32, motion: bool| Quality { max_height: h, max_fps: fps, max_kbps: 5000, motion };
         let capture = (2560, 1440);
-        assert_eq!(step(0, &q(None, 60), capture), (2560, 1440, 60, 5000)); // "Source"
-        assert_eq!(step(0, &q(Some(1080), 30), capture), (1920, 1080, 30, 5000));
-        assert_eq!(step(1, &q(Some(1080), 60), capture), (1280, 720, 30, 2500));
-        assert_eq!(step(1, &q(Some(480), 15), capture), (852, 480, 15, 2500)); // never above the pick
-        assert_eq!(step(3, &q(Some(1080), 60), capture), (640, 360, 15, 600));
+        let top = |q: Quality| ladder_steps(&q, capture)[0];
+        assert_eq!((top(q(None, 60, false)).height, top(q(None, 60, false)).fps), (1440, 60)); // "Source"
+        assert_eq!((top(q(Some(1080), 30, true)).height, top(q(Some(1080), 30, true)).fps), (1080, 30));
+        assert_eq!(top(q(Some(1080), 30, true)).max_kbps, 5000);
+        // Detail gives up frame rate first, motion resolution.
+        assert_eq!(ladder_steps(&q(Some(1080), 60, false), capture)[1].height, 1080);
+        assert_eq!(ladder_steps(&q(Some(1080), 60, true), capture)[1].height, 720);
     }
 }

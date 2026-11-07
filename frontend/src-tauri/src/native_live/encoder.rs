@@ -1,6 +1,12 @@
 //! BGRA capture texture -> NV12 (D3D11 video processor, scaled to the output size) -> hardware
 //! H.264 (async Media Foundation MFT), all on the GPU. One instance per output size: a quality
 //! step change makes a new one, whose first frame is a keyframe with the new SPS.
+//!
+//! Keyframes only when asked for (a viewer's PLI, a new encoder): measured on the NVIDIA MFT at
+//! 1080p30 and 3 Mbps, each keyframe of the old 4 s GOP was 300-500 KB, 57-95x a normal frame and
+//! 1-1.3 s of the whole link, so the live hitched every 4 s. The rate control's buffer is kept
+//! small too (`buffer_bits`): with it, keyframes and scene cuts came out 4x smaller (96-145 KB)
+//! and the output held within 2.1-3.1 Mbps of 3 Mbps each second, against 1.6-5.3 Mbps.
 
 use std::mem::ManuallyDrop;
 
@@ -13,6 +19,15 @@ use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::Variant::VARIANT;
 
 const RING: usize = 4; // NV12 textures the encoder may still be reading
+/// No periodic keyframes: an hour of frames between them. Viewers ask for one (PLI) when they
+/// need it, and the server asks when someone starts watching.
+const GOP_SECONDS: u32 = 3600;
+
+/// The rate control's buffer: 50 ms of the bitrate, or 1.5 frames if that's more. Smaller (33 ms
+/// at 30 fps) and the NVIDIA encoder stalled; under 1.5 frames it can't reach the bitrate.
+fn buffer_bits(kbps: u32, fps: u32) -> u32 {
+    kbps * (1500 / fps.max(1)).max(50)
+}
 
 pub struct Output {
     /// Sample time, 100 ns units.
@@ -131,7 +146,8 @@ impl Encoder {
             set(&CODECAPI_AVLowLatencyMode, VARIANT::from(true), "low latency");
             set(&CODECAPI_AVEncCommonRateControlMode, VARIANT::from(eAVEncCommonRateControlMode_CBR.0 as u32), "CBR");
             set(&CODECAPI_AVEncCommonMeanBitRate, VARIANT::from(kbps * 1000), "bitrate");
-            set(&CODECAPI_AVEncMPVGOPSize, VARIANT::from(fps * 4), "GOP");
+            set(&CODECAPI_AVEncCommonBufferSize, VARIANT::from(buffer_bits(kbps, fps)), "buffer size");
+            set(&CODECAPI_AVEncMPVGOPSize, VARIANT::from(fps * GOP_SECONDS), "GOP");
         }
         let out_type = MFCreateMediaType()?;
         out_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
@@ -141,7 +157,7 @@ impl Encoder {
         out_type.SetUINT64(&MF_MT_FRAME_RATE, pack(fps, 1))?;
         out_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
         out_type.SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_High.0 as u32)?;
-        out_type.SetUINT32(&MF_MT_MAX_KEYFRAME_SPACING, fps * 4)?;
+        out_type.SetUINT32(&MF_MT_MAX_KEYFRAME_SPACING, fps * GOP_SECONDS)?;
         transform.SetOutputType(0, &out_type, 0)?;
         let in_type = MFCreateMediaType()?;
         in_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
@@ -248,6 +264,7 @@ impl Encoder {
 
     pub unsafe fn set_bitrate(&self, kbps: u32) {
         if let Some(c) = &self.codec {
+            let _ = c.SetValue(&CODECAPI_AVEncCommonBufferSize, &VARIANT::from(buffer_bits(kbps, self.fps)));
             let _ = c.SetValue(&CODECAPI_AVEncCommonMeanBitRate, &VARIANT::from(kbps * 1000));
         }
     }

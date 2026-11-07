@@ -4,7 +4,10 @@ import { nativeQuality, nativeRtpParameters, avcCodec } from '../src/core/native
 
 test('the picked quality becomes the top of the native ladder', () => {
   const screen = { width: 1920, height: 1080 };
-  assert.deepEqual(nativeQuality({ resolution: '720', fps: 30 }, screen, 1), { maxHeight: 720, maxFps: 30, maxKbps: 2212 });
+  assert.deepEqual(nativeQuality({ resolution: '720', fps: 30 }, screen, 1), { maxHeight: 720, maxFps: 30, maxKbps: 2212, motion: false });
+  // "Optimize for": motion gives up resolution first in Rust's ladder; detail (text), frame rate.
+  assert.equal(nativeQuality({ resolution: '1080', fps: 60, optimizeFor: 'motion' }, screen, 1).motion, true);
+  assert.equal(nativeQuality({ resolution: '1080', fps: 60, optimizeFor: 'detail' }, screen, 1).motion, false);
   // "Source" leaves the height to the monitor; the bitrate cap counts its real pixels (125% scaling).
   const source = nativeQuality({ resolution: 'source', fps: 60 }, { width: 1536, height: 864 }, 1.25);
   assert.equal(source.maxHeight, null);

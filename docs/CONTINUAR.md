@@ -148,6 +148,15 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Depois da 0.4.1 (07/11/2026), ainda sem instalador:**
+- **Atualização automática:** o Jay-C oferece a versão nova publicada no GitHub (no lobby e em Settings › Help) e confere o instalador pelo SHA-256, como o Jay-H. Funciona a partir da primeira versão que já a tiver.
+- **Live nativa engasgando e com texto ilegível** (relato: "gargalo enorme", servidor remoto pelo Radmin VPN). Medido com um limitador de 4 Mbps (detalhes em `docs/spikes/10-live-nativa.md`, "Engasgos, texto ilegível e a escada"):
+  - **as causas:** quadros-chave de 300–500 KB a cada 4 s; a fila do str0m crescendo até 1,5 s; o teto do espectador prendendo a live em 720p30; a thread da live esperando CPU até 97 ms;
+  - **as correções:** quadro-chave só quando pedido, com buffer de 50 ms (4× menores); a escada segue o "Otimizar para" (texto mantém a resolução); a fila de envio é medida e o codificador baixa ou pula quadros antes de ela crescer; a banda de quem assiste é filtrada; a thread entra no MMCSS;
+  - **upload de 4 Mbps:** antes, atraso de até 1,7 s e pausas de 1,4 s; agora, 1080p30 o tempo todo, atraso mediano de 167 ms;
+  - **quem assiste com 4 Mbps:** 1080p15 o tempo todo, com 2 pausas curtas;
+  - **sem limite:** 1080p60, sem perdas.
+
 **Instalador 0.4.1 (06/11/2026):** a 0.4.0 com o que está abaixo, gerado pelo workflow do instalador no GitHub (tag `v0.4.1`). O servidor não mudou por dentro: um servidor 0.4.0 funciona igual. Só a imagem Docker trocou de base.
 
 **Entre a 0.4.0 e a 0.4.1 (06/11/2026):**

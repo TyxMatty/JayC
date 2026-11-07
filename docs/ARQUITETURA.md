@@ -267,6 +267,8 @@ Bitrate automático: ~0,08 bit/pixel/quadro, e os quadros acima de 30 fps contam
 
 A tela vai numa única camada, sem simulcast, em **H.264 High** (`profile-level-id` 640032, adicionado ao router). Com esse perfil, o WebView2 usa o encoder da placa de vídeo (Media Foundation: `NVIDIA H.264 Encoder MFT` medido numa RTX 3050). O H.264 constrained baseline (42e01f) fica no OpenH264 em software, mesmo em 720p, e o VP8 fica no libvpx. Servidor antigo, sem o perfil High: VP8. Durante a live de **tela inteira pelo seletor do sistema** (o caminho sem a live nativa), a janela do Jay-C sai da captura (`setContentProtected` = `WDA_EXCLUDEFROMCAPTURE`), para não filmar a própria prévia (efeito espelho). A live nativa não tem vídeo local, então o Jay-C aparece nela, e a própria janela do Jay-C pode ser transmitida (sem o som, que seria o da chamada).
 
+**Na live nativa (Windows),** o "Otimizar para" também escolhe os degraus de qualidade quando falta banda: *Texto* mantém a resolução e baixa os quadros/s primeiro; *Movimento* faz o contrário. O codificador só manda quadro-chave quando pedido, e a live mede a própria fila de envio para não deixar o atraso crescer (`docs/spikes/10-live-nativa.md`, "Engasgos, texto ilegível e a escada").
+
 **Para quem assiste:** o layout vira *presenting*, com as telas em destaque e as câmeras numa faixa de 160 px (pedindo a camada mais baixa). Clique duplo na tela abre em tela cheia. Quem transmite vê uma prévia pequena no canto.
 
 ### Settings › Streaming
