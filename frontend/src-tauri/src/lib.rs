@@ -10,6 +10,8 @@ mod native_live;
 mod pip_window;
 #[cfg(windows)]
 mod taskbar_icon;
+#[cfg(windows)]
+mod update;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,7 +46,11 @@ pub fn run() {
             #[cfg(windows)]
             pip_window::pip_drag,
             #[cfg(windows)]
-            pip_window::pip_close
+            pip_window::pip_close,
+            #[cfg(windows)]
+            update::update_latest,
+            #[cfg(windows)]
+            update::update_install
         ])
         .on_window_event(|window, event| {
             #[cfg(windows)]

@@ -1618,6 +1618,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "sha2",
  "str0m",
  "tauri",
  "tauri-build",

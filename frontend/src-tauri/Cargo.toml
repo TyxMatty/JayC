@@ -41,6 +41,7 @@ windows = { version = "0.62", features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Imaging",
     "Win32_Media_MediaFoundation",
+    "Win32_Networking_WinHttp",
     "Win32_Storage_EnhancedStorage",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
@@ -55,6 +56,8 @@ windows = { version = "0.62", features = [
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
 ] }
+# Self-update (src/update.rs): checks the installer GitHub serves against its SHA-256.
+sha2 = "0.10"
 # Native screen share over WebRTC (src/native_live); Windows' own crypto, no OpenSSL.
 str0m = { version = "0.25", default-features = false, features = ["wincrypto"] }
 
