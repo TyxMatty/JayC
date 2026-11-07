@@ -148,7 +148,9 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
-**Depois da 0.4.1 (07/11/2026), ainda sem instalador:**
+**Instalador 0.4.2 (07/11/2026):** a 0.4.1 com o que está abaixo, gerado pelo workflow do instalador no GitHub (tag `v0.4.2`). O servidor não mudou: um servidor 0.4.1 funciona igual. É a primeira versão com atualização automática; quem está na 0.4.1 ou antes instala esta à mão (ou pelo Jay-H).
+
+**Entre a 0.4.1 e a 0.4.2 (07/11/2026):**
 - **Atualização automática:** o Jay-C oferece a versão nova publicada no GitHub (no lobby e em Settings › Help) e confere o instalador pelo SHA-256, como o Jay-H. Funciona a partir da primeira versão que já a tiver.
 - **Live nativa engasgando e com texto ilegível** (relato: "gargalo enorme", servidor remoto pelo Radmin VPN). Medido com um limitador de 4 Mbps (detalhes em `docs/spikes/10-live-nativa.md`, "Engasgos, texto ilegível e a escada"):
   - **as causas:** quadros-chave de 300–500 KB a cada 4 s; a fila do str0m crescendo até 1,5 s; o teto do espectador prendendo a live em 720p30; a thread da live esperando CPU até 97 ms;

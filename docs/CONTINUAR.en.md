@@ -150,7 +150,9 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
-**After 0.4.1 (07/11/2026), no installer yet:**
+**Installer 0.4.2 (07/11/2026):** 0.4.1 with what's below, built by the installer workflow on GitHub (tag `v0.4.2`). The server didn't change: a 0.4.1 server works the same. It's the first version with auto-update; anyone on 0.4.1 or older installs this one by hand (or through Jay-H).
+
+**Between 0.4.1 and 0.4.2 (07/11/2026):**
 - **Auto-update:** Jay-C offers the newer release published on GitHub (in the lobby and in Settings › Help) and checks the installer's SHA-256, like Jay-H. It works from the first version that has it.
 - **Native live stuttering and unreadable text** (report: "a huge bottleneck", remote server over Radmin VPN). Measured with a 4 Mbps limiter (details in `docs/spikes/10-live-nativa.md`, "Engasgos, texto ilegível e a escada"):
   - **the causes:** 300–500 KB keyframes every 4 s; str0m's queue growing to 1.5 s; the viewer cap holding the live at 720p30; the live's thread waiting up to 97 ms for the CPU;
