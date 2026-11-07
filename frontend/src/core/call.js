@@ -16,7 +16,7 @@ import { startScreenAudio } from './screen-audio.js';
 import { nativeMicSupported, startNativeMic, listMics, micNeedsRestart, micCallState, jayANotices } from './native-mic.js';
 import { startNativeLive, stopNativeLive } from './native-live.js';
 import { capturePreview } from './screen-preview.js';
-import { bufferDelayMs, catchUp } from './catch-up.js';
+import { bufferDelayMs, catchUp, screenVideoTargetMs } from './catch-up.js';
 import { t } from './i18n.js';
 
 /** Screen-share sound: stereo Opus at music quality, no DTX (silence detection would clip quiet passages). */
@@ -126,6 +126,8 @@ export class Call extends EventTarget {
   /** The signaling connection: 'connecting' | 'open' | 'reconnecting' | 'closed'. */
   #signalingState = 'connecting';
   #previewTimer = null;
+  /** Native live: tells Rust every second how much later the share's sound goes out (#syncAudioLead). */
+  #leadTimer = null;
   /** Every second: received audio that fell far behind gets a fresh consumer (core/catch-up.js). */
   #audioWatch = null;
   /** producerId -> { high, renewedAt, consumerId, stats } */
@@ -413,6 +415,8 @@ export class Call extends EventTarget {
         // A Jay-C window's sound is the call itself: sending it would echo everyone's voices back.
         if (!source.own) await this.#startScreenAudio();
         this.#startPreviews();
+        clearInterval(this.#leadTimer);
+        this.#leadTimer = setInterval(() => this.#syncAudioLead(), 1000);
         this.#emit('local-updated', {});
         return true;
       }
@@ -473,8 +477,16 @@ export class Call extends EventTarget {
     this.screenPreview = null;
   }
 
+  /** The native live holds its picture back by as much as its sound arrives later (screen-audio.js). */
+  async #syncAudioLead() {
+    const lead = this.#screenAudio ? await this.#screenAudio.leadMs().catch(() => 0) : 0;
+    this.#nativeLive?.setAudioLead(lead);
+  }
+
   async stopScreenShare() {
     this.#stopPreviews();
+    clearInterval(this.#leadTimer);
+    this.#leadTimer = null;
     this.#nativeLive = null; // its close() runs below, as the screen producer's
     this.#screenAudio?.stop();
     this.#screenAudio = null;
@@ -890,12 +902,22 @@ export class Call extends EventTarget {
         const delay = same ? bufferDelayMs(last.stats, stats) : null;
         const { state, renew } = catchUp(last, delay, now);
         this.#audioBehind.set(producerId, { ...state, consumerId: entry.consumer.id, stats });
+        if (entry.source === 'screen-audio' && delay != null) this.#syncScreenVideo(participant, delay);
         if (renew) {
           console.info(`[call] ${entry.source} audio ${Math.round(delay)} ms behind: starting it again at live`);
           this.#renewConsumer(participant, producerId).catch((error) => console.warn('[call] renew consumer', error));
         }
       }
     }
+  }
+
+  /** Holds a live's picture back so its sound, which arrives later, plays with it (catch-up.js). */
+  #syncScreenVideo(participant, audioBufferMs) {
+    const video = [...participant.consumers.values()].find((e) => e.source === 'screen' && e.consumer.kind === 'video');
+    const receiver = video?.consumer.closed ? null : video?.consumer.rtpReceiver;
+    if (!receiver || !('jitterBufferTarget' in receiver)) return;
+    const target = screenVideoTargetMs(audioBufferMs);
+    if (Math.abs((receiver.jitterBufferTarget ?? 0) - target) >= 10) receiver.jitterBufferTarget = target;
   }
 
   /** A fresh consumer for an audio whose receive buffer fell far behind: it plays from live again. */
@@ -1050,6 +1072,8 @@ export class Call extends EventTarget {
     this.#micWatch = null;
     clearInterval(this.#previewTimer);
     this.#previewTimer = null;
+    clearInterval(this.#leadTimer);
+    this.#leadTimer = null;
     clearInterval(this.#audioWatch);
     this.#audioWatch = null;
     this.#nativeLive?.close();

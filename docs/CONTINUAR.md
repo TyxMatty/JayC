@@ -156,6 +156,7 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
   - **upload de 4 Mbps:** antes, atraso de até 1,7 s e pausas de 1,4 s; agora, 1080p30 o tempo todo, atraso mediano de 167 ms;
   - **quem assiste com 4 Mbps:** 1080p15 o tempo todo, com 2 pausas curtas;
   - **sem limite:** 1080p60, sem perdas.
+- **Som da live atrás da imagem:** chegava 143 ms depois. Agora quem transmite segura a imagem pelo atraso do próprio som (a fila do worklet + 55 ms), e quem assiste compensa o próprio buffer. Medido com um bipe de 18,5 kHz: −2 a +2 ms de diferença (mediana). A imagem chega ~110–150 ms mais tarde, junto com o som (`docs/spikes/10-live-nativa.md`, "O som da live atrás da imagem").
 
 **Instalador 0.4.1 (06/11/2026):** a 0.4.0 com o que está abaixo, gerado pelo workflow do instalador no GitHub (tag `v0.4.1`). O servidor não mudou por dentro: um servidor 0.4.0 funciona igual. Só a imagem Docker trocou de base.
 

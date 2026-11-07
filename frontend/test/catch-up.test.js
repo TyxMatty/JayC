@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bufferDelayMs, catchUp, BEHIND_MS, RENEW_GAP_MS } from '../src/core/catch-up.js';
+import { bufferDelayMs, catchUp, screenVideoTargetMs, BEHIND_MS, RENEW_GAP_MS, SCREEN_AUDIO_LEAD_MS, SCREEN_VIDEO_MAX_HOLD_MS } from '../src/core/catch-up.js';
 
 test('the buffer delay over an interval', () => {
   // 48000 samples emitted in a second, each 2.5 s in the buffer: 120000 s of summed delay.
@@ -25,4 +25,10 @@ test('renews after two checks far behind, then not again for a while', () => {
   assert.equal(step(2000, t + 6000), false, 'still behind, but just renewed');
   assert.equal(step(2000, t + 4000 + RENEW_GAP_MS), true, 'after the gap it may renew again');
   assert.equal(step(null, t + 40000), false, 'no audio: nothing to judge');
+});
+
+test("a live's picture waits for its sound: the audio buffer plus the sharer's lead, within bounds", () => {
+  assert.equal(screenVideoTargetMs(30), 30 + SCREEN_AUDIO_LEAD_MS);
+  assert.equal(screenVideoTargetMs(0), SCREEN_AUDIO_LEAD_MS);
+  assert.equal(screenVideoTargetMs(2500), SCREEN_VIDEO_MAX_HOLD_MS, 'far behind: catch-up renews the audio instead');
 });

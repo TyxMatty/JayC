@@ -4,6 +4,17 @@ import { t } from './i18n.js';
 
 const SAMPLE_RATE = 48_000;
 
+/**
+ * How much later than the picture a live's sound reaches WebRTC, besides what waits in the player
+ * worklet: the capture's 20 ms blocks, the trip to the page, from the worklet into the track and
+ * Opus's 20 ms frames. Measured: with the picture held back by the worklet's queue alone, the sound
+ * was still ~60 ms behind at the viewer (whose own side catch-up.js covers).
+ */
+export const SCREEN_AUDIO_FIXED_MS = 55;
+
+/** The sound's lead (ms) with `queuedFrames` waiting in the worklet (PcmTrackSource.stats()). */
+export const screenAudioLeadMs = (queuedFrames) => Math.round((queuedFrames / SAMPLE_RATE) * 1000) + SCREEN_AUDIO_FIXED_MS;
+
 /** Turns pushed PCM chunks into a live MediaStreamTrack (not played locally). */
 export class PcmTrackSource {
   /** @param {{ channels?: 1 | 2 }} [options] */
@@ -87,6 +98,10 @@ export async function startScreenAudio({ mode, windowHandle, excludedApps = [], 
   return {
     track: source.track,
     description,
+    /** How much later than the picture this sound reaches WebRTC now (ms). */
+    async leadMs() {
+      return screenAudioLeadMs((await source.stats()).queued);
+    },
     stop() {
       systemAudio.stopCapture().catch(() => {});
       source.close();

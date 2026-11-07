@@ -158,6 +158,7 @@ iOS (milestone 15, code only) was left for after launch.
   - **4 Mbps upload:** before, up to 1.7 s of delay and 1.4 s freezes; now 1080p30 throughout, 167 ms median delay;
   - **a viewer on 4 Mbps:** 1080p15 throughout, with 2 short freezes;
   - **no limit:** 1080p60, no loss.
+- **Live sound behind the picture:** it arrived 143 ms later. Now the sharer holds the picture back by its own sound's delay (the worklet's queue + 55 ms), and the viewer makes up for its own buffer. Measured with an 18.5 kHz beep: −2 to +2 ms apart (median). The picture arrives ~110–150 ms later, together with the sound (`docs/spikes/10-live-nativa.md`, "O som da live atrás da imagem").
 
 **Installer 0.4.1 (06/11/2026):** 0.4.0 with what's below, built by the installer workflow on GitHub (tag `v0.4.1`). The server didn't change inside: a 0.4.0 server works the same. Only the Docker image changed its base.
 

@@ -8,6 +8,21 @@ export const BEHIND_MS = 500;
 /** At most one renewal per audio this often, so a very jittery network doesn't blip every second. */
 export const RENEW_GAP_MS = 15000;
 
+/**
+ * A live's sound reaches the viewer later than its picture. The sharer's side (native capture, the
+ * player worklet) is made up there: the native live holds its picture back (screen-audio.js). On the
+ * viewer's side the sound waits in a bigger receive buffer (30 ms against 9, measured) and then goes
+ * out through WebAudio, so the picture waits for the sound's buffer plus this.
+ */
+export const SCREEN_AUDIO_LEAD_MS = 20;
+/** Never hold a live's picture back more than this: an audio further behind gets renewed instead. */
+export const SCREEN_VIDEO_MAX_HOLD_MS = 400;
+
+/** The jitterBufferTarget (ms) for a live's picture, given its sound's receive buffer delay (ms). */
+export function screenVideoTargetMs(audioBufferMs) {
+  return Math.round(Math.min(SCREEN_VIDEO_MAX_HOLD_MS, Math.max(0, audioBufferMs + SCREEN_AUDIO_LEAD_MS)));
+}
+
 /** The receive buffer's average delay (ms) between two inbound-rtp stats, or null without new audio. */
 export function bufferDelayMs(prev, now) {
   const emitted = now.jitterBufferEmittedCount - prev.jitterBufferEmittedCount;

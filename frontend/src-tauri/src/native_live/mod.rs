@@ -12,6 +12,7 @@ mod ladder;
 mod sources;
 mod webrtc;
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
@@ -69,6 +70,11 @@ const QUEUE_RESUME_MS: u64 = 80;
 const SKIP_DECAY: f64 = 3.0;
 const SKIP_STEP_DOWN: f64 = 0.6;
 const SKIP_SETTLE: Duration = Duration::from_secs(3);
+/// The picture waits for the share's sound (`native_live_audio_lead`): it reaches WebRTC later,
+/// through the native capture and the page's player worklet. Never more than HOLD_MAX, and the wait
+/// moves by HOLD_RATE (seconds per second) at most, so the picture never jumps.
+const HOLD_MAX: Duration = Duration::from_millis(400);
+const HOLD_RATE: f64 = 0.05;
 /// Forced keyframes at most this often: under congestion every PLI's keyframe makes it worse.
 const KEYFRAME_GAP: Duration = Duration::from_secs(1);
 const START_KBPS: u32 = 1500;
@@ -96,6 +102,8 @@ struct Taps {
     /// The slowest viewer's bandwidth (kbps) as the server sees it; 0 = nobody watching, u32::MAX =
     /// no report yet.
     viewer_kbps: Arc<AtomicU32>,
+    /// How much later the share's sound reaches WebRTC (ms): the picture waits that long.
+    audio_lead_ms: Arc<AtomicU32>,
 }
 
 impl Taps {
@@ -166,6 +174,8 @@ pub enum LiveEvent {
         fps: u32,
         loop_max_ms: u32,
         frame_gap_max_ms: u32,
+        /// How long the picture waits for the share's sound (`native_live_audio_lead`).
+        hold_ms: u32,
     },
     /// The share ended on its own (`error`), or after `native_live_stop` (no error).
     Ended { error: Option<String> },
@@ -299,6 +309,15 @@ pub fn native_live_viewer_kbps(kbps: Option<u32>) {
     }
 }
 
+/// How much later than the picture the share's sound reaches WebRTC (ms; 0 = no sound): the
+/// picture waits that long before going out, so viewers get both together (core/screen-audio.js).
+#[tauri::command]
+pub fn native_live_audio_lead(ms: u32) {
+    if let Some(r) = RUNNING.lock().unwrap().as_ref() {
+        r.taps.audio_lead_ms.store(ms, Ordering::Relaxed);
+    }
+}
+
 /// Settings changed during the share: the new top of the ladder applies right away.
 #[tauri::command]
 pub fn native_live_set_quality(quality: Quality) {
@@ -428,6 +447,8 @@ unsafe fn run(
         // recent past it did (seconds, decayed over SKIP_DECAY s).
         let (mut skipping, mut skip_score, mut queue_ms, mut stepped_at) = (false, 0.0f64, 0u64, start);
         let (mut last_pass, mut loop_max, mut last_sent, mut frame_gap_max) = (start, Duration::ZERO, None::<Instant>, Duration::ZERO);
+        // Encoded frames waiting for the sound (HOLD_MAX): when each goes out, data, RTP time.
+        let (mut hold, mut held) = (Duration::ZERO, VecDeque::<(Instant, Vec<u8>, u64)>::new());
 
         while !stop.load(Ordering::Relaxed) {
             let pass = Instant::now();
@@ -435,6 +456,9 @@ unsafe fn run(
             loop_max = loop_max.max(pass - last_pass);
             last_pass = pass;
             skip_score = skip_score * (-dt / SKIP_DECAY).exp() + if skipping { dt } else { 0.0 };
+            let wanted = Duration::from_millis(taps.audio_lead_ms.load(Ordering::Relaxed) as u64).min(HOLD_MAX);
+            let step = Duration::from_secs_f64(dt * HOLD_RATE);
+            hold = if wanted > hold { (hold + step).min(wanted) } else { hold.saturating_sub(step).max(wanted) };
             let mut resized = false;
             while let Ok(frame) = pool.TryGetNextFrame() {
                 let content = frame.ContentSize().map_err(err("capture"))?;
@@ -464,8 +488,12 @@ unsafe fn run(
                 encoded += 1;
                 bytes += frame.data.len() as u64;
                 let (data, key) = net.complete(&frame.data);
-                taps.show(&data, key, frame.time);
-                net.send_frame(data, (frame.time * 9 / 1000) as u64).map_err(|e| format!("WebRTC: {e}"))?;
+                taps.show(&data, key, frame.time); // our own tile doesn't wait for the sound
+                held.push_back((Instant::now() + hold, data, (frame.time * 9 / 1000) as u64));
+            }
+            while held.front().is_some_and(|(due, ..)| *due <= Instant::now()) {
+                let (_, data, rtp_time) = held.pop_front().unwrap();
+                net.send_frame(data, rtp_time).map_err(|e| format!("WebRTC: {e}"))?;
                 let sent = Instant::now();
                 frame_gap_max = frame_gap_max.max(last_sent.map_or(Duration::ZERO, |t| sent - t));
                 last_sent = Some(sent);
@@ -518,6 +546,7 @@ unsafe fn run(
                     fps: enc.fps,
                     loop_max_ms: loop_max.as_millis() as u32,
                     frame_gap_max_ms: frame_gap_max.as_millis() as u32,
+                    hold_ms: hold.as_millis() as u32,
                 });
                 (captured, encoded, skipped, bytes, stats_at) = (0, 0, 0, 0, now);
                 (loop_max, frame_gap_max) = (Duration::ZERO, Duration::ZERO);

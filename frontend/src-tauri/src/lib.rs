@@ -32,6 +32,8 @@ pub fn run() {
             #[cfg(windows)]
             native_live::native_live_viewer_kbps,
             #[cfg(windows)]
+            native_live::native_live_audio_lead,
+            #[cfg(windows)]
             native_live::native_live_sources,
             #[cfg(windows)]
             native_live::native_live_thumbnail,

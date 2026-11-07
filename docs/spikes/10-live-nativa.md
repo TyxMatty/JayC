@@ -309,3 +309,39 @@ O texto do HUD em 1080p30 a ~3,7 Mbps ficou legível linha a linha, onde o 1080p
 - **Troca de degrau:** cada uma ainda cria um codificador (67–290 ms, mais um quadro-chave).
 - **Espectador num link lento:** ele ainda tenta subir de vez em quando, e a espera cresce a cada tentativa que falha.
 - **O som atrasado** é a próxima etapa.
+
+## O som da live atrás da imagem (07/11/2026)
+
+**Relato:** "delay em áudio ainda é a bit perceptível".
+
+**Como medir:**
+- uma janela de teste com o relógio em blocos (como `clock-av.ps1`) e um bipe de 30 ms exatamente em cada segundo cheio;
+- o bipe é de 18,5 kHz e baixo, quase inaudível na sala, e passa inteiro pelo Opus a 128 kbps;
+- quem assiste (Chrome sem janela) lê o atraso da imagem em cada quadro e o do som pela chegada de cada bipe;
+- live nativa da janela, com o som dela (o processo da janela), sem limite de rede.
+
+**Antes:** o som chegava **143 ms atrás da imagem** (imagem 92 ms, som 234 ms), acima do limiar em que se percebe o som atrasado (~125 ms). No app, a saída do som pelo WebAudio ainda soma ~10–20 ms.
+
+**De onde vem:**
+- **Quem transmite, ~120 ms:** o som passa pela captura nativa (blocos de 20 ms), pela thread principal da página, pela fila do worklet (60–90 ms, e até ~250 ms por alguns segundos depois de uma travada da página; `docs/spikes/11-continuidade-do-mic.md`) e pelos quadros de 20 ms do Opus. A imagem vai direto para o codificador.
+- **Quem assiste, ~20 ms:** o buffer de recepção do som ficou em 30 ms, o da imagem em 9.
+- **Não é fixo:** numa rodada seguinte o som chegou 60 ms mais tarde que na primeira, porque a fila do worklet estava maior. Um valor fixo do lado de quem assiste (o primeiro teste: o buffer do som + 110 ms) deixou o som ainda 104 ms atrás.
+
+**O que mudou:**
+- **Quem transmite segura a imagem pelo atraso do próprio som** (`native_live_audio_lead`). A cada segundo, a página mede a fila do worklet do som da tela e soma 55 ms fixos (os blocos de 20 ms, a ida à página, a passagem para a faixa e o Opus; `screen-audio.js`). O Rust segura cada quadro codificado esse tempo antes de enviar:
+  - no máximo 400 ms;
+  - a espera muda 50 ms por segundo no máximo, então a imagem não dá tranco (fica ~5% mais lenta ou mais rápida enquanto ajusta);
+  - o card de quem transmite mostra a live na hora, sem esperar.
+- **Quem assiste compensa a parte dele:** o `jitterBufferTarget` da imagem da live vira o buffer do som + 20 ms (`catch-up.js`), revisto a cada segundo, até 400 ms. Vale para qualquer live com som, inclusive a do `getDisplayMedia`.
+- O `call.screenStats()` mostra a espera atual (`holdMs`).
+
+**Depois** (mesma montagem, 45–68 bipes por rodada):
+- o som ficou **−2 a +2 ms** em relação à imagem (mediana);
+- quase todo o tempo dentro de ±25 ms;
+- quando a fila do worklet muda, a diferença chega a ~50 ms por alguns segundos, até a espera alcançar;
+- **o custo:** a imagem chega mais tarde para quem assiste (de ~92 para ~200–240 ms), junto com o som.
+
+**Limites:**
+- Medido com a live de uma janela, no mesmo PC e sem limite de rede.
+- Os 55 ms e os 20 ms foram calibrados nesta máquina.
+- Uma live de alguém com o app antigo só tem a parte de quem assiste: o som segue ~120 ms atrás.
