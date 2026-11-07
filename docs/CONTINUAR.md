@@ -88,7 +88,14 @@ npm test           # testes
   - Os testes Rust que precisam de tela, Discord ou som ao vivo são `#[ignore]` e não rodam lá.
   - Também constrói a imagem Docker do servidor (`signaling-server/Dockerfile`, contexto na raiz) e confere que ela sobe e responde no `/health`. A imagem não é publicada: o nome no GHCR é uma decisão em aberto.
   - O selo "CI" no topo dos READMEs mostra o resultado da última execução na `main`.
-- **Instalador no GitHub** (`.github/workflows/installer.yml`): numa tag `v*` ou à mão pela aba Actions ("Installer › Run workflow"), roda o `npm run build` numa máquina Windows limpa. O `Jay-C_<versão>_x64-setup.exe` fica como artefato da execução. A release continua manual: notas, teste do instalador num PC de teste e upload.
+- **Instalador no GitHub** (`.github/workflows/installer.yml`): numa tag `v*` ou à mão pela aba Actions ("Installer › Run workflow"), roda o `npm run build` numa máquina Windows limpa. O `Jay-C_<versão>_x64-setup.exe` fica como artefato da execução e, numa tag, vai para uma **release em rascunho** (se a da tag já foi publicada, ela não é tocada).
+- **Uma versão nova, passo a passo:**
+  1. suba a versão nos mesmos lugares do commit "Versão 0.4.1" e registre as mudanças neste documento;
+  2. commit, push e `git tag vX.Y.Z` + `git push origin vX.Y.Z`;
+  3. espere o workflow Installer (~8–11 min): ele cria o rascunho com o instalador;
+  4. teste o instalador num PC de teste, escreva as notas no rascunho e publique.
+
+  Só a release publicada aparece para o auto-update do Jay-C (a partir da 0.4.2) e para o Jay-H. O SHA-256 que eles conferem é o que o GitHub calcula para o instalador da release.
 
 ## 4. Claude Code no PC novo
 

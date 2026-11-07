@@ -18,13 +18,14 @@ Every milestone ends with something testable. The full plan, with the "done when
 - [x] **Look and feel:** three styles (Calm, Neon, Soft) in light and dark, custom colors, a movable call bar, the welcome tour and the wolf icon.
 - [x] **Audio controls:** volume per person and per stream, device selection, microphone volume and "only send when I speak".
 - [x] **Discord Rich Presence.**
+- [x] **Auto-update (Windows):** Jay-C offers a newer published release in the lobby and in Settings › Help, checks the installer against GitHub's SHA-256 (the same way as the Jay-H hub), then runs it. Version tags make a draft GitHub release with the installer.
 - [x] **Jay-A integration, client side (I1 to I4):** the named-pipe client, the filter selector, Jay-C's own filter kept running as a hot standby, and starting Jay-A when a call begins.
 
 ## Next
 
 - [ ] **Tester feedback:** a late joiner sometimes doesn't hear the people already in the room; the stream stutters with the app in focus; Windows shortcuts during a stream. Details and measurements in `docs/CONTINUAR.en.md`.
 - [ ] **Signed release APK** for ARM 64 and 32-bit (14.B).
-- [ ] **Release pipeline:** add the APK and the server image on GHCR to the tag workflow, and draft the GitHub Release with `docker-compose.yml` (14.C).
+- [ ] **Release pipeline:** the tag already drafts the GitHub Release with the Windows installer; add the APK, the server image on GHCR and `docker-compose.yml` (14.C).
 - [ ] **Publishing**, and testing the setup guide from scratch on a clean machine (14.E).
 - [ ] **Jay-A integration with the real app:** latency and jitter measured, closing Jay-A mid-call doesn't cut the voice (I5); the soundboard button in the call bar (I6); a release that works with and without Jay-A installed (I7).
 - [ ] **iOS:** Swift PiP plugin, after launch (milestone 15).

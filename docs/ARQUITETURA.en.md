@@ -486,3 +486,23 @@ Plugins were left for after the release. Plugins without isolation on the client
 ### Jay-A integration (user's request, after 0.4.0)
 
 Jay-A is the Jay line's audio app and lives in another repository. In a call, it can replace Jay-C's microphone filter, like Krisp in Discord. The person picks the filter, Jay-A or Jay-C, and Jay-C's filter keeps running alongside as a fallback in case Jay-A goes down. The plan, with the diagrams, what Jay-C asks of Jay-A and milestones I0–I7, is in [JAY-A.md](JAY-A.md) (Portuguese only for now).
+
+### Auto-update (user's request, after 0.4.1)
+
+Jay-C updates itself the way the Jay-H hub updates the Jay apps, without a signing key of its own.
+
+- **Where it comes from:** the latest **published** release of `TyxMatty/Jay-C` on GitHub. Drafts don't show.
+- **Checks** (`src-tauri/src/update.rs`, the same rules as Jay-H's `products.rs`):
+  - the `_x64-setup.exe` must come from `https://github.com/TyxMatty/Jay-C/releases/download/`;
+  - its name can't have slashes, and it is at most 200 MB;
+  - its size and SHA-256 must match the `digest` GitHub computes for the file.
+
+  The page only says "update": the Rust side fetches the release again and decides what to download. Downloads use Windows' WinHTTP (the system's TLS and proxy), not an HTTP library with its own TLS.
+- **Applying it:** Jay-C opens the installer and closes, and the person finishes in the installer. It updates in place and keeps the settings.
+- **Interface** (`core/update.js`):
+  - a strip in the lobby, "Jay-C X is available.", with Update and Not now. Being in the lobby, it never shows during a call;
+  - Settings › Help › About, with Check for updates and Update. During a call, it asks to leave first.
+  - One check per launch, Windows app only.
+- **Publishing:** on a `v*` tag, the installer workflow creates a draft release with the installer (`docs/CONTINUAR.en.md`, section 3).
+- **Measured:** WinHTTP's download of the 0.4.1 installer matched GitHub's SHA-256; the dev app claiming 0.4.0 offered 0.4.1 in the lobby and in Help.
+- **Not measured:** the installer actually opening and Jay-C closing, because installers aren't run on the user's PC with Jay-C installed. The first version with auto-update is 0.4.2, and anyone on 0.4.1 or older installs that one by hand or through Jay-H.

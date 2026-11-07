@@ -90,7 +90,14 @@ npm test           # tests
   - Rust tests that need a screen, Discord or live sound are `#[ignore]` and don't run there.
   - It also builds the server's Docker image (`signaling-server/Dockerfile`, context at the root) and checks that it starts and answers on `/health`. The image isn't published: its name on GHCR is an open decision.
   - The "CI" badge at the top of the READMEs shows the result of the last run on `main`.
-- **Installer on GitHub** (`.github/workflows/installer.yml`): on a `v*` tag or by hand from the Actions tab ("Installer › Run workflow"), it runs `npm run build` on a clean Windows machine. The `Jay-C_<version>_x64-setup.exe` is kept as the run's artifact. The release stays manual: notes, testing the installer on a test PC, and the upload.
+- **Installer on GitHub** (`.github/workflows/installer.yml`): on a `v*` tag or by hand from the Actions tab ("Installer › Run workflow"), it runs `npm run build` on a clean Windows machine. The `Jay-C_<version>_x64-setup.exe` is kept as the run's artifact and, on a tag, goes into a **draft release** (if the tag's release is already published, it isn't touched).
+- **A new version, step by step:**
+  1. bump the version in the same places as the "Versão 0.4.1" commit and record the changes in this document;
+  2. commit, push, and `git tag vX.Y.Z` + `git push origin vX.Y.Z`;
+  3. wait for the Installer workflow (~8–11 min): it creates the draft with the installer;
+  4. test the installer on a test PC, write the notes in the draft and publish it.
+
+  Only the published release reaches Jay-C's auto-update (from 0.4.2 on) and Jay-H. The SHA-256 they check is the one GitHub computes for the release's installer.
 
 ## 4. Claude Code on the new PC
 

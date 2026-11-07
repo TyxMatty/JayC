@@ -484,3 +484,23 @@ Plugins ficaram para depois do release. Plugins sem isolamento no cliente estão
 ### Integração com o Jay-A (pedido do usuário, depois da 0.4.0)
 
 O Jay-A é o app de áudio da linha Jay e fica em outro repositório. Na chamada, ele pode substituir o filtro do microfone do Jay-C, como o Krisp no Discord. A pessoa escolhe o filtro, Jay-A ou Jay-C, e o filtro do Jay-C fica rodando em paralelo como reserva, caso o Jay-A caia. O plano, com os diagramas, o que o Jay-C pede ao Jay-A e as etapas I0–I7, está em [JAY-A.md](JAY-A.md).
+
+### Atualização automática (pedido do usuário, depois da 0.4.1)
+
+O Jay-C se atualiza do mesmo jeito que o hub Jay-H atualiza os apps da linha Jay, sem chave de assinatura própria.
+
+- **De onde vem:** a última release **publicada** de `TyxMatty/Jay-C` no GitHub. Rascunhos não aparecem.
+- **Conferência** (`src-tauri/src/update.rs`, as mesmas regras do `products.rs` do Jay-H):
+  - o `_x64-setup.exe` tem de vir de `https://github.com/TyxMatty/Jay-C/releases/download/`;
+  - o nome não pode ter barras, e o arquivo tem até 200 MB;
+  - o tamanho e o SHA-256 têm de bater com o `digest` que o GitHub calcula para o arquivo.
+
+  A página só diz "atualize": o Rust busca a release de novo e decide o que baixar. O download usa o WinHTTP do Windows (TLS e proxy do sistema), não uma biblioteca HTTP com TLS própria.
+- **Aplicar:** o Jay-C abre o instalador e fecha, e a pessoa termina no instalador. Ele atualiza por cima e mantém as configurações.
+- **Interface** (`core/update.js`):
+  - uma faixa no lobby, "O Jay-C X está disponível.", com Atualizar e Agora não. Por ficar no lobby, nunca aparece numa chamada;
+  - Configurações › Ajuda › Sobre, com Procurar atualização e Atualizar. Durante uma chamada, pede para sair antes.
+  - Uma consulta por abertura, só no app de Windows.
+- **Publicação:** numa tag `v*`, o workflow do instalador cria a release em rascunho com o instalador (`docs/CONTINUAR.md`, seção 3).
+- **Medido:** o download pelo WinHTTP do instalador da 0.4.1 bateu o SHA-256 do GitHub; o app de dev dizendo 0.4.0 ofereceu a 0.4.1 no lobby e na Ajuda.
+- **Não medido:** o instalador abrindo e o Jay-C fechando de verdade, porque não rodamos instalador no PC do usuário com o Jay-C instalado. A primeira versão com auto-update é a 0.4.2, e quem está na 0.4.1 ou antes instala essa à mão ou pelo Jay-H.
