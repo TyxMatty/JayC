@@ -141,6 +141,20 @@ O iOS (etapa 15, só o código) ficou para depois do lançamento.
 - **Como regenerar:** `scripts/wolf-icon.ps1` e depois `tauri icon` (ver CLAUDE.md, "Ícone").
 - Publicado no instalador 0.3.1.
 
+**Instalador 0.4.1 (06/11/2026):** a 0.4.0 com o que está abaixo, gerado pelo workflow do instalador no GitHub (tag `v0.4.1`). O servidor não mudou por dentro: um servidor 0.4.0 funciona igual. Só a imagem Docker trocou de base.
+
+**Entre a 0.4.0 e a 0.4.1 (06/11/2026):**
+- **Integração com o Jay-A** (etapas I1–I4 do `docs/JAY-A.md`):
+  - Settings › Áudio › **Filtro do microfone**: Jay-C (padrão) ou Jay-A;
+  - com o Jay-A, o filtro do Jay-C roda junto como reserva e assume sem buraco se o Jay-A cair;
+  - avisos na chamada só para quedas de mais de 2 s;
+  - **Abrir Jay-A** e "não instalado" com **Baixar o Jay-A**;
+  - o Jay-A instalado é iniciado uma vez por chamada.
+  - Só faz efeito com um Jay-A que tenha o servidor do Jay Link.
+- **Áudio do microfone e da live:** o worklet não corta mais seco depois de uma travada da página. A rajada de blocos vira reserva e sai com crossfade (`docs/spikes/11-continuidade-do-mic.md`).
+- **GitHub:** o README da página inicial está em inglês (o português em `README.pt-BR.md`); os links usam o nome novo, `TyxMatty/Jay-C`, inclusive o guia de servidor no app; entraram o CI e o workflow do instalador.
+- **Imagem Docker do servidor:** a base passou de `node:24-bookworm-slim` para `node:24-trixie-slim`. Num host com kernel 7, o worker pronto do mediasoup exige glibc 2.38, e o bookworm tem a 2.36: a imagem não construía.
+
 **Instalador 0.4.0 (06/11/2026):** a 0.3.9 com o que está abaixo. O servidor não mudou.
 
 **Entre a 0.3.9 e a 0.4.0 (06/11/2026):**

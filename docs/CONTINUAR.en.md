@@ -143,6 +143,20 @@ iOS (milestone 15, code only) was left for after launch.
 - **How to regenerate:** `scripts/wolf-icon.ps1` and then `tauri icon` (see CLAUDE.md, "Ícone").
 - Shipped in installer 0.3.1.
 
+**Installer 0.4.1 (06/11/2026):** 0.4.0 with what's below, built by the installer workflow on GitHub (tag `v0.4.1`). The server didn't change inside: a 0.4.0 server works the same. Only the Docker image changed its base.
+
+**Between 0.4.0 and 0.4.1 (06/11/2026):**
+- **Jay-A integration** (milestones I1–I4 in `docs/JAY-A.md`):
+  - Settings › Audio › **Microphone filter**: Jay-C (default) or Jay-A;
+  - with Jay-A, Jay-C's filter runs alongside as the fallback and takes over without a gap if Jay-A goes down;
+  - in-call notices only for drops longer than 2 s;
+  - **Open Jay-A**, and "not installed" with **Get Jay-A**;
+  - the installed Jay-A is started once per call.
+  - It only takes effect with a Jay-A that has the Jay Link server.
+- **Microphone and stream audio:** the worklet no longer cuts dry after the page stalls. The burst of chunks becomes a cushion and is trimmed with a crossfade (`docs/spikes/11-continuidade-do-mic.md`).
+- **GitHub:** the home page README is in English (Portuguese in `README.pt-BR.md`); links use the new name, `TyxMatty/Jay-C`, including the in-app server guide; the CI and the installer workflow were added.
+- **Server Docker image:** the base moved from `node:24-bookworm-slim` to `node:24-trixie-slim`. On a host with kernel 7, mediasoup's prebuilt worker needs glibc 2.38, and bookworm has 2.36: the image didn't build.
+
 **Installer 0.4.0 (06/11/2026):** 0.3.9 with what's below. The server didn't change.
 
 **Between 0.3.9 and 0.4.0 (06/11/2026):**
