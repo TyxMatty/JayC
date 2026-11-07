@@ -394,6 +394,30 @@ select {
   overflow: hidden;
 }
 
+/* A newer Jay-C is out (core/update.js). */
+.lobby-update {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+}
+
+.lobby-update-text {
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.lobby-update-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .lobby-profile {
   margin: -24px -24px 20px;
 }

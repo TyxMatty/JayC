@@ -4,9 +4,13 @@ import { settings } from '../store/settings.js';
 import { serverStatus } from '../core/server-status.js';
 import { profileBackground } from '../core/profile-color.js';
 import { t } from '../core/i18n.js';
+import { updatesSupported, checkForUpdate, installUpdate } from '../core/update.js';
 
 // Must match the signaling server's room-name rule.
 const ROOM_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** "Not now" on the update offer: not asked again until Jay-C starts again. */
+let updateDismissed = false;
 
 const JOIN_ERRORS = {
   'room-full': 'This room is full.',
@@ -167,10 +171,40 @@ export function createLobby({ openSettings, openGuide, onJoin }) {
     }
   };
 
+  // A newer Jay-C (core/update.js): offered here, so never in the middle of a call.
+  const updateText = h('p', { class: 'lobby-update-text', role: 'status' });
+  const updateButton = h('button', { type: 'button', class: 'btn btn-primary btn-small' }, t('Update'));
+  const laterButton = h('button', { type: 'button', class: 'btn btn-secondary btn-small' }, t('Not now'));
+  const updateBox = h('div', { class: 'lobby-update', hidden: true }, updateText, h('div', { class: 'lobby-update-actions' }, updateButton, laterButton));
+  laterButton.addEventListener('click', () => {
+    updateDismissed = true;
+    updateBox.hidden = true;
+  });
+  let destroyed = false;
+  cleanups.push(() => (destroyed = true));
+  if (updatesSupported() && !updateDismissed) {
+    checkForUpdate().then(({ update }) => {
+      if (!update || destroyed || updateDismissed) return;
+      updateText.textContent = t('Jay-C {version} is available.', { version: update.version });
+      updateBox.hidden = false;
+      updateButton.onclick = async () => {
+        updateButton.disabled = laterButton.disabled = true;
+        updateText.textContent = t('Downloading Jay-C {version}… The installer opens next, and Jay-C closes.', { version: update.version });
+        try {
+          await installUpdate();
+        } catch (error) {
+          updateText.textContent = t("Couldn't update: {reason}", { reason: String(error) });
+          updateButton.disabled = laterButton.disabled = false;
+        }
+      };
+    });
+  }
+
   const form = h(
     'form',
     { class: 'card lobby-card', onSubmit },
     profile,
+    updateBox,
     h('h1', {}, t('Join a room')),
     h('p', {}, t('Share the room name with friends on the same server.')),
     h('div', { class: 'field' }, h('label', { for: 'lobby-name' }, t('Display name')), nameInput),

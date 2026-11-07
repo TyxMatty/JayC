@@ -10,6 +10,7 @@ import { SUGGESTED_APPS, addExcludedApp, removeExcludedApp, exeKey } from '../co
 import * as systemAudio from 'tauri-plugin-system-audio-api';
 import { DEFAULT_GRADIENT } from '../core/appearance.js';
 import { callDiagnostics } from '../core/diagnostics.js';
+import { updatesSupported, checkForUpdate, installUpdate } from '../core/update.js';
 import { createAudioSettings } from './audio-settings.js';
 import { createAvatarEditor } from './avatar-editor.js';
 import { createProfileColorField } from './profile-color-field.js';
@@ -445,6 +446,41 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
 
   const audioSettings = createAudioSettings({ getCall });
 
+  // ----- About: the version, and updates (core/update.js) -----
+  const updateStatus = h('p', { class: 'hint', 'aria-live': 'polite' });
+  const checkButton = h('button', { type: 'button', class: 'btn btn-secondary' }, t('Check for updates'));
+  const installButton = h('button', { type: 'button', class: 'btn btn-primary', hidden: true }, t('Update'));
+  const showUpdate = ({ update, error }) => {
+    installButton.hidden = !update;
+    updateStatus.textContent = error
+      ? t("Couldn't check for updates: {reason}", { reason: error })
+      : update
+        ? t('Jay-C {version} is available.', { version: update.version })
+        : t('You have the latest version.');
+  };
+  checkButton.addEventListener('click', async () => {
+    checkButton.disabled = true;
+    updateStatus.textContent = t('Checking…');
+    showUpdate(await checkForUpdate({ again: true }));
+    checkButton.disabled = false;
+  });
+  installButton.addEventListener('click', async () => {
+    // The installer closes Jay-C: not with a call on.
+    if (getCall()) {
+      updateStatus.textContent = t('Leave the call to update: the installer closes Jay-C.');
+      return;
+    }
+    installButton.disabled = checkButton.disabled = true;
+    updateStatus.textContent = t('Downloading… The installer opens next, and Jay-C closes.');
+    try {
+      await installUpdate();
+    } catch (error) {
+      updateStatus.textContent = t("Couldn't update: {reason}", { reason: String(error) });
+      installButton.disabled = checkButton.disabled = false;
+    }
+  });
+  const updatePart = updatesSupported() ? h('div', { class: 'field' }, h('div', { class: 'input-row' }, checkButton, installButton), updateStatus) : null;
+
   // ----- Troubleshooting: a snapshot of the running call for bug reports -----
   const diagHint = h('p', { class: 'hint', 'aria-live': 'polite' }, t('During a call: measures what you receive from each person and whether it plays, and copies it to send to whoever runs the server.'));
   const diagText = h('textarea', { class: 'input', rows: 8, readonly: true, hidden: true, 'aria-label': t('Call diagnostics') });
@@ -677,7 +713,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
           ),
         ),
         h('fieldset', {}, h('h3', {}, t('Troubleshooting')), h('div', { class: 'field' }, diagButton, diagHint, diagText)),
-        h('fieldset', {}, h('h3', {}, t('About')), h('p', { class: 'hint' }, `Jay-C ${__APP_VERSION__}`)),
+        h('fieldset', {}, h('h3', {}, t('About')), h('p', { class: 'hint' }, `Jay-C ${__APP_VERSION__}`), updatePart),
       ),
     },
   ];
@@ -718,6 +754,7 @@ export function createSettingsModal({ openGuide, getCall = () => null, openWelco
       renderAppearance();
       dialog.showModal();
       audioSettings.open();
+      if (updatePart && installButton.hidden) checkForUpdate().then(showUpdate);
       if (!streamingSection.hidden) refreshPlayingApps();
       if (focus === 'server') {
         tabs.select('server');
